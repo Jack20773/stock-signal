@@ -187,11 +187,17 @@ def _render_signal_row(r: dict, ep: str, ep_num_val: int) -> str:
         f'color:#888;font-style:italic;font-size:14px;">「{exact_quote}」</div>'
         if exact_quote else ""
     )
+
+    # 全站搜尋關鍵字：集數、數字、標的名、代碼、純數字代碼、主委觀點、原文引用
+    kw = " ".join(filter(None, [
+        ep, str(ep_num_val), name, code, code.split(".")[0], raw_reason, exact_quote
+    ])).replace('"', ' ').replace('\n', ' ')
+
     reason_html = (
         f'<tr class="ep-row ep-{ep} reason-row" data-ep="{ep}" data-epnum="{ep_num_val}"'
         f' data-tag="{tag}" data-mkt="{mkt}" data-spct="{s_pct_val}"'
         f' data-bpct="{b_pct_val}" data-beat="{beat_val}"'
-        f' data-name="{name}" data-code="{code}"'
+        f' data-name="{name}" data-code="{code}" data-kw="{kw}"'
         f' style="background:#f8f9fa;">'
         f'<td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;">'
         f'<span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span>'
@@ -205,7 +211,7 @@ def _render_signal_row(r: dict, ep: str, ep_num_val: int) -> str:
             data-ep="{ep}" data-epnum="{ep_num_val}" data-tag="{tag}" data-mkt="{mkt}"
             data-spct="{s_pct_val}" data-bpct="{b_pct_val}"
             data-beat="{beat_val}" data-days="{days}"
-            data-name="{name}" data-code="{code}"
+            data-name="{name}" data-code="{code}" data-kw="{kw}"
             style="border-bottom:none;">
           <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">{ep}</td>
           <td style="padding:9px 12px 4px;color:#888;font-size:14px;">{tag}</td>
@@ -320,20 +326,13 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   <!-- 集數篩選工具列 -->
   <div id="view-filters" style="padding:10px 16px 6px;border-bottom:1px solid #eee;background:#fafafa;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-      <span style="font-size:14px;color:#888;white-space:nowrap;">搜集數：</span>
-      <input id="ep-search" type="text" placeholder="如 630 或 EP630"
-        oninput="filterEp(this.value)"
-        style="width:150px;padding:5px 10px;border:1px solid #ddd;border-radius:12px;
+      <span style="font-size:14px;color:#888;white-space:nowrap;">搜尋：</span>
+      <input id="main-search" type="text"
+        placeholder="集數、標的、代碼、主委觀點、任意關鍵字..."
+        oninput="filterSearch(this.value)"
+        style="flex:1;max-width:380px;padding:5px 12px;border:1px solid #ddd;border-radius:12px;
                font-size:14px;outline:none;">
-      <button onclick="clearEpFilter()"
-        style="padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;
-               cursor:pointer;font-size:14px;color:#888;">清除</button>
-      <span style="font-size:14px;color:#888;white-space:nowrap;margin-left:8px;">搜標的：</span>
-      <input id="stock-search" type="text" placeholder="如 台積電 或 2330"
-        oninput="filterStock(this.value)"
-        style="width:150px;padding:5px 10px;border:1px solid #ddd;border-radius:12px;
-               font-size:14px;outline:none;">
-      <button onclick="clearStockFilter()"
+      <button onclick="clearSearch()"
         style="padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;
                cursor:pointer;font-size:14px;color:#888;">清除</button>
     </div>
@@ -415,27 +414,15 @@ function toggleEp(ep) {{
   if (hdr) hdr.innerHTML = hdr.innerHTML.replace(/[▾▸]/, collapsed ? '▾' : '▸');
 }}
 
-// ── 集數搜尋 ──────────────────────────────────────────────
-let epFilter = '';
-function filterEp(val) {{
-  epFilter = val.replace(/^EP/i, '').trim();
+// ── 統一搜尋 ──────────────────────────────────────────────
+let searchFilter = '';
+function filterSearch(val) {{
+  searchFilter = val.trim().toLowerCase();
   applyAllFilters();
 }}
-function clearEpFilter() {{
-  epFilter = '';
-  document.getElementById('ep-search').value = '';
-  applyAllFilters();
-}}
-
-// ── 標的搜尋 ──────────────────────────────────────────────
-let stockFilter = '';
-function filterStock(val) {{
-  stockFilter = val.trim().toLowerCase();
-  applyAllFilters();
-}}
-function clearStockFilter() {{
-  stockFilter = '';
-  document.getElementById('stock-search').value = '';
+function clearSearch() {{
+  searchFilter = '';
+  document.getElementById('main-search').value = '';
   applyAllFilters();
 }}
 
@@ -458,15 +445,10 @@ function filterMkt(mkt) {{
 
 function applyAllFilters() {{
   document.querySelectorAll('.ep-row').forEach(r => {{
-    const epNum  = r.dataset.epnum;
-    const epId   = r.dataset.ep;
-    const epMatch    = !epFilter || epNum === epFilter || epId.toLowerCase().includes(epFilter.toLowerCase());
-    const tagMatch   = tagFilter === 'all' || r.dataset.tag === tagFilter;
-    const mktMatch   = mktFilter === 'all' || r.dataset.mkt === mktFilter;
-    const stockMatch = !stockFilter ||
-                       (r.dataset.name || '').toLowerCase().includes(stockFilter) ||
-                       (r.dataset.code || '').toLowerCase().includes(stockFilter.replace('.tw', '').replace('.two', ''));
-    r.classList.toggle('hidden', !(epMatch && tagMatch && mktMatch && stockMatch));
+    const kwMatch  = !searchFilter || (r.dataset.kw || '').toLowerCase().includes(searchFilter);
+    const tagMatch = tagFilter === 'all' || r.dataset.tag === tagFilter;
+    const mktMatch = mktFilter === 'all' || r.dataset.mkt === mktFilter;
+    r.classList.toggle('hidden', !(kwMatch && tagMatch && mktMatch));
   }});
   syncEpHeaders();
 }}
