@@ -40,15 +40,17 @@ jobs:
             --detail-url https://Jack20773.github.io/stock-signal/
 
       - name: Deploy detail HTML to GitHub Pages
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin
-          # 用 git plumbing 直接寫入 gh-pages，不需切換 branch
           BLOB=$(git hash-object -w report_detail.html)
-          TREE=$(printf "100644 blob %s\tindex.html\n" "$BLOB" | git mktree)
-          PARENT=$(git rev-parse origin/gh-pages 2>/dev/null || echo "")
-          if [ -n "$PARENT" ]; then
+          TREE=$(printf '100644 blob %s\tindex.html\n' "$BLOB" | git mktree)
+          if git ls-remote --exit-code origin gh-pages > /dev/null 2>&1; then
+            git fetch origin gh-pages
+            PARENT=$(git rev-parse FETCH_HEAD)
             COMMIT=$(git commit-tree "$TREE" -p "$PARENT" -m "chore: update report [skip ci]")
           else
             COMMIT=$(git commit-tree "$TREE" -m "chore: init gh-pages [skip ci]")
