@@ -100,15 +100,12 @@ def save_result(result: dict) -> int:
 
 
 def list_signals(episode_id: str = None) -> list[dict]:
+    query  = "SELECT * FROM signals"
+    params = ()
+    if episode_id:
+        query  += " WHERE episode_id=?"
+        params  = (episode_id,)
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
-        if episode_id:
-            rows = conn.execute(
-                "SELECT * FROM signals WHERE episode_id=? ORDER BY created_at DESC",
-                (episode_id,)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM signals ORDER BY created_at DESC"
-            ).fetchall()
+        rows = conn.execute(query + " ORDER BY created_at DESC", params).fetchall()
     return [dict(r) for r in rows]

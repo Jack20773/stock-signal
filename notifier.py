@@ -22,6 +22,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 from dotenv import load_dotenv
 from performance import _fill_entry_prices, calc_performance, win_rate
+from prices import benchmark_for
 
 load_dotenv(override=True)
 
@@ -96,13 +97,12 @@ def _stock_tab_html(results: list[dict]) -> str:
     rows_list = []
     for g in groups:
         wr = g["win_rate"]
-        wr_color = "#d9534f" if wr and wr >= 50 else "#2b8a3e"
+        wr_color = "#d9534f" if wr is not None and wr >= 50 else "#2b8a3e"
         wr_txt = f"{wr}%" if wr is not None else "待定"
         avg_color = _pct_color(g["avg_ret"])
         avg_txt = _fmt_pct(g["avg_ret"])
-        bull_bear = ""
-        if g["bullish"]: bull_bear += f'+{g["bullish"]}'
-        if g["bearish"]: bull_bear += f' / -{g["bearish"]}'
+        parts = ([f'+{g["bullish"]}'] if g["bullish"] else []) + ([f'-{g["bearish"]}'] if g["bearish"] else [])
+        bull_bear = " / ".join(parts)
         ep_tags = "".join(
             f'<span style="font-size:11px;background:#f0f0f0;padding:1px 5px;'
             f'border-radius:3px;margin:1px 2px;display:inline-block;">'
@@ -265,7 +265,8 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   body{{margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#333;}}
-  .wrap{{max-width:860px;margin:20px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.07);}}
+  .wrap{{max-width:860px;margin:20px auto;background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.07);overflow-x:clip;}}
+  @media(max-width:600px){{.wrap{{margin:0;border-radius:0;}}}}
   th{{cursor:pointer;user-select:none;}}
   th:hover{{background:#e2e6ea;}}
   .btn-active{{background:#1a252f!important;color:#fff!important;border-color:#1a252f!important;}}
@@ -281,7 +282,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
 <div class="wrap">
 
   <!-- Header -->
-  <div style="background:#1a252f;padding:22px 20px;text-align:center;color:#fff;">
+  <div style="background:#1a252f;padding:22px 20px;text-align:center;color:#fff;border-radius:8px 8px 0 0;">
     <div style="font-size:22px;font-weight:bold;">股癌訊號勝率追蹤</div>
     <div style="color:#b3c1cd;font-size:14px;margin-top:4px;">{title} · {today}</div>
   </div>
@@ -350,8 +351,8 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   </div>
 
   <!-- 以集數 Table -->
-  <div id="view-ep" style="padding:0 0 12px;">
-    <table id="main-table" style="width:100%;border-collapse:collapse;font-size:15px;">
+  <div id="view-ep" style="padding:0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;">
+    <table id="main-table" style="width:100%;border-collapse:collapse;font-size:15px;min-width:640px;">
       <thead>
         <tr style="background:#f1f3f5;color:#495057;font-size:13px;">
           <th onclick="sortBy('epnum')" style="padding:10px 12px;text-align:left;">集數 ↕</th>
@@ -369,7 +370,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   </div>
 
   <!-- 以標的 Table -->
-  <div id="view-stock" style="display:none;padding:0 0 12px;">
+  <div id="view-stock" style="display:none;padding:0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;">
     {stock_tab_content}
   </div>
 
@@ -565,7 +566,7 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
         action     = r.get("action", "0")
         s_pct      = r.get("stock_return_pct")
         b_pct      = r.get("benchmark_return_pct")
-        bm         = r.get("benchmark_ticker") or ("0050.TW" if str(code).endswith(".TW") else "SPY")
+        bm         = r.get("benchmark_ticker") or benchmark_for(code)
         action_lbl = _action_label(action, r.get("confidence_level", ""))
         badge      = (
             ' <span style="font-size:11px;background:#e8f4fd;color:#1a6b9a;'
@@ -708,7 +709,7 @@ def send_email(subject: str, html_content: str) -> bool:
 # ── 主流程 ──────────────────────────────────────────────────────────────────
 
 def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
-               preview: bool = False, detail_url: str = ""):
+               preview: bool = False, detail_url: str = "", no_send: bool = False):
     if fill:
         logging.info("補抓進場價中...")
         n = _fill_entry_prices()
@@ -720,8 +721,7 @@ def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
         results = [r for r in results if r.get("episode_id") == ep_filter]
         title = f"集數 {ep_filter}"
     elif last_n:
-        eps  = sorted({r["episode_id"] for r in results if r.get("episode_id")},
-                      key=lambda e: int(re.sub(r"[^0-9]", "", e) or 0))
+        eps  = sorted({r["episode_id"] for r in results if r.get("episode_id")}, key=_ep_num)
         keep = set(eps[-last_n:])
         results = [r for r in results if r.get("episode_id") in keep]
         title = f"最新 {last_n} 集匯總"
@@ -739,17 +739,24 @@ def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
 
     if preview:
         html = generate_html_detail(results, title, stats)
-        with open("report_preview.html", "w", encoding="utf-8") as f:
-            f.write(html)
-        logging.info("預覽已存至 report_preview.html（未寄送）")
+        try:
+            with open("report_preview.html", "w", encoding="utf-8") as f:
+                f.write(html)
+            logging.info("預覽已存至 report_preview.html（未寄送）")
+        except OSError as e:
+            logging.error(f"寫入 report_preview.html 失敗：{e}")
     else:
         # 儲存詳細版（供 workflow push 到 GitHub Pages）
         html_detail = generate_html_detail(results, title, stats)
-        with open("report_detail.html", "w", encoding="utf-8") as f:
-            f.write(html_detail)
-        # 寄送簡要版 email
-        html_email = generate_html_email(results, title, stats, detail_url)
-        send_email(subject, html_email)
+        try:
+            with open("report_detail.html", "w", encoding="utf-8") as f:
+                f.write(html_detail)
+        except OSError as e:
+            logging.error(f"寫入 report_detail.html 失敗：{e}")
+        if not no_send:
+            # 寄送簡要版 email
+            html_email = generate_html_email(results, title, stats, detail_url)
+            send_email(subject, html_email)
 
 
 def main():
@@ -758,6 +765,7 @@ def main():
     parser.add_argument("--last",       type=int, default=0, help="最新 N 集")
     parser.add_argument("--no-fill",    action="store_true", help="跳過補抓進場價")
     parser.add_argument("--preview",    action="store_true", help="只存 HTML 預覽，不寄信")
+    parser.add_argument("--no-send",    action="store_true", help="只存 report_detail.html，不寄信")
     parser.add_argument("--detail-url", default="",  help="詳細版 URL（加在 email 按鈕）")
     args = parser.parse_args()
 
@@ -766,6 +774,7 @@ def main():
         last_n     = args.last,
         fill       = not args.no_fill,
         preview    = args.preview,
+        no_send    = args.no_send,
         detail_url = args.detail_url,
     )
 

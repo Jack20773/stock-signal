@@ -70,11 +70,11 @@ def load_analyzed_set() -> set[str]:
 
 def run_batch(files: list[Path], dry_run: bool = False):
     total = len(files)
-    skipped = done = failed = 0
+    skipped = done = failed = dry = 0
     analyzed = load_analyzed_set()
 
     for i, path in enumerate(files, 1):
-        ep_id = f"EP{ep_number(path)}"
+        ep_id  = path.stem          # 直接用檔名如 EP672，避免 regex 不 match 時產生 EP0
         prefix = f"[{i}/{total}] {ep_id}"
 
         if ep_id in analyzed:
@@ -84,7 +84,7 @@ def run_batch(files: list[Path], dry_run: bool = False):
 
         if dry_run:
             logging.info(f"{prefix} — 待跑（dry-run）")
-            done += 1
+            dry += 1
             continue
 
         try:
@@ -101,9 +101,10 @@ def run_batch(files: list[Path], dry_run: bool = False):
         if i < total:
             time.sleep(SLEEP_BETWEEN)
 
-    logging.info(
-        f"\n完成｜共 {total} 集｜分析 {done}｜跳過 {skipped}｜失敗 {failed}"
-    )
+    if dry_run:
+        logging.info(f"\ndry-run｜共 {total} 集｜待跑 {dry}｜已跳過 {skipped}")
+    else:
+        logging.info(f"\n完成｜共 {total} 集｜分析 {done}｜跳過 {skipped}｜失敗 {failed}")
     return done, skipped, failed
 
 

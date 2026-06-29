@@ -40,7 +40,7 @@ jobs:
 
       - name: Analyze new episodes
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python batch.py --last ${{ github.event.inputs.last_n || '10' }}
 
       - name: Commit updated signals.db

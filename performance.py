@@ -94,11 +94,9 @@ def calc_performance() -> list[dict]:
         bm       = row.get("benchmark_ticker") or benchmark_for(code)
 
         if not entry_p or not entry_d or not code or code == "Unknown":
-            row["stock_return_pct"]     = None
-            row["benchmark_return_pct"] = None
-            row["beat_benchmark"]       = None
-            row["current_price"]        = None
-            row["days_held"]            = None
+            row.update(dict.fromkeys(
+                ["stock_return_pct", "benchmark_return_pct", "beat_benchmark", "current_price", "days_held"]
+            ))
             results.append(row)
             continue
 
@@ -146,11 +144,11 @@ def calc_performance() -> list[dict]:
 
 def win_rate(results: list[dict]) -> dict:
     decided = [r for r in results if r["beat_benchmark"] is not None]
-    wins    = [r for r in decided if r["beat_benchmark"]]
+    wins    = sum(1 for r in decided if r["beat_benchmark"])
     return {
         "total":    len(results),
         "decided":  len(decided),
-        "wins":     len(wins),
-        "losses":   len(decided) - len(wins),
-        "win_rate": round(len(wins) / len(decided) * 100, 1) if decided else 0.0,
+        "wins":     wins,
+        "losses":   len(decided) - wins,
+        "win_rate": round(wins / len(decided) * 100, 1) if decided else 0.0,
     }

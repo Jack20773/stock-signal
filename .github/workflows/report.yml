@@ -9,10 +9,10 @@ on:
       last_n:
         description: '報告包含最新幾集'
         required: false
-        default: '50'
+        default: '20'
 
 permissions:
-  contents: write   # 需要 push gh-pages
+  contents: read
 
 jobs:
   send-report:
@@ -29,30 +29,12 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Generate detail HTML and send email
+      - name: Send email report
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           REPORT_TO: ${{ secrets.REPORT_TO }}
         run: |
           python notifier.py \
-            --last ${{ github.event.inputs.last_n || '50' }} \
+            --last ${{ github.event.inputs.last_n || '20' }} \
             --detail-url https://Jack20773.github.io/stock-signal/
-
-      - name: Deploy detail HTML to GitHub Pages
-        env:
-          GIT_AUTHOR_NAME: github-actions[bot]
-          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
-          GIT_COMMITTER_NAME: github-actions[bot]
-          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
-        run: |
-          BLOB=$(git hash-object -w report_detail.html)
-          TREE=$(printf '100644 blob %s\tindex.html\n' "$BLOB" | git mktree)
-          if git ls-remote --exit-code origin gh-pages > /dev/null 2>&1; then
-            git fetch origin gh-pages
-            PARENT=$(git rev-parse FETCH_HEAD)
-            COMMIT=$(git commit-tree "$TREE" -p "$PARENT" -m "chore: update report [skip ci]")
-          else
-            COMMIT=$(git commit-tree "$TREE" -m "chore: init gh-pages [skip ci]")
-          fi
-          git push origin "$COMMIT":refs/heads/gh-pages

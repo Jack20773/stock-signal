@@ -1,8 +1,9 @@
 import json
+import os
 import re
 from datetime import date
-import anthropic
-from config import MODEL
+from google import genai
+from google.genai import types
 from prompt import SYSTEM_PROMPT
 
 _client = None
@@ -10,22 +11,23 @@ _client = None
 def _get_client():
     global _client
     if _client is None:
-        _client = anthropic.Anthropic()
+        _client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
     return _client
 
 def analyze(transcript: str) -> dict:
     today = date.today().isoformat()
     user_content = f"今天日期：{today}\n\n以下是今天的逐字稿：\n\n{transcript}"
 
-    response = _get_client().messages.create(
-        model=MODEL,
-        max_tokens=4096,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_content}]
+    response = _get_client().models.generate_content(
+        model="gemini-1.5-flash",
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            max_output_tokens=4096,
+        ),
+        contents=user_content,
     )
 
-    raw = response.content[0].text.strip()
-    # 防護：Claude 有時仍會包 ```json ... ``` 標籤
+    raw = response.text.strip()
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
 
