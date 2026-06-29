@@ -680,7 +680,9 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
 def send_email(subject: str, html_content: str) -> bool:
     user     = os.getenv("GMAIL_USER")
     password = os.getenv("GMAIL_APP_PASSWORD")
-    to_addr  = os.getenv("REPORT_TO") or user
+    # REPORT_TO 支援多個收件人，用逗號分隔，例如 a@gmail.com,b@gmail.com
+    to_raw   = os.getenv("REPORT_TO") or user
+    to_list  = [a.strip() for a in to_raw.split(",") if a.strip()]
 
     if not user or not password:
         logging.error("未設定 GMAIL_USER / GMAIL_APP_PASSWORD，無法寄信")
@@ -689,14 +691,14 @@ def send_email(subject: str, html_content: str) -> bool:
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"]    = user
-    msg["To"]      = to_addr
+    msg["To"]      = ", ".join(to_list)
     msg.attach(MIMEText(html_content, "html", "utf-8"))
 
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
             server.login(user, password)
-            server.sendmail(user, to_addr, msg.as_string())
-        logging.info(f"報告已寄出 → {to_addr}")
+            server.sendmail(user, to_list, msg.as_string())
+        logging.info(f"報告已寄出 → {', '.join(to_list)}")
         return True
     except Exception as e:
         logging.error(f"寄信失敗：{e}")
