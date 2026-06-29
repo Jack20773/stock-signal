@@ -1,11 +1,16 @@
 import json
+import logging
 import sqlite3
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "signals.db"
+_initialized = False
 
 
 def init_db():
+    global _initialized
+    if _initialized:
+        return
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS signals (
@@ -27,7 +32,6 @@ def init_db():
                 created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        # migrate existing DB
         for col, typedef in [
             ("entry_date",       "TEXT"),
             ("entry_price",      "REAL"),
@@ -35,8 +39,9 @@ def init_db():
         ]:
             try:
                 conn.execute(f"ALTER TABLE signals ADD COLUMN {col} {typedef}")
-            except Exception:
-                pass
+            except sqlite3.OperationalError:
+                pass  # column already exists
+    _initialized = True
 
 
 def save_result(result: dict) -> int:
@@ -67,7 +72,6 @@ def save_result(result: dict) -> int:
 
             # 同集同股衝突攔截
             if code in seen and seen[code] != action and action != "0" and seen[code] != "0":
-                import logging
                 logging.warning(
                     f"[衝突攔截] {episode_id} {code}：已有 {seen[code]}，新訊號 {action} 被丟棄"
                 )

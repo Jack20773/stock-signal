@@ -11,7 +11,7 @@ BENCHMARK_US = "SPY"
 
 
 def benchmark_for(stock_code: str) -> str:
-    return BENCHMARK_TW if stock_code.endswith(".TW") else BENCHMARK_US
+    return BENCHMARK_TW if (stock_code.endswith(".TW") or stock_code.endswith(".TWO")) else BENCHMARK_US
 
 
 def _fetch_history(ticker: str, start: str, end: str):

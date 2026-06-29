@@ -68,11 +68,12 @@ def _build_stock_groups(results: list[dict]) -> list[dict]:
         decided = [s for s in sigs if s.get("beat_benchmark") is not None]
         wins = sum(1 for s in decided if s.get("beat_benchmark"))
         rets = [s["stock_return_pct"] for s in sigs if s.get("stock_return_pct") is not None]
+        is_tw = str(code).endswith(".TW") or str(code).endswith(".TWO")
         out.append({
             "code": code,
             "name": sigs[0].get("stock_name", ""),
             "tag": sigs[0].get("primary_tag", ""),
-            "mkt": "台股" if str(code).endswith(".TW") else "美股",
+            "mkt": "台股" if is_tw else "美股",
             "signals": sorted(sigs, key=lambda s: _ep_num(s.get("episode_id", ""))),
             "total": len(sigs),
             "bullish": sum(1 for s in sigs if s.get("action") == "+1"),
@@ -92,7 +93,7 @@ def _stock_tab_html(results: list[dict]) -> str:
     if not groups:
         return "<div style='padding:20px;color:#888;text-align:center;'>無標的資料</div>"
 
-    rows = ""
+    rows_list = []
     for g in groups:
         wr = g["win_rate"]
         wr_color = "#d9534f" if wr and wr >= 50 else "#2b8a3e"
@@ -108,7 +109,7 @@ def _stock_tab_html(results: list[dict]) -> str:
             f'{s.get("episode_id","")}</span>'
             for s in g["signals"]
         )
-        rows += f"""
+        rows_list.append(f"""
         <tr style="border-bottom:1px solid #f0f0f0;">
           <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">{g['name']}<br>
             <span style="color:#aaa;font-size:13px;">{g['code']}</span></td>
@@ -119,7 +120,7 @@ def _stock_tab_html(results: list[dict]) -> str:
           <td style="padding:10px 8px;text-align:center;font-weight:bold;color:{avg_color};">{avg_txt}</td>
           <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">{g['latest_ep']}</td>
           <td style="padding:10px 8px;line-height:1.8;">{ep_tags}</td>
-        </tr>"""
+        </tr>""")
 
     return f"""
     <table width="100%" style="border-collapse:collapse;font-size:15px;">
@@ -135,83 +136,76 @@ def _stock_tab_html(results: list[dict]) -> str:
           <th style="padding:10px 8px;text-align:left;">提及集數</th>
         </tr>
       </thead>
-      <tbody>{rows}</tbody>
+      <tbody>{"".join(rows_list)}</tbody>
     </table>"""
 
 
-# ── 詳細版 HTML（瀏覽器）────────────────────────────────────────────────────
+# ── 詳細版 row helpers ───────────────────────────────────────────────────────
 
-def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
-    all_tags = sorted({r.get("primary_tag", "") for r in results if r.get("primary_tag")})
-
-    rows_by_ep = defaultdict(list)
-    for r in results:
-        rows_by_ep[r.get("episode_id", "")].append(r)
-
-    table_rows = ""
-    for ep in sorted(rows_by_ep, key=_ep_num):
-        ep_signals  = rows_by_ep[ep]
-        ep_date     = ep_signals[0].get("entry_date", "") or ""
-        ep_num_val  = _ep_num(ep)
-
-        table_rows += f"""
+def _render_ep_header(ep: str, ep_date: str, count: int) -> str:
+    return f"""
         <tr class="ep-header" data-ep="{ep}"
             style="background:#e8ecf0;cursor:pointer;"
             onclick="toggleEp('{ep}')">
-          <td colspan="7" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
+          <td colspan="8" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
             ▾ {ep}
-            <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;">{ep_date} · {len(ep_signals)} 筆</span>
+            <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;">{ep_date} · {count} 筆</span>
           </td>
         </tr>"""
 
-        for r in ep_signals:
-            action     = r.get("action", "0")
-            s_pct      = r.get("stock_return_pct")
-            b_pct      = r.get("benchmark_return_pct")
-            beat       = r.get("beat_benchmark")
-            name       = r.get("stock_name", "")
-            code       = r.get("stock_code", "")
-            tag        = r.get("primary_tag", "")
-            bm         = r.get("benchmark_ticker") or ("0050.TW" if str(code).endswith(".TW") else "SPY")
-            action_lbl = _action_label(action, r.get("confidence_level", ""))
-            short_badge = (
-                '<span style="font-size:14px;background:#e8f4fd;color:#1a6b9a;'
-                'border-radius:3px;padding:1px 4px;margin-left:4px;">空</span>'
-                if action == "-1" else ""
-            )
-            _ep     = r.get("live_entry_price") or r.get("entry_price")
-            entry_p = f"{_ep:.2f}" if _ep else "N/A"
-            curr_p  = f"{r['current_price']:.2f}" if r.get("current_price") else "N/A"
-            days    = r.get("days_held") or "N/A"
-            s_pct_val = s_pct if s_pct is not None else -9999
-            b_pct_val = b_pct if b_pct is not None else -9999
-            beat_val  = 1 if beat is True else (0 if beat is False else -1)
-            mkt = "tw" if str(code).endswith(".TW") else "us"
 
-            raw_reason  = (r.get("raw_reason")  or "").strip()
-            exact_quote = (r.get("exact_quote") or "").strip()
-            quote_html  = (
-                f'<div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;'
-                f'color:#888;font-style:italic;font-size:14px;">「{exact_quote}」</div>'
-                if exact_quote else ""
-            )
-            reason_html = (
-                f'<tr class="ep-row ep-{ep} reason-row" data-ep="{ep}" data-epnum="{ep_num_val}"'
-                f' data-tag="{tag}" data-mkt="{mkt}" data-spct="{s_pct_val}"'
-                f' data-bpct="{b_pct_val}" data-beat="{beat_val}"'
-                f' style="background:#f8f9fa;">'
-                f'<td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;">'
-                f'<span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span>'
-                f'<span style="font-size:14px;color:#555;margin-left:6px;">{raw_reason}</span>'
-                f'{quote_html}</td></tr>'
-                if raw_reason or exact_quote else ""
-            )
+def _render_signal_row(r: dict, ep: str, ep_num_val: int) -> str:
+    action     = r.get("action", "0")
+    s_pct      = r.get("stock_return_pct")
+    b_pct      = r.get("benchmark_return_pct")
+    beat       = r.get("beat_benchmark")
+    name       = r.get("stock_name", "")
+    code       = r.get("stock_code", "")
+    tag        = r.get("primary_tag", "")
+    is_tw      = str(code).endswith(".TW") or str(code).endswith(".TWO")
+    bm         = r.get("benchmark_ticker") or ("0050.TW" if is_tw else "SPY")
+    action_lbl = _action_label(action, r.get("confidence_level", ""))
+    short_badge = (
+        '<span style="font-size:14px;background:#e8f4fd;color:#1a6b9a;'
+        'border-radius:3px;padding:1px 4px;margin-left:4px;">空</span>'
+        if action == "-1" else ""
+    )
+    _ep_p   = r.get("live_entry_price") or r.get("entry_price")
+    entry_p = f"{_ep_p:.2f}" if _ep_p else "N/A"
+    curr_p  = f"{r['current_price']:.2f}" if r.get("current_price") else "N/A"
+    days    = r.get("days_held") or "N/A"
 
-            table_rows += f"""
+    s_pct_val = s_pct if s_pct is not None else -9999
+    b_pct_val = b_pct if b_pct is not None else -9999
+    beat_val  = 1 if beat is True else (0 if beat is False else -1)
+    mkt       = "tw" if is_tw else "us"
+
+    raw_reason  = (r.get("raw_reason")  or "").strip()
+    exact_quote = (r.get("exact_quote") or "").strip()
+    quote_html  = (
+        f'<div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;'
+        f'color:#888;font-style:italic;font-size:14px;">「{exact_quote}」</div>'
+        if exact_quote else ""
+    )
+    reason_html = (
+        f'<tr class="ep-row ep-{ep} reason-row" data-ep="{ep}" data-epnum="{ep_num_val}"'
+        f' data-tag="{tag}" data-mkt="{mkt}" data-spct="{s_pct_val}"'
+        f' data-bpct="{b_pct_val}" data-beat="{beat_val}"'
+        f' data-name="{name}" data-code="{code}"'
+        f' style="background:#f8f9fa;">'
+        f'<td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;">'
+        f'<span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span>'
+        f'<span style="font-size:14px;color:#555;margin-left:6px;">{raw_reason}</span>'
+        f'{quote_html}</td></tr>'
+        if raw_reason or exact_quote else ""
+    )
+
+    return f"""
         <tr class="ep-row ep-{ep}"
             data-ep="{ep}" data-epnum="{ep_num_val}" data-tag="{tag}" data-mkt="{mkt}"
             data-spct="{s_pct_val}" data-bpct="{b_pct_val}"
             data-beat="{beat_val}" data-days="{days}"
+            data-name="{name}" data-code="{code}"
             style="border-bottom:none;">
           <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">{ep}</td>
           <td style="padding:9px 12px 4px;color:#888;font-size:14px;">{tag}</td>
@@ -225,6 +219,26 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
             <span style="color:#bbb;font-size:12px;">{bm}</span></td>
           <td style="padding:9px 12px 4px;">{_beat_label(beat)}</td>
         </tr>{reason_html}"""
+
+
+# ── 詳細版 HTML（瀏覽器）────────────────────────────────────────────────────
+
+def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
+    all_tags = sorted({r.get("primary_tag", "") for r in results if r.get("primary_tag")})
+
+    rows_by_ep = defaultdict(list)
+    for r in results:
+        rows_by_ep[r.get("episode_id", "")].append(r)
+
+    rows_list = []
+    for ep in sorted(rows_by_ep, key=_ep_num):
+        ep_signals = rows_by_ep[ep]
+        ep_date    = ep_signals[0].get("entry_date", "") or ""
+        ep_num_val = _ep_num(ep)
+        rows_list.append(_render_ep_header(ep, ep_date, len(ep_signals)))
+        for r in ep_signals:
+            rows_list.append(_render_signal_row(r, ep, ep_num_val))
+    table_rows = "".join(rows_list)
 
     win_pct   = stats.get("win_rate", 0)
     win_color = "#d9534f" if win_pct >= 50 else "#2b8a3e"
@@ -252,7 +266,10 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   tr.ep-row.hidden{{display:none;}}
   .tab-btn{{margin:0 4px;padding:6px 16px;border:1px solid #ddd;border-radius:6px;
             background:#fff;cursor:pointer;font-size:14px;font-weight:bold;}}
+  .fs-btn{{margin:0 2px;padding:4px 10px;border:1px solid #ddd;border-radius:6px;
+           background:#fff;cursor:pointer;font-weight:bold;}}
 </style>
+<style id="dyn-font"></style>
 </head>
 <body>
 <div class="wrap">
@@ -287,21 +304,36 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     </div>
   </div>
 
-  <!-- Tab 切換 -->
+  <!-- Tab 切換 + 字體控制 -->
   <div style="padding:10px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:8px;">
     <button id="tab-ep" class="tab-btn btn-active" onclick="switchTab('ep')">以集數</button>
     <button id="tab-stock" class="tab-btn" onclick="switchTab('stock')">以標的</button>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:4px;">
+      <span style="font-size:12px;color:#999;">字體</span>
+      <button class="fs-btn" id="fs0" onclick="setFontSize(0)" style="font-size:11px;">小</button>
+      <button class="fs-btn" id="fs1" onclick="setFontSize(1)" style="font-size:13px;">中</button>
+      <button class="fs-btn" id="fs2" onclick="setFontSize(2)" style="font-size:15px;">大</button>
+      <button class="fs-btn" id="fs3" onclick="setFontSize(3)" style="font-size:17px;">特大</button>
+    </div>
   </div>
 
   <!-- 集數篩選工具列 -->
   <div id="view-filters" style="padding:10px 16px 6px;border-bottom:1px solid #eee;background:#fafafa;">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
       <span style="font-size:14px;color:#888;white-space:nowrap;">搜集數：</span>
-      <input id="ep-search" type="text" placeholder="輸入集數，如 630 或 EP630"
+      <input id="ep-search" type="text" placeholder="如 630 或 EP630"
         oninput="filterEp(this.value)"
-        style="flex:1;max-width:220px;padding:5px 10px;border:1px solid #ddd;border-radius:12px;
+        style="width:150px;padding:5px 10px;border:1px solid #ddd;border-radius:12px;
                font-size:14px;outline:none;">
       <button onclick="clearEpFilter()"
+        style="padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;
+               cursor:pointer;font-size:14px;color:#888;">清除</button>
+      <span style="font-size:14px;color:#888;white-space:nowrap;margin-left:8px;">搜標的：</span>
+      <input id="stock-search" type="text" placeholder="如 台積電 或 2330"
+        oninput="filterStock(this.value)"
+        style="width:150px;padding:5px 10px;border:1px solid #ddd;border-radius:12px;
+               font-size:14px;outline:none;">
+      <button onclick="clearStockFilter()"
         style="padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;
                cursor:pointer;font-size:14px;color:#888;">清除</button>
     </div>
@@ -349,6 +381,21 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
 </div>
 
 <script>
+// ── 字體大小 ──────────────────────────────────────────────
+const FS = [12, 14, 16, 18];
+let fsIdx = parseInt(localStorage.getItem('fs-idx') || '1');
+
+function applyFontSize() {{
+  const s = FS[fsIdx];
+  document.getElementById('dyn-font').textContent =
+    `.wrap td, .wrap th, .wrap div, .wrap span, .wrap button {{ font-size: ${{s}}px !important; }}`;
+  document.querySelectorAll('.fs-btn').forEach((b, i) =>
+    b.classList.toggle('btn-active', i === fsIdx));
+  localStorage.setItem('fs-idx', fsIdx);
+}}
+function setFontSize(i) {{ fsIdx = i; applyFontSize(); }}
+document.addEventListener('DOMContentLoaded', applyFontSize);
+
 // ── Tab 切換 ─────────────────────────────────────────────
 function switchTab(tab) {{
   const isEp = tab === 'ep';
@@ -380,6 +427,18 @@ function clearEpFilter() {{
   applyAllFilters();
 }}
 
+// ── 標的搜尋 ──────────────────────────────────────────────
+let stockFilter = '';
+function filterStock(val) {{
+  stockFilter = val.trim().toLowerCase();
+  applyAllFilters();
+}}
+function clearStockFilter() {{
+  stockFilter = '';
+  document.getElementById('stock-search').value = '';
+  applyAllFilters();
+}}
+
 // ── 分類篩選 ──────────────────────────────────────────────
 let tagFilter = 'all';
 let mktFilter = 'all';
@@ -401,10 +460,13 @@ function applyAllFilters() {{
   document.querySelectorAll('.ep-row').forEach(r => {{
     const epNum  = r.dataset.epnum;
     const epId   = r.dataset.ep;
-    const epMatch  = !epFilter || epNum === epFilter || epId.toLowerCase().includes(epFilter.toLowerCase());
-    const tagMatch = tagFilter === 'all' || r.dataset.tag === tagFilter;
-    const mktMatch = mktFilter === 'all' || r.dataset.mkt === mktFilter;
-    r.classList.toggle('hidden', !(epMatch && tagMatch && mktMatch));
+    const epMatch    = !epFilter || epNum === epFilter || epId.toLowerCase().includes(epFilter.toLowerCase());
+    const tagMatch   = tagFilter === 'all' || r.dataset.tag === tagFilter;
+    const mktMatch   = mktFilter === 'all' || r.dataset.mkt === mktFilter;
+    const stockMatch = !stockFilter ||
+                       (r.dataset.name || '').toLowerCase().includes(stockFilter) ||
+                       (r.dataset.code || '').toLowerCase().includes(stockFilter.replace('.tw', '').replace('.two', ''));
+    r.classList.toggle('hidden', !(epMatch && tagMatch && mktMatch && stockMatch));
   }});
   syncEpHeaders();
 }}

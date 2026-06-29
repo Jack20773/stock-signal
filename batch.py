@@ -30,7 +30,21 @@ logging.basicConfig(
 )
 
 TRANSCRIPTS_DIR = Path(__file__).parent / "transcripts"
-SLEEP_BETWEEN = 3  # 每集之間暫停秒數，避免 API rate limit
+SLEEP_BETWEEN  = 3   # 每集之間暫停秒數，避免 API rate limit
+MAX_RETRIES    = 3   # 單集最多重試次數
+
+
+def _analyze_with_retry(transcript: str) -> dict:
+    for attempt in range(MAX_RETRIES):
+        try:
+            return analyze(transcript)
+        except Exception as e:
+            if attempt < MAX_RETRIES - 1:
+                wait = 5 * (2 ** attempt)  # 5 → 10 → 20 秒
+                logging.warning(f"分析失敗（第 {attempt+1}/{MAX_RETRIES} 次），{wait}s 後重試：{e}")
+                time.sleep(wait)
+            else:
+                raise
 
 
 def ep_number(path: Path) -> int:
@@ -76,7 +90,7 @@ def run_batch(files: list[Path], dry_run: bool = False):
         try:
             transcript = path.read_text(encoding="utf-8")
             logging.info(f"{prefix} — 分析中（{len(transcript):,} chars）...")
-            result = analyze(transcript)
+            result = _analyze_with_retry(transcript)
             count = save_result(result)
             logging.info(f"{prefix} — 完成，存入 {count} 個訊號")
             done += 1
