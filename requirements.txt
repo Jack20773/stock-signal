@@ -1,0 +1,3 @@
+anthropic>=0.109.1
+yfinance>=1.4.1
+python-dotenv>=1.2.2

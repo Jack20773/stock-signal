@@ -1,0 +1,22 @@
+# 環境與密鑰
+.env
+*.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# 逐字稿（從 whatmkreallysaid.com 動態下載，不進 repo）
+transcripts/
+
+# 產出物
+report_preview.html
+batch.log
+*.log
+
+# 本地開發工具
+.vscode/
+.idea/
