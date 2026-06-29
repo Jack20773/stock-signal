@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body{margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#333;}
+  .wrap{max-width:860px;margin:20px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.07);}
+  th{cursor:pointer;user-select:none;}
+  th:hover{background:#e2e6ea;}
+  .btn-active{background:#1a252f!important;color:#fff!important;border-color:#1a252f!important;}
+  tr.ep-row.hidden{display:none;}
+  .tab-btn{margin:0 4px;padding:6px 16px;border:1px solid #ddd;border-radius:6px;
+            background:#fff;cursor:pointer;font-size:14px;font-weight:bold;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <div style="background:#1a252f;padding:22px 20px;text-align:center;color:#fff;">
+    <div style="font-size:22px;font-weight:bold;">股癌訊號勝率追蹤</div>
+    <div style="color:#b3c1cd;font-size:14px;margin-top:4px;">最新 10 集匯總 · 2026-06-29</div>
+  </div>
+
+  <!-- Stats -->
+  <div style="display:flex;text-align:center;border-bottom:1px solid #eee;">
+    <div style="flex:1;padding:16px 0;">
+      <div style="font-size:13px;color:#999;">總訊號</div>
+      <div style="font-size:26px;font-weight:bold;color:#2c3e50;">42</div>
+    </div>
+    <div style="flex:1;padding:16px 0;border-left:1px solid #eee;border-right:1px solid #eee;">
+      <div style="font-size:13px;color:#999;">對標大盤勝率</div>
+      <div style="font-size:26px;font-weight:bold;color:#2b8a3e;">47.1%</div>
+    </div>
+    <div style="flex:1;padding:16px 0;border-right:1px solid #eee;">
+      <div style="font-size:13px;color:#999;">Win / Lose</div>
+      <div style="font-size:24px;font-weight:bold;">
+        <span style="color:#d9534f;">16</span>
+        <span style="color:#ccc;"> / </span>
+        <span style="color:#2b8a3e;">18</span>
+      </div>
+    </div>
+    <div style="flex:1;padding:16px 0;">
+      <div style="font-size:13px;color:#999;">待定</div>
+      <div style="font-size:26px;font-weight:bold;color:#aaa;">8</div>
+    </div>
+  </div>
+
+  <!-- Tab 切換 -->
+  <div style="padding:10px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:8px;">
+    <button id="tab-ep" class="tab-btn btn-active" onclick="switchTab('ep')">以集數</button>
+    <button id="tab-stock" class="tab-btn" onclick="switchTab('stock')">以標的</button>
+  </div>
+
+  <!-- 集數篩選工具列 -->
+  <div id="view-filters" style="padding:10px 16px 6px;border-bottom:1px solid #eee;background:#fafafa;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <span style="font-size:14px;color:#888;white-space:nowrap;">搜集數：</span>
+      <input id="ep-search" type="text" placeholder="輸入集數，如 630 或 EP630"
+        oninput="filterEp(this.value)"
+        style="flex:1;max-width:220px;padding:5px 10px;border:1px solid #ddd;border-radius:12px;
+               font-size:14px;outline:none;">
+      <button onclick="clearEpFilter()"
+        style="padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;
+               cursor:pointer;font-size:14px;color:#888;">清除</button>
+    </div>
+    <div>
+      <span style="font-size:14px;color:#888;margin-right:4px;">分類：</span>
+      <button onclick="filterTag('all')" id="btn-all" class="btn-active"
+        style="margin:2px 4px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:14px;">全部</button>
+      <button onclick="filterMkt('tw')"
+        style="margin:2px 4px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:14px;">台股</button>
+      <button onclick="filterMkt('us')"
+        style="margin:2px 4px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:14px;">美股</button>
+      <button onclick="filterTag('#估值過低')" style="margin:2px 4px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:14px;">#估值過低</button><button onclick="filterTag('#技術創新')" style="margin:2px 4px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:14px;">#技術創新</button><button onclick="filterTag('#熱度結束')" style="margin:2px 4px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:14px;">#熱度結束</button><button onclick="filterTag('#營收動能')" style="margin:2px 4px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:14px;">#營收動能</button><button onclick="filterTag('#產能擴充')" style="margin:2px 4px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:14px;">#產能擴充</button><button onclick="filterTag('#籌碼面')" style="margin:2px 4px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:14px;">#籌碼面</button><button onclick="filterTag('#總經趨勢')" style="margin:2px 4px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:14px;">#總經趨勢</button>
+    </div>
+    <div style="font-size:12px;color:#bbb;margin-top:6px;">台股對比 0050.TW · 美股對比 SPY（同集台美混合時基準不同）</div>
+  </div>
+
+  <!-- 以集數 Table -->
+  <div id="view-ep" style="padding:0 0 12px;">
+    <table id="main-table" style="width:100%;border-collapse:collapse;font-size:15px;">
+      <thead>
+        <tr style="background:#f1f3f5;color:#495057;font-size:13px;">
+          <th onclick="sortBy('epnum')" style="padding:10px 12px;text-align:left;">集數 ↕</th>
+          <th onclick="sortBy('tag')"   style="padding:10px 12px;text-align:left;">分類 ↕</th>
+          <th style="padding:10px 12px;text-align:left;">標的</th>
+          <th style="padding:10px 12px;text-align:left;">動作</th>
+          <th onclick="sortBy('date')"  style="padding:10px 12px;text-align:left;">進場日 ↕</th>
+          <th onclick="sortBy('spct')"  style="padding:10px 12px;text-align:left;">個股報酬 ↕</th>
+          <th onclick="sortBy('bpct')"  style="padding:10px 12px;text-align:left;">同期大盤 ↕</th>
+          <th onclick="sortBy('beat')"  style="padding:10px 12px;text-align:left;">勝負 ↕</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr class="ep-header" data-ep="EP658"
+            style="background:#e8ecf0;cursor:pointer;"
+            onclick="toggleEp('EP658')">
+          <td colspan="7" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
+            ▾ EP658
+            <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;">2026-05-02 · 2 筆</span>
+          </td>
+        </tr>
+        <tr class="ep-row ep-EP658"
+            data-ep="EP658" data-epnum="658" data-tag="#熱度結束" data-mkt="us"
+            data-spct="28.81" data-bpct="1.42"
+            data-beat="1" data-days="58"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP658</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#熱度結束</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">Intel<br>
+            <span style="color:#aaa;font-size:13px;">INTC</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看壞<span style="font-size:14px;background:#e8f4fd;color:#1a6b9a;border-radius:3px;padding:1px 4px;margin-left:4px;">空</span></td>
+          <td style="padding:9px 12px 4px;">2026-05-02<br>
+            <span style="color:#aaa;font-size:13px;">99.62 → 128.32</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+28.81%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+1.42%<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP658 reason-row" data-ep="EP658" data-epnum="658" data-tag="#熱度結束" data-mkt="us" data-spct="28.81" data-bpct="1.42" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者表示 Intel 近期股價已大幅上漲至其看不懂的程度，不可能再加碼，甚至想找機會出清，態度偏向減碼/出場。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「Intel 最近老實講也是噴到我自己已經是有點那種看不懂的狀態，就是不可能再做加，甚至會想要去把它找到機會要開始丟出來的一個情形。」</div></td></tr>
+        <tr class="ep-row ep-EP658"
+            data-ep="EP658" data-epnum="658" data-tag="#營收動能" data-mkt="tw"
+            data-spct="49.81" data-bpct="15.41"
+            data-beat="1" data-days="58"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP658</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#營收動能</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">聯發科 Google TPU（發哥）<br>
+            <span style="color:#aaa;font-size:13px;">2454.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-02<br>
+            <span style="color:#aaa;font-size:13px;">2610.00 → 3910.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+49.81%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+15.41%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP658 reason-row" data-ep="EP658" data-epnum="658" data-tag="#營收動能" data-mkt="tw" data-spct="49.81" data-bpct="15.41" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者針對聯發科 AI ASIC 業務（發哥）表示，法說後券商上調目標價大幅超出市場謠言，講者雖認為現在偏樂觀，但仍給予 consensus 打八折後認為有機會達到，整體態度正向且維持觀察持有意向。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「因為我覺得發哥真的在過去一陣子是已經漲了很多了，那只是我必須得說，就是我們本來在心目中覺得是很誇張的劇本，就竟然有券商報告敢把它寫出來，甚至可能可以代表說我們的想像力還不夠豐富，搞不好可以更豐富之類的……我稍微看一下市場新公布的報告 consensus，我大概打個可能不知道八折之類的吧，我覺得那是有機會可以到。」</div></td></tr>
+        <tr class="ep-header" data-ep="EP659"
+            style="background:#e8ecf0;cursor:pointer;"
+            onclick="toggleEp('EP659')">
+          <td colspan="7" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
+            ▾ EP659
+            <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;"> · 12 筆</span>
+          </td>
+        </tr>
+        <tr class="ep-row ep-EP659"
+            data-ep="EP659" data-epnum="659" data-tag="#產能擴充" data-mkt="tw"
+            data-spct="-9999" data-bpct="-9999"
+            data-beat="-1" data-days="N/A"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP659</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#產能擴充</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">信昌電<br>
+            <span style="color:#aaa;font-size:13px;">6173.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">None<br>
+            <span style="color:#aaa;font-size:13px;">N/A → N/A</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#888888;">N/A</td>
+          <td style="padding:9px 12px 4px;color:#666;">N/A<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#888;'>待定</span></td>
+        </tr><tr class="ep-row ep-EP659 reason-row" data-ep="EP659" data-epnum="659" data-tag="#產能擴充" data-mkt="tw" data-spct="-9999" data-bpct="-9999" data-beat="-1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">出貨交期拉長預示供需趨緊、後續漲價可能性升高，市場直接以漲停反應，符合講者長期看好被動元件缺貨的敘事。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「今天也看到信昌電有一個出貨交期拉長的通知信，它並不是一個漲價信，可是市場就很買單，就直接給它一個漲停。但出貨的交期拉長當然就可能代表說後面就有機會會看到一些漲價的可能性」</div></td></tr>
+        <tr class="ep-row ep-EP659"
+            data-ep="EP659" data-epnum="659" data-tag="#總經趨勢" data-mkt="tw"
+            data-spct="-9999" data-bpct="-9999"
+            data-beat="-1" data-days="N/A"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP659</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#總經趨勢</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">環球晶<br>
+            <span style="color:#aaa;font-size:13px;">6488.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">None<br>
+            <span style="color:#aaa;font-size:13px;">N/A → N/A</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#888888;">N/A</td>
+          <td style="padding:9px 12px 4px;color:#666;">N/A<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#888;'>待定</span></td>
+        </tr><tr class="ep-row ep-EP659 reason-row" data-ep="EP659" data-epnum="659" data-tag="#總經趨勢" data-mkt="tw" data-spct="-9999" data-bpct="-9999" data-beat="-1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">矽晶圓週期底部翻轉，環球晶近期股價轉強，但講者明確定位為二軍候補、非首選標的，待一軍部位調整後才考慮布局。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「矽晶圓——環球晶雖然昨天講的不是特別好，但整體來看就是矽晶圓的一個週期應該開始要上去了。那這就不會是首選，他是排在後面的一個選擇，雖然他可能最近股價也蠻強的」</div></td></tr>
+        <tr class="ep-row ep-EP659"
+            data-ep="EP659" data-epnum="659" data-tag="#產能擴充" data-mkt="tw"
+            data-spct="-9999" data-bpct="-9999"
+            data-beat="-1" data-days="N/A"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP659</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#產能擴充</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">世界先進<br>
+            <span style="color:#aaa;font-size:13px;">5347.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">None<br>
+            <span style="color:#aaa;font-size:13px;">N/A → N/A</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#888888;">N/A</td>
+          <td style="padding:9px 12px 4px;color:#666;">N/A<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#888;'>待定</span></td>
+        </tr><tr class="ep-row ep-EP659 reason-row" data-ep="EP659" data-epnum="659" data-tag="#產能擴充" data-mkt="tw" data-spct="-9999" data-bpct="-9999" data-beat="-1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">成熟製程廠房產能尚未建好便已售罄，利用率超高，顯示供需極度緊俏，但講者定位為二軍候補，非當前首選，待市場輪動時才切入。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「另外一個我覺得也蠻意外的是像這個 Vanguard 就是世界先進。世界先進他在最近的一次對外的說法也是顯示了他一些廠房他是在做那個成熟製程的，就成熟製程的廠房他可能還沒有蓋好然後東西都賣掉了，他的利用率也是超級高的」</div></td></tr>
+        <tr class="ep-row ep-EP659"
+            data-ep="EP659" data-epnum="659" data-tag="#營收動能" data-mkt="tw"
+            data-spct="209.9" data-bpct="9.09"
+            data-beat="1" data-days="54"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP659</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#營收動能</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">國巨<br>
+            <span style="color:#aaa;font-size:13px;">2327.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">超級看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-06<br>
+            <span style="color:#aaa;font-size:13px;">335.59 → 1040.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+209.90%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+9.09%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP659 reason-row" data-ep="EP659" data-epnum="659" data-tag="#營收動能" data-mkt="tw" data-spct="209.9" data-bpct="9.09" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">陳泰銘舉辦 AI 日大力宣傳，疊加講者數月前即看好被動元件供需趨緊的基本面論述，國巨帶動整個被動元件族群轉強，產業趨勢獲市場確認。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「我們在過去已經跟大家一直聊到說，就是被動元件這邊在後面一定會有一個缺貨的情形產生……最近就是國巨的陳董陳泰銘，他搞了一個 AI 日，然後在上面大吹猛吹一頓，整個國巨走起來，相關的一些被動元件都全體的轉強」</div></td></tr>
+        <tr class="ep-row ep-EP659"
+            data-ep="EP659" data-epnum="659" data-tag="#營收動能" data-mkt="us"
+            data-spct="23.78" data-bpct="-0.4"
+            data-beat="1" data-days="54"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP659</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#營收動能</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">AMD<br>
+            <span style="color:#aaa;font-size:13px;">AMD</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">超級看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-06<br>
+            <span style="color:#aaa;font-size:13px;">421.39 → 521.58</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+23.78%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-0.40%<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP659 reason-row" data-ep="EP659" data-epnum="659" data-tag="#營收動能" data-mkt="us" data-spct="23.78" data-bpct="-0.4" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">AMD 法說上修 server CPU TAM 至 2030 年 120B 美元、年增逾 35%，並宣示市佔率目標超過 50%，agentic AI 結構性拉升 CPU 需求，講者認同此訊號高度可信。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「AMD 這邊在法說會有一些重大的訊號——他們去上修了 server CPU TAM，從原本的一個估算調到 2030 年，他們是估 120B，年增是大於 35%，這個速度是很快的。同時他們也講出說他們有信心可以拿下 server CPU 超過 50% 的一個 market share，那這個我是覺得機率是還蠻高的」</div></td></tr>
+        <tr class="ep-row ep-EP659"
+            data-ep="EP659" data-epnum="659" data-tag="#技術創新" data-mkt="tw"
+            data-spct="-10.39" data-bpct="9.09"
+            data-beat="0" data-days="54"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP659</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#技術創新</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">創意電子<br>
+            <span style="color:#aaa;font-size:13px;">3443.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">超級看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-06<br>
+            <span style="color:#aaa;font-size:13px;">4932.53 → 4420.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#2b8a3e;">-10.39%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+9.09%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP659 reason-row" data-ep="EP659" data-epnum="659" data-tag="#技術創新" data-mkt="tw" data-spct="-10.39" data-bpct="9.09" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">創意與 Google 高度綁定，Google chain 啟動帶動 ASIC 族群，股價已率先反應，屬講者持續追蹤的核心標的。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「台股的 ASIC 也都動起來。當然前面像是創意 3443，那個算是大家都已經知道，因為它跟 Google 高度相關嘛，所以當 Google 在動、Google chain 在動起來的時候，它已經提早動起來」</div></td></tr>
+        <tr class="ep-row ep-EP659"
+            data-ep="EP659" data-epnum="659" data-tag="#技術創新" data-mkt="tw"
+            data-spct="-12.71" data-bpct="9.09"
+            data-beat="0" data-days="54"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP659</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#技術創新</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">世芯-KY<br>
+            <span style="color:#aaa;font-size:13px;">3661.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">超級看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-06<br>
+            <span style="color:#aaa;font-size:13px;">4565.00 → 3985.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#2b8a3e;">-12.71%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+9.09%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP659 reason-row" data-ep="EP659" data-epnum="659" data-tag="#技術創新" data-mkt="tw" data-spct="-12.71" data-bpct="9.09" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">世芯高度綁定 Amazon Trainium，Trainium 表現強勁帶動股價直接漲停，講者雖曾對 Amazon 概念保留，但確認股價表態後轉為正面跟進。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「Alchip 也就是世芯 3661 也是直接漲停的。3661 的故事是比較綁定——應該說高度綁定 Amazon 的 Trainium，那在 Trainium 這邊它的表現是非常好啦……Amazon 相關的這個 ASIC 其實最近的表現也都是還蠻好的」</div></td></tr>
+        <tr class="ep-row ep-EP659"
+            data-ep="EP659" data-epnum="659" data-tag="#技術創新" data-mkt="us"
+            data-spct="-15.59" data-bpct="-0.4"
+            data-beat="0" data-days="54"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP659</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#技術創新</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">Palantir<br>
+            <span style="color:#aaa;font-size:13px;">PLTR</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-06<br>
+            <span style="color:#aaa;font-size:13px;">133.79 → 112.93</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#2b8a3e;">-15.59%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-0.40%<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP659 reason-row" data-ep="EP659" data-epnum="659" data-tag="#技術創新" data-mkt="us" data-spct="-15.59" data-bpct="-0.4" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">Palantir 財報推動 No AI Slop 精準 AI 方向（FDE），講者長期看好其在企業精準 AI 的核心地位，相對其他 SaaS 公司跌幅顯著較小，具錯殺後補漲潛力。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「像我們特別喜歡的 CrowdStrike、或是 Palantir、或是這個叫什麼，Cloudflare，他們在過去一陣子其實 year-to-date 有兩家是正的，只是 Palantir 還是負的還是在水下，但相較於一些 SaaS 公司可能是已經跌掉 40%、50%、甚至是有跌掉 60%、70% 的，那他們是相對撐得住的」</div></td></tr>
+        <tr class="ep-row ep-EP659"
+            data-ep="EP659" data-epnum="659" data-tag="#技術創新" data-mkt="us"
+            data-spct="49.78" data-bpct="-0.4"
+            data-beat="1" data-days="54"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP659</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#技術創新</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">CrowdStrike<br>
+            <span style="color:#aaa;font-size:13px;">CRWD</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-06<br>
+            <span style="color:#aaa;font-size:13px;">468.07 → 701.09</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+49.78%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-0.40%<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP659 reason-row" data-ep="EP659" data-epnum="659" data-tag="#技術創新" data-mkt="us" data-spct="49.78" data-bpct="-0.4" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者長期點名 CrowdStrike 為偏好軟體標的之一，year-to-date 表現相對 SaaS 同業顯著抗跌，講者視其為 stand your ground 的核心持倉。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「像我們特別喜歡的 CrowdStrike、或是 Palantir、或是這個叫什麼，Cloudflare，他們在過去一陣子其實 year-to-date 有兩家是正的，只是 Palantir 還是負的還是在水下，但相較於一些 SaaS 公司可能是已經跌掉 40%、50%、甚至是有跌掉 60%、70% 的，那他們是相對撐得住的」</div></td></tr>
+        <tr class="ep-row ep-EP659"
+            data-ep="EP659" data-epnum="659" data-tag="#技術創新" data-mkt="us"
+            data-spct="-4.57" data-bpct="-0.4"
+            data-beat="0" data-days="54"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP659</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#技術創新</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">Cloudflare<br>
+            <span style="color:#aaa;font-size:13px;">NET</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-06<br>
+            <span style="color:#aaa;font-size:13px;">248.59 → 237.24</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#2b8a3e;">-4.57%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-0.40%<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP659 reason-row" data-ep="EP659" data-epnum="659" data-tag="#技術創新" data-mkt="us" data-spct="-4.57" data-bpct="-0.4" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者長期點名 Cloudflare 為偏好軟體標的，year-to-date 正報酬，相對 SaaS 同業表現強勁，具基本面支撐，為 stand your ground 組合成員。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「像我們特別喜歡的 CrowdStrike、或是 Palantir、或是這個叫什麼，Cloudflare，他們在過去一陣子其實 year-to-date 有兩家是正的，只是 Palantir 還是負的還是在水下，但相較於一些 SaaS 公司可能是已經跌掉 40%、50%、甚至是有跌掉 60%、70% 的，那他們是相對撐得住的」</div></td></tr>
+        <tr class="ep-row ep-EP659"
+            data-ep="EP659" data-epnum="659" data-tag="#產能擴充" data-mkt="us"
+            data-spct="123.46" data-bpct="-0.4"
+            data-beat="1" data-days="54"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP659</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#產能擴充</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">三星電機<br>
+            <span style="color:#aaa;font-size:13px;">009150.KS</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-06<br>
+            <span style="color:#aaa;font-size:13px;">912000.00 → 2038000.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+123.46%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-0.40%<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP659 reason-row" data-ep="EP659" data-epnum="659" data-tag="#產能擴充" data-mkt="us" data-spct="123.46" data-bpct="-0.4" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">高階 AI 伺服器被動元件（MLCC 等）嚴重供不應求，三星電機為高階貨龍頭受益者，講者點名但未明確表示個人布局。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「台系可能就不一定碰得到，就是要把麥克風交給不管是韓國的三星電機，然後或者是在日本的村田，他們是老大」</div></td></tr>
+        <tr class="ep-row ep-EP659"
+            data-ep="EP659" data-epnum="659" data-tag="#產能擴充" data-mkt="us"
+            data-spct="109.03" data-bpct="-0.4"
+            data-beat="1" data-days="54"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP659</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#產能擴充</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">村田製作所<br>
+            <span style="color:#aaa;font-size:13px;">6981.T</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-06<br>
+            <span style="color:#aaa;font-size:13px;">5138.00 → 10740.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+109.03%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-0.40%<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP659 reason-row" data-ep="EP659" data-epnum="659" data-tag="#產能擴充" data-mkt="us" data-spct="109.03" data-bpct="-0.4" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">高階 MLCC 市場龍頭，AI 伺服器高階被動元件需求爆增下最直接受益，講者點名但未明確表示個人布局。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「台系可能就不一定碰得到，就是要把麥克風交給不管是韓國的三星電機，然後或者是在日本的村田，他們是老大」</div></td></tr>
+        <tr class="ep-header" data-ep="EP660"
+            style="background:#e8ecf0;cursor:pointer;"
+            onclick="toggleEp('EP660')">
+          <td colspan="7" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
+            ▾ EP660
+            <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;"> · 3 筆</span>
+          </td>
+        </tr>
+        <tr class="ep-row ep-EP660"
+            data-ep="EP660" data-epnum="660" data-tag="#產能擴充" data-mkt="tw"
+            data-spct="-9999" data-bpct="-9999"
+            data-beat="-1" data-days="N/A"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP660</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#產能擴充</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">世界先進<br>
+            <span style="color:#aaa;font-size:13px;">5347.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">None<br>
+            <span style="color:#aaa;font-size:13px;">N/A → N/A</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#888888;">N/A</td>
+          <td style="padding:9px 12px 4px;color:#666;">N/A<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#888;'>待定</span></td>
+        </tr><tr class="ep-row ep-EP660 reason-row" data-ep="EP660" data-epnum="660" data-tag="#產能擴充" data-mkt="tw" data-spct="-9999" data-bpct="-9999" data-beat="-1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者確認世界先進承接台積電產能轉移計畫、稼動率良好，且新建廠房產能已全數售出，基本面支撐股價強勢表現，態度正面。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「像最近連世界先進的表現都很好⋯⋯其實我們一直都知道說在世界先進，我記得那時候法說開完，就有跟大家聊到說，其實看起來他的狀況不錯，因為他其實是拿到 TSMC 的一個計畫轉移，東西放在他這裡，所以他不會太差。那只是連電都噴上去，這個我就有一點意外。」</div></td></tr>
+        <tr class="ep-row ep-EP660"
+            data-ep="EP660" data-epnum="660" data-tag="#籌碼面" data-mkt="tw"
+            data-spct="32.26" data-bpct="7.68"
+            data-beat="1" data-days="51"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP660</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#籌碼面</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">瑞昱<br>
+            <span style="color:#aaa;font-size:13px;">2379.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-09<br>
+            <span style="color:#aaa;font-size:13px;">592.00 → 783.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+32.26%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+7.68%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP660 reason-row" data-ep="EP660" data-epnum="660" data-tag="#籌碼面" data-mkt="tw" data-spct="32.26" data-bpct="7.68" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者注意到瑞昱股價強勢開燈，類比 CPU 族群早期走勢，表示將認真探索研究並持續追蹤，具有試單觀察傾向，屬初步看好訊號。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「禮拜五大家也看到，瑞昱啊、聯詠都直接開燈。那到底是發生什麼事情呢？這個我們會去認真探索一下。就有可能類似像 CPU 這樣子，有些東西我們可能在一開始沒有辦法看到，但是我們在股價技術面先看到，那後續就會去做持續的追蹤。」</div></td></tr>
+        <tr class="ep-row ep-EP660"
+            data-ep="EP660" data-epnum="660" data-tag="#籌碼面" data-mkt="tw"
+            data-spct="5.02" data-bpct="7.68"
+            data-beat="0" data-days="51"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP660</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#籌碼面</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">聯詠<br>
+            <span style="color:#aaa;font-size:13px;">3034.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-09<br>
+            <span style="color:#aaa;font-size:13px;">498.00 → 523.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+5.02%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+7.68%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP660 reason-row" data-ep="EP660" data-epnum="660" data-tag="#籌碼面" data-mkt="tw" data-spct="5.02" data-bpct="7.68" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者注意到聯詠股價強勢開燈，與瑞昱同為成熟製程/消費性 IC 族群走強代表，將持續追蹤研究，屬初步看好訊號。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「禮拜五大家也看到，瑞昱啊、聯詠都直接開燈。那到底是發生什麼事情呢？這個我們會去認真探索一下。就有可能類似像 CPU 這樣子，有些東西我們可能在一開始沒有辦法看到，但是我們在股價技術面先看到，那後續就會去做持續的追蹤。」</div></td></tr>
+        <tr class="ep-header" data-ep="EP661"
+            style="background:#e8ecf0;cursor:pointer;"
+            onclick="toggleEp('EP661')">
+          <td colspan="7" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
+            ▾ EP661
+            <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;"> · 10 筆</span>
+          </td>
+        </tr>
+        <tr class="ep-row ep-EP661"
+            data-ep="EP661" data-epnum="661" data-tag="#營收動能" data-mkt="tw"
+            data-spct="-9999" data-bpct="-9999"
+            data-beat="-1" data-days="N/A"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP661</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#營收動能</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">金山電<br>
+            <span style="color:#aaa;font-size:13px;">8042.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">None<br>
+            <span style="color:#aaa;font-size:13px;">N/A → N/A</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#888888;">N/A</td>
+          <td style="padding:9px 12px 4px;color:#666;">N/A<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#888;'>待定</span></td>
+        </tr><tr class="ep-row ep-EP661 reason-row" data-ep="EP661" data-epnum="661" data-tag="#營收動能" data-mkt="tw" data-spct="-9999" data-bpct="-9999" data-beat="-1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">鋁電容漲價趨勢下，金山電已跟上國際被動元件行情，表現相當程度。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「台灣的電容廠，就像是立隆電、金山電，然後或者說鈺邦，其實都是有相當程度的表現。所以現在已經不能夠說台灣沒有跟上世界的被動元件」</div></td></tr>
+        <tr class="ep-row ep-EP661"
+            data-ep="EP661" data-epnum="661" data-tag="#產能擴充" data-mkt="tw"
+            data-spct="-9999" data-bpct="-9999"
+            data-beat="-1" data-days="N/A"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP661</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#產能擴充</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">世界先進<br>
+            <span style="color:#aaa;font-size:13px;">5347.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">超級看好</td>
+          <td style="padding:9px 12px 4px;">None<br>
+            <span style="color:#aaa;font-size:13px;">N/A → N/A</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#888888;">N/A</td>
+          <td style="padding:9px 12px 4px;color:#666;">N/A<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#888;'>待定</span></td>
+        </tr><tr class="ep-row ep-EP661 reason-row" data-ep="EP661" data-epnum="661" data-tag="#產能擴充" data-mkt="tw" data-spct="-9999" data-bpct="-9999" data-beat="-1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">世界先進擁有台積電特殊製程授權，新加坡新廠產能已全數被客戶包走，屬於需求驅動型漲價，基本面確實。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「世界先進是因為它有很多台積電的授權，一些特殊製程的授權或什麼的，所以世界先進這邊，特別是他們自己在法說會就跟大家講說，就是怎麼樣，它產能是被包走的，在新加坡的新廠是直接整個被包掉。所以這種我們覺得沒有問題，這個就是 demand 去驅動的」</div></td></tr>
+        <tr class="ep-row ep-EP661"
+            data-ep="EP661" data-epnum="661" data-tag="#技術創新" data-mkt="tw"
+            data-spct="-9999" data-bpct="-9999"
+            data-beat="-1" data-days="N/A"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP661</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#技術創新</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">加弘<br>
+            <span style="color:#aaa;font-size:13px;">6538.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">None<br>
+            <span style="color:#aaa;font-size:13px;">N/A → N/A</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#888888;">N/A</td>
+          <td style="padding:9px 12px 4px;color:#666;">N/A<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#888;'>待定</span></td>
+        </tr><tr class="ep-row ep-EP661 reason-row" data-ep="EP661" data-epnum="661" data-tag="#技術創新" data-mkt="tw" data-spct="-9999" data-bpct="-9999" data-beat="-1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">加弘受益於CPU Socket外溢題材，講者確認該邏輯成立，視為CPU產業鏈擴散受益股。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「CPU socket 的話加弘，這個確實，就是我們那時候講說 CPU 的一個外溢題材」</div></td></tr>
+        <tr class="ep-row ep-EP661"
+            data-ep="EP661" data-epnum="661" data-tag="#營收動能" data-mkt="tw"
+            data-spct="149.4" data-bpct="9.37"
+            data-beat="1" data-days="47"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP661</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#營收動能</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">國巨<br>
+            <span style="color:#aaa;font-size:13px;">2327.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-13<br>
+            <span style="color:#aaa;font-size:13px;">417.01 → 1040.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+149.40%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+9.37%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP661 reason-row" data-ep="EP661" data-epnum="661" data-tag="#營收動能" data-mkt="tw" data-spct="149.4" data-bpct="9.37" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">MLCC供需吃緊，高規格料由日韓大廠主導，台系受排擠效應受惠，國巨作為台灣領頭羊已跟上國際被動元件漲價趨勢。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「台灣的不管是領頭羊，像是國巨、華新科，然後後面一些比較小隻的 MLCC，像是什麼信昌啊、然後或者是立隆電、然後或者說電龍，我剛剛舉的這幾家，其實他們本身現在都有跟到這個國際的情勢」</div></td></tr>
+        <tr class="ep-row ep-EP661"
+            data-ep="EP661" data-epnum="661" data-tag="#營收動能" data-mkt="tw"
+            data-spct="157.0" data-bpct="9.37"
+            data-beat="1" data-days="47"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP661</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#營收動能</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">華新科<br>
+            <span style="color:#aaa;font-size:13px;">2492.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-13<br>
+            <span style="color:#aaa;font-size:13px;">200.00 → 514.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+157.00%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+9.37%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP661 reason-row" data-ep="EP661" data-epnum="661" data-tag="#營收動能" data-mkt="tw" data-spct="157.0" data-bpct="9.37" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">MLCC排擠效應下，華新科作為台系領頭羊之一已跟上國際被動元件漲價與需求趨勢。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「台灣的不管是領頭羊，像是國巨、華新科，然後後面一些比較小隻的 MLCC，像是什麼信昌啊、然後或者是立隆電、然後或者說電龍，我剛剛舉的這幾家，其實他們本身現在都有跟到這個國際的情勢」</div></td></tr>
+        <tr class="ep-row ep-EP661"
+            data-ep="EP661" data-epnum="661" data-tag="#營收動能" data-mkt="tw"
+            data-spct="2.16" data-bpct="9.37"
+            data-beat="0" data-days="47"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP661</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#營收動能</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">立隆電<br>
+            <span style="color:#aaa;font-size:13px;">2471.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-13<br>
+            <span style="color:#aaa;font-size:13px;">50.90 → 52.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+2.16%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+9.37%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP661 reason-row" data-ep="EP661" data-epnum="661" data-tag="#營收動能" data-mkt="tw" data-spct="2.16" data-bpct="9.37" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">鋁電容需求升溫，日本大廠Nichicon等股價大漲後，台灣電容廠立隆電已跟上國際被動元件行情，鋁電容漲價趨勢持續。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「台灣的電容廠，就像是立隆電、金山電，然後或者說鈺邦，其實都是有相當程度的表現。所以現在已經不能夠說台灣沒有跟上世界的被動元件」</div></td></tr>
+        <tr class="ep-row ep-EP661"
+            data-ep="EP661" data-epnum="661" data-tag="#營收動能" data-mkt="tw"
+            data-spct="56.58" data-bpct="9.37"
+            data-beat="1" data-days="47"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP661</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#營收動能</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">鈺邦<br>
+            <span style="color:#aaa;font-size:13px;">6449.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-13<br>
+            <span style="color:#aaa;font-size:13px;">215.86 → 338.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+56.58%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+9.37%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP661 reason-row" data-ep="EP661" data-epnum="661" data-tag="#營收動能" data-mkt="tw" data-spct="56.58" data-bpct="9.37" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">鋁電容漲價趨勢下，鈺邦已跟上國際被動元件行情，表現相當程度。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「台灣的電容廠，就像是立隆電、金山電，然後或者說鈺邦，其實都是有相當程度的表現。所以現在已經不能夠說台灣沒有跟上世界的被動元件」</div></td></tr>
+        <tr class="ep-row ep-EP661"
+            data-ep="EP661" data-epnum="661" data-tag="#估值過低" data-mkt="tw"
+            data-spct="7.04" data-bpct="9.37"
+            data-beat="0" data-days="47"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP661</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#估值過低</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">台積電<br>
+            <span style="color:#aaa;font-size:13px;">2330.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">超級看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-13<br>
+            <span style="color:#aaa;font-size:13px;">2214.09 → 2370.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+7.04%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+9.37%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP661 reason-row" data-ep="EP661" data-epnum="661" data-tag="#估值過低" data-mkt="tw" data-spct="7.04" data-bpct="9.37" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者明確表示已將部位調整至台積電，視之為高確定性核心持股，財務數字與漲價性俱佳，且可作為市場震盪時的防守標的。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「像我自己也是把一些部位都放到台積電跟聯發科去，然後就在過去一陣子都有去做這樣子一個調整」</div></td></tr>
+        <tr class="ep-row ep-EP661"
+            data-ep="EP661" data-epnum="661" data-tag="#籌碼面" data-mkt="tw"
+            data-spct="11.87" data-bpct="9.37"
+            data-beat="1" data-days="47"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP661</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#籌碼面</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">聯發科<br>
+            <span style="color:#aaa;font-size:13px;">2454.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">超級看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-13<br>
+            <span style="color:#aaa;font-size:13px;">3495.00 → 3910.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+11.87%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+9.37%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP661 reason-row" data-ep="EP661" data-epnum="661" data-tag="#籌碼面" data-mkt="tw" data-spct="11.87" data-bpct="9.37" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者明確表示已將部位調整至聯發科，視之為核心持股之一，在市場震盪分化時選擇集中至大型確定性標的。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「像我自己也是把一些部位都放到台積電跟聯發科去，然後就在過去一陣子都有去做這樣子一個調整」</div></td></tr>
+        <tr class="ep-row ep-EP661"
+            data-ep="EP661" data-epnum="661" data-tag="#營收動能" data-mkt="tw"
+            data-spct="2.71" data-bpct="9.37"
+            data-beat="0" data-days="47"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP661</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#營收動能</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">新唐<br>
+            <span style="color:#aaa;font-size:13px;">4919.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-13<br>
+            <span style="color:#aaa;font-size:13px;">166.00 → 170.50</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+2.71%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+9.37%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP661 reason-row" data-ep="EP661" data-epnum="661" data-tag="#營收動能" data-mkt="tw" data-spct="2.71" data-bpct="9.37" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">新唐切入Google、微軟供應鏈的MCU故事持續發酵，業績改善確實，傳言NVIDIA也可能進場，講者認可該邏輯有效性，聽眾持續加碼。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「新唐的話最好笑，新唐的話就是可能兩年前的節目就有跟大家說，那時候他做進去 Google 跟微軟，然後大家現在把一樣的故事再拿出來炒，然後這次就上去了，所以這個 MCU 的業績改善確實是蠻重要。那當然現在有些人說 NV 也要進去了或什麼的」</div></td></tr>
+        <tr class="ep-header" data-ep="EP662"
+            style="background:#e8ecf0;cursor:pointer;"
+            onclick="toggleEp('EP662')">
+          <td colspan="7" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
+            ▾ EP662
+            <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;">2026-05-16 · 2 筆</span>
+          </td>
+        </tr>
+        <tr class="ep-row ep-EP662"
+            data-ep="EP662" data-epnum="662" data-tag="#籌碼面" data-mkt="tw"
+            data-spct="4.91" data-bpct="9.49"
+            data-beat="0" data-days="44"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP662</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#籌碼面</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">台積電<br>
+            <span style="color:#aaa;font-size:13px;">2330.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">超級看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-16<br>
+            <span style="color:#aaa;font-size:13px;">2258.97 → 2370.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+4.91%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+9.49%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP662 reason-row" data-ep="EP662" data-epnum="662" data-tag="#籌碼面" data-mkt="tw" data-spct="4.91" data-bpct="9.49" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">金管會放寬投信持有台積電上限，現有投信買盤已強勁，且後續仍有大量投信需歷經約2-4個月修改條款才能增持，形成持續且可預期的資金流入動能，看好中期資金輪動推升台積電。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「金管會的宣布其實非常重要，也就是放寬台積電的上限，讓大家可以買到很多。那個其實在過去已經持續發酵，要不是前面外資在那邊瘋狂亂倒貨的話，其實我覺得台積電早就已經走出去了，因為你看那個投信真的買得蠻大力的。」</div></td></tr>
+        <tr class="ep-row ep-EP662"
+            data-ep="EP662" data-epnum="662" data-tag="#技術創新" data-mkt="us"
+            data-spct="18.01" data-bpct="-1.12"
+            data-beat="1" data-days="44"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP662</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#技術創新</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">CrowdStrike<br>
+            <span style="color:#aaa;font-size:13px;">CRWD</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">超級看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-16<br>
+            <span style="color:#aaa;font-size:13px;">594.08 → 701.09</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+18.01%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-1.12%<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP662 reason-row" data-ep="EP662" data-epnum="662" data-tag="#技術創新" data-mkt="us" data-spct="18.01" data-bpct="-1.12" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">CrowdStrike即將創新高，資安股在市場唱衰聲中仍走強創高，講者明確表示這是自己喜歡的軟體股，且認為資安族群已率先爬向右上角，是新時代領先族群。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「像我自己喜歡的軟體股，反而不是在過去跌爛的，反而是就像 CrowdStrike 要創新高了。大家還記得嗎，在前陣子什麼 Methos 出來的時候，不是說什麼全球的資安又要完蛋了，surprise motherfucker，資安股一大堆都在創新高。」</div></td></tr>
+        <tr class="ep-header" data-ep="EP663"
+            style="background:#e8ecf0;cursor:pointer;"
+            onclick="toggleEp('EP663')">
+          <td colspan="7" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
+            ▾ EP663
+            <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;">2026-05-20 · 1 筆</span>
+          </td>
+        </tr>
+        <tr class="ep-row ep-EP663"
+            data-ep="EP663" data-epnum="663" data-tag="#技術創新" data-mkt="tw"
+            data-spct="1.41" data-bpct="12.92"
+            data-beat="0" data-days="40"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP663</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#技術創新</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">愛普（EPMEM）<br>
+            <span style="color:#aaa;font-size:13px;">6531.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-20<br>
+            <span style="color:#aaa;font-size:13px;">966.37 → 980.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+1.41%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+12.92%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP663 reason-row" data-ep="EP663" data-epnum="663" data-tag="#技術創新" data-mkt="tw" data-spct="1.41" data-bpct="12.92" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者以愛普為例說明：即便短期被市場冷落，其埋入式被動元件（IPD）與Google TPU載板的綁定關係仍在，只要相關產品線重回市場焦點，股價就有機會復活；暗示現階段軟掉的老AI族群不代表故事結束。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「前陣子那時候聊一家公司叫 EPMEM——就是愛普——那像這家公司呢，他也是在那一段時間，你就不知道為什麼，就市場就不喜歡他。可是後來當這個 Google 的 TPU 變成是台面正中央的時候，因為大家知道說他的那個東西就是埋在載板裡面的電容嘛……就再一次這個字體又回來。所以前面可能比較軟的東西，都是有機會會在後面復活啦。」</div></td></tr>
+        <tr class="ep-header" data-ep="EP664"
+            style="background:#e8ecf0;cursor:pointer;"
+            onclick="toggleEp('EP664')">
+          <td colspan="7" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
+            ▾ EP664
+            <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;">2026-05-23 · 2 筆</span>
+          </td>
+        </tr>
+        <tr class="ep-row ep-EP664"
+            data-ep="EP664" data-epnum="664" data-tag="#技術創新" data-mkt="us"
+            data-spct="-11.85" data-bpct="-1.98"
+            data-beat="0" data-days="37"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP664</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#技術創新</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">Google（Alphabet）<br>
+            <span style="color:#aaa;font-size:13px;">GOOGL</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-23<br>
+            <span style="color:#aaa;font-size:13px;">382.74 → 337.39</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#2b8a3e;">-11.85%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-1.98%<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP664 reason-row" data-ep="EP664" data-epnum="664" data-tag="#技術創新" data-mkt="us" data-spct="-11.85" data-bpct="-1.98" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">Google 與 Blackstone 合作推出 TPU Cluster/TPU Cloud，以第三方 Neo Cloud 形式繞過客戶資料疑慮，吸引模型廠商採用 TPU；外銷比例從極低快速拉升至 3:1（自用:外銷），顯示 TPU 商業化加速，講者認為對 Google 本身及其 supply chain 是重大利多。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「Google 跟 Blackstone 他們合作要去搞 TPU Cluster、TPU Cloud。……我個人認為這個對於 Google 來講，是一個非常大的好消息。……如果你今天是 Google 的 Supply Chain 的投資者的話，可能就會覺得這是一個大好消息，因為除了自用之外，現在外銷的數字也是非常可怕。……大概是 3 比 1，就是說 3 是自用，那 1 是外銷。」</div></td></tr>
+        <tr class="ep-row ep-EP664"
+            data-ep="EP664" data-epnum="664" data-tag="#營收動能" data-mkt="tw"
+            data-spct="17.75" data-bpct="7.35"
+            data-beat="1" data-days="37"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP664</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#營收動能</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">漢唐<br>
+            <span style="color:#aaa;font-size:13px;">2404.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-23<br>
+            <span style="color:#aaa;font-size:13px;">1155.00 → 1360.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+17.75%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+7.35%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP664 reason-row" data-ep="EP664" data-epnum="664" data-tag="#營收動能" data-mkt="tw" data-spct="17.75" data-bpct="7.35" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者回覆聽眾留言時提及漢唐，確認其營收、獲利、毛利表現均佳，認為基本面好的公司股價終究會反映，態度偏正面，但並無明確個人加碼動作，信心度偏低。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「那這位兄弟一看，應該就是那個漢唐的股東，因為漢唐的股東應該都很好奇說，營收這麼好、獲利這麼好、毛利來到這上海，怎麼不會漲，他不是禮拜五就漲了嗎？……反正你公司只要持續的營運都好的話，你股價終究會還你公道，只是有時候你可能會等很久。」</div></td></tr>
+        <tr class="ep-header" data-ep="EP665"
+            style="background:#e8ecf0;cursor:pointer;"
+            onclick="toggleEp('EP665')">
+          <td colspan="7" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
+            ▾ EP665
+            <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;"> · 3 筆</span>
+          </td>
+        </tr>
+        <tr class="ep-row ep-EP665"
+            data-ep="EP665" data-epnum="665" data-tag="#技術創新" data-mkt="us"
+            data-spct="-9999" data-bpct="-9999"
+            data-beat="-1" data-days="N/A"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP665</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#技術創新</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">SpaceX<br>
+            <span style="color:#aaa;font-size:13px;">SPACEX</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">超級看好</td>
+          <td style="padding:9px 12px 4px;">None<br>
+            <span style="color:#aaa;font-size:13px;">N/A → N/A</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#888888;">N/A</td>
+          <td style="padding:9px 12px 4px;color:#666;">N/A<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#888;'>待定</span></td>
+        </tr><tr class="ep-row ep-EP665 reason-row" data-ep="EP665" data-epnum="665" data-tag="#技術創新" data-mkt="us" data-spct="-9999" data-bpct="-9999" data-beat="-1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">SpaceX 啟動 IPO，講者明確表示不論估值高低都會先買進卡位，預計初期建倉約五成部位，後續視情況加碼，並視 SpaceX 為衛星 AI 算力／Neo Cloud 潛力股。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「最近當然可能比較大的話題，就是 SpaceX 他們要開始去做 IPO 了。因為我自己的看法就是，反正不管你估出來的價格怎麼樣，我都一定會先上車一點，然後先上車一點去插旗之後，接下來再看說要怎麼樣去調整。」</div></td></tr>
+        <tr class="ep-row ep-EP665"
+            data-ep="EP665" data-epnum="665" data-tag="#營收動能" data-mkt="tw"
+            data-spct="49.42" data-bpct="1.85"
+            data-beat="1" data-days="33"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP665</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#營收動能</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">國巨<br>
+            <span style="color:#aaa;font-size:13px;">2327.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">超級看好</td>
+          <td style="padding:9px 12px 4px;">2026-05-27<br>
+            <span style="color:#aaa;font-size:13px;">696.01 → 1040.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#d9534f;">+49.42%</td>
+          <td style="padding:9px 12px 4px;color:#666;">+1.85%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP665 reason-row" data-ep="EP665" data-epnum="665" data-tag="#營收動能" data-mkt="tw" data-spct="49.42" data-bpct="1.85" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">國巨稼動率持續提升（特規品90%、標準品80%），BB Ratio 走揚，配合全球被動元件廠商同步上漲趨勢，確認非人為炒作，基本面動能明確。講者以2018年高峰毛利率類比，認為此波可延伸至明顯的 EPS 成長。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「在今天國巨的一個對外說明會上，有提到說他們的 BB Ratio 數字拉上去了，然後現在在一些特規品的品項好像是拉到90%的一個稼動率，然後在標準品也是80%的一個稼動率。所以就代表說它的數字是越來越好。」</div></td></tr>
+        <tr class="ep-row ep-EP665"
+            data-ep="EP665" data-epnum="665" data-tag="#熱度結束" data-mkt="us"
+            data-spct="-13.77" data-bpct="-2.61"
+            data-beat="0" data-days="33"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP665</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#熱度結束</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">Tesla<br>
+            <span style="color:#aaa;font-size:13px;">TSLA</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看壞<span style="font-size:14px;background:#e8f4fd;color:#1a6b9a;border-radius:3px;padding:1px 4px;margin-left:4px;">空</span></td>
+          <td style="padding:9px 12px 4px;">2026-05-27<br>
+            <span style="color:#aaa;font-size:13px;">440.36 → 379.71</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#2b8a3e;">-13.77%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-2.61%<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP665 reason-row" data-ep="EP665" data-epnum="665" data-tag="#熱度結束" data-mkt="us" data-spct="-13.77" data-bpct="-2.61" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者為因應 SpaceX IPO 上車資金需求，計畫調降 Tesla 持股比重，投資重心從 Tesla 轉移至 SpaceX，並認為 Tesla 的核心故事已從電動車出貨轉向 Optimus/自駕，原始投資邏輯持續演變。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「那同時會去降低一點，可能像 Tesla 的持股，因為對我來講反正我就壓住馬斯克的一個故事。」</div></td></tr>
+        <tr class="ep-header" data-ep="EP671"
+            style="background:#e8ecf0;cursor:pointer;"
+            onclick="toggleEp('EP671')">
+          <td colspan="7" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
+            ▾ EP671
+            <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;">2026-06-17 · 4 筆</span>
+          </td>
+        </tr>
+        <tr class="ep-row ep-EP671"
+            data-ep="EP671" data-epnum="671" data-tag="#籌碼面" data-mkt="tw"
+            data-spct="-0.63" data-bpct="-1.46"
+            data-beat="1" data-days="12"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP671</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#籌碼面</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">台積電<br>
+            <span style="color:#aaa;font-size:13px;">2330.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">超級看好</td>
+          <td style="padding:9px 12px 4px;">2026-06-17<br>
+            <span style="color:#aaa;font-size:13px;">2385.00 → 2370.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#2b8a3e;">-0.63%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-1.46%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#d9534f;font-weight:bold;'>獲勝</span></td>
+        </tr><tr class="ep-row ep-EP671 reason-row" data-ep="EP671" data-epnum="671" data-tag="#籌碼面" data-mkt="tw" data-spct="-0.63" data-bpct="-1.46" data-beat="1" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者明確表示台積電是其核心避險與長線部位，視之為市場動盪時的首要資金歸宿；並提到投信法規鬆綁後台積電持股比重上限提升，預期未來資金將萬箭歸宗回流台積電。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「我一個窟我已經想好就台積電，隨時我發現說媽的風向不對，我就要密地躲進台積電」</div></td></tr>
+        <tr class="ep-row ep-EP671"
+            data-ep="EP671" data-epnum="671" data-tag="#技術創新" data-mkt="us"
+            data-spct="-19.72" data-bpct="-1.36"
+            data-beat="0" data-days="12"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP671</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#技術創新</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">安森美<br>
+            <span style="color:#aaa;font-size:13px;">ON</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-06-17<br>
+            <span style="color:#aaa;font-size:13px;">112.92 → 90.65</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#2b8a3e;">-19.72%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-1.36%<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP671 reason-row" data-ep="EP671" data-epnum="671" data-tag="#技術創新" data-mkt="us" data-spct="-19.72" data-bpct="-1.36" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者表示安森美在 Server 及功率半導體應用上持續關注，受惠於 Nexperia 被制裁後的供應缺口與 non-China 布局需求，外加 800V DC 與 DrMOS 等高端功率元件需求增長，屬於整體離散元件/功率半導體族群受惠邏輯的核心標的之一。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「不管你去看一下什麼 Vishay 或是什麼安森美，然後相關的 NPN，那或者是瑞薩，就是他們其實都是在過去的兩個月漲蠻多，就是直接拉了一波走……那在美國交易所的那個 onsemi（安森美）之前，我跟大家稍微的聊過，包含說他可能在一些 server 或是說相關的應用，這個我可能是比較有在注意啊」</div></td></tr>
+        <tr class="ep-row ep-EP671"
+            data-ep="EP671" data-epnum="671" data-tag="#營收動能" data-mkt="us"
+            data-spct="-6.44" data-bpct="-1.36"
+            data-beat="0" data-days="12"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP671</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#營收動能</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">Vishay<br>
+            <span style="color:#aaa;font-size:13px;">VSH</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-06-17<br>
+            <span style="color:#aaa;font-size:13px;">60.23 → 56.35</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#2b8a3e;">-6.44%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-1.36%<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP671 reason-row" data-ep="EP671" data-epnum="671" data-tag="#營收動能" data-mkt="us" data-spct="-6.44" data-bpct="-1.36" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">Vishay 為離散元件/功率半導體海外 IDM 代表，講者認為受 Nexperia 制裁缺口與 AI 伺服器高階功率需求外溢影響，高階 IDM 廠商（如 Vishay）在供需結構改變中持續受惠，且觀察到其外資持股變化與後續 800V DC 題材醞釀。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「不管你去看一下什麼 Vishay 或是什麼安森美……就是他們其實都是在過去的兩個月漲蠻多，就是直接拉了一波走……就是因為高階的需求的量真的是蠻大，所以它確實是有可能會產生一些排擠的效應或說外溢的效應，然後導致說一些可能比較高階的廠商，會把它比較中低規格的東西丟出來，那這丟出來的東西當然蠻多就會被台廠給吃掉」</div></td></tr>
+        <tr class="ep-row ep-EP671"
+            data-ep="EP671" data-epnum="671" data-tag="#產能擴充" data-mkt="us"
+            data-spct="-5.45" data-bpct="-1.36"
+            data-beat="0" data-days="12"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP671</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#產能擴充</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">德州儀器<br>
+            <span style="color:#aaa;font-size:13px;">TXN</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-06-17<br>
+            <span style="color:#aaa;font-size:13px;">301.88 → 285.43</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#2b8a3e;">-5.45%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-1.36%<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP671 reason-row" data-ep="EP671" data-epnum="671" data-tag="#產能擴充" data-mkt="us" data-spct="-5.45" data-bpct="-1.36" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">德州儀器提早在車用、機器人與工業端加單備貨，講者認為這反映對後續離散元件/PMIC 用量顯著提升與 ASP 上升的預期，屬供需結構轉變的先行布局。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「包含像德州儀器也是……其實不就是可能在機器人，或者說什麼工廠在工業端這邊有看到蠻多的用量去做加碼……就是可能是因為他們也注意到後面的這些 discrete 或是一些功率元件它會在用量上面是顯著的提升，然後在 ASP 也是有機會去提升，所以提早先往那個方向去做遷移」</div></td></tr>
+        <tr class="ep-header" data-ep="EP672"
+            style="background:#e8ecf0;cursor:pointer;"
+            onclick="toggleEp('EP672')">
+          <td colspan="7" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
+            ▾ EP672
+            <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;">2026-06-20 · 3 筆</span>
+          </td>
+        </tr>
+        <tr class="ep-row ep-EP672"
+            data-ep="EP672" data-epnum="672" data-tag="#營收動能" data-mkt="tw"
+            data-spct="-3.7" data-bpct="-2.66"
+            data-beat="0" data-days="9"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP672</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#營收動能</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">國巨<br>
+            <span style="color:#aaa;font-size:13px;">2327.TW</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-06-20<br>
+            <span style="color:#aaa;font-size:13px;">1080.00 → 1040.00</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#2b8a3e;">-3.70%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-2.66%<br>
+            <span style="color:#bbb;font-size:12px;">0050.TW</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP672 reason-row" data-ep="EP672" data-epnum="672" data-tag="#營收動能" data-mkt="tw" data-spct="-3.7" data-bpct="-2.66" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者提及國巨在被動元件族群震盪中仍持續鎖漲，表現強勢，隱含持續看好態度。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「像大型的國巨照樣繼續鎖上漲，跟做壞掉一樣」</div></td></tr>
+        <tr class="ep-row ep-EP672"
+            data-ep="EP672" data-epnum="672" data-tag="#產能擴充" data-mkt="us"
+            data-spct="-13.17" data-bpct="-2.38"
+            data-beat="0" data-days="9"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP672</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#產能擴充</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">Vishay Intertechnology（Vshare）<br>
+            <span style="color:#aaa;font-size:13px;">VSH</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">看好</td>
+          <td style="padding:9px 12px 4px;">2026-06-20<br>
+            <span style="color:#aaa;font-size:13px;">64.90 → 56.35</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#2b8a3e;">-13.17%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-2.38%<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP672 reason-row" data-ep="EP672" data-epnum="672" data-tag="#產能擴充" data-mkt="us" data-spct="-13.17" data-bpct="-2.38" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者表示自己持續追蹤 Vshare，發現其功率半導體料件 lead time 極長，被動元件與功率半導體雙重受惠，視為一魚兩吃的正向驚喜，隱含繼續持有看好態度。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「像過去我自己在追 Vshare 的話，我觀察的東西其實都是它的被動元件，只是 Vshare 這家公司很特別的點是在於說，它除了被動元件之外，它其實算是功率半導體廠商，它是一個綜合體，就是這兩個東西都有。因為我注意到說其實 Vshare 有些料那個 lead time 拉得非常的恐怖，比他的被動元件還要恐怖非常多，所以就是有點像歪打正著的感覺啦，一魚兩吃」</div></td></tr>
+        <tr class="ep-row ep-EP672"
+            data-ep="EP672" data-epnum="672" data-tag="#技術創新" data-mkt="us"
+            data-spct="-14.11" data-bpct="-2.38"
+            data-beat="0" data-days="9"
+            style="border-bottom:none;">
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">EP672</td>
+          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">#技術創新</td>
+          <td style="padding:9px 12px 4px;font-weight:bold;">Marvell Technology<br>
+            <span style="color:#aaa;font-size:13px;">MRVL</span></td>
+          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">超級看好</td>
+          <td style="padding:9px 12px 4px;">2026-06-20<br>
+            <span style="color:#aaa;font-size:13px;">310.58 → 266.77</span></td>
+          <td style="padding:9px 12px 4px;font-weight:bold;color:#2b8a3e;">-14.11%</td>
+          <td style="padding:9px 12px 4px;color:#666;">-2.38%<br>
+            <span style="color:#bbb;font-size:12px;">SPY</span></td>
+          <td style="padding:9px 12px 4px;"><span style='color:#2b8a3e;font-weight:bold;'>落後</span></td>
+        </tr><tr class="ep-row ep-EP672 reason-row" data-ep="EP672" data-epnum="672" data-tag="#技術創新" data-mkt="us" data-spct="-14.11" data-bpct="-2.38" data-beat="0" style="background:#f8f9fa;"><td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;"><span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span><span style="font-size:14px;color:#555;margin-left:6px;">講者明確表示 Marvell 是近期帶來最大驚喜的持倉，目前仍持有並持續加碼進攻，漲幅遠超預期，為正向加碼訊號。</span><div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「我覺得就是 Marvell 吧，因為本來 Marvell 我回去，我真的只是想要報復它而已，就是我只是覺得說我怎麼可能每次，其實在 Marvell 我掌握的消息事後證明都是對的，可是你每次都上不去怎麼可能，然後在第三次遠征的時候就成功，然後到現在都還抱著，然後都持續的去做進攻，然後這個漲幅是遠超自己的想像」</div></td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- 以標的 Table -->
+  <div id="view-stock" style="display:none;padding:0 0 12px;">
+    
+    <table width="100%" style="border-collapse:collapse;font-size:15px;">
+      <thead>
+        <tr style="background:#f1f3f5;color:#495057;font-size:13px;">
+          <th style="padding:10px 12px;text-align:left;">標的</th>
+          <th style="padding:10px 8px;text-align:left;">市場</th>
+          <th style="padding:10px 8px;text-align:center;">次數</th>
+          <th style="padding:10px 8px;text-align:center;">多/空</th>
+          <th style="padding:10px 8px;text-align:center;">勝率</th>
+          <th style="padding:10px 8px;text-align:center;">均報酬</th>
+          <th style="padding:10px 8px;text-align:left;">最近集</th>
+          <th style="padding:10px 8px;text-align:left;">提及集數</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">國巨<br>
+            <span style="color:#aaa;font-size:13px;">2327.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">4</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+4</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">75.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+101.26%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP672</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP659</span><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP661</span><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP665</span><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP672</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">世界先進<br>
+            <span style="color:#aaa;font-size:13px;">5347.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">3</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+3</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">待定</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#888888;">N/A</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP661</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP659</span><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP660</span><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP661</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">台積電<br>
+            <span style="color:#aaa;font-size:13px;">2330.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">3</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+3</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">33.3%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+3.77%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP671</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP661</span><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP662</span><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP671</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">聯發科 Google TPU（發哥）<br>
+            <span style="color:#aaa;font-size:13px;">2454.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">2</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+2</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">100.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+30.84%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP661</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP658</span><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP661</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">CrowdStrike<br>
+            <span style="color:#aaa;font-size:13px;">CRWD</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">美股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">2</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+2</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">100.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+33.90%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP662</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP659</span><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP662</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">Vishay<br>
+            <span style="color:#aaa;font-size:13px;">VSH</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">美股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">2</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+2</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">0.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">-9.80%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP672</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP671</span><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP672</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">信昌電<br>
+            <span style="color:#aaa;font-size:13px;">6173.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">待定</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#888888;">N/A</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP659</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP659</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">環球晶<br>
+            <span style="color:#aaa;font-size:13px;">6488.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">待定</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#888888;">N/A</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP659</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP659</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">金山電<br>
+            <span style="color:#aaa;font-size:13px;">8042.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">待定</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#888888;">N/A</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP661</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP661</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">加弘<br>
+            <span style="color:#aaa;font-size:13px;">6538.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">待定</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#888888;">N/A</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP661</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP661</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">SpaceX<br>
+            <span style="color:#aaa;font-size:13px;">SPACEX</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">美股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">待定</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#888888;">N/A</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP665</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP665</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">Intel<br>
+            <span style="color:#aaa;font-size:13px;">INTC</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">美股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;"> / -1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">100.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+28.81%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP658</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP658</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">AMD<br>
+            <span style="color:#aaa;font-size:13px;">AMD</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">美股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">100.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+23.78%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP659</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP659</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">創意電子<br>
+            <span style="color:#aaa;font-size:13px;">3443.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">0.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">-10.39%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP659</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP659</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">世芯-KY<br>
+            <span style="color:#aaa;font-size:13px;">3661.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">0.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">-12.71%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP659</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP659</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">Palantir<br>
+            <span style="color:#aaa;font-size:13px;">PLTR</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">美股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">0.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">-15.59%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP659</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP659</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">Cloudflare<br>
+            <span style="color:#aaa;font-size:13px;">NET</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">美股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">0.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">-4.57%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP659</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP659</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">三星電機<br>
+            <span style="color:#aaa;font-size:13px;">009150.KS</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">美股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">100.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+123.46%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP659</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP659</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">村田製作所<br>
+            <span style="color:#aaa;font-size:13px;">6981.T</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">美股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">100.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+109.03%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP659</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP659</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">瑞昱<br>
+            <span style="color:#aaa;font-size:13px;">2379.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">100.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+32.26%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP660</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP660</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">聯詠<br>
+            <span style="color:#aaa;font-size:13px;">3034.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">0.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+5.02%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP660</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP660</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">華新科<br>
+            <span style="color:#aaa;font-size:13px;">2492.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">100.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+157.00%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP661</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP661</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">立隆電<br>
+            <span style="color:#aaa;font-size:13px;">2471.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">0.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+2.16%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP661</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP661</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">鈺邦<br>
+            <span style="color:#aaa;font-size:13px;">6449.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">100.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+56.58%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP661</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP661</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">新唐<br>
+            <span style="color:#aaa;font-size:13px;">4919.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">0.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+2.71%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP661</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP661</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">愛普（EPMEM）<br>
+            <span style="color:#aaa;font-size:13px;">6531.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">0.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+1.41%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP663</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP663</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">Google（Alphabet）<br>
+            <span style="color:#aaa;font-size:13px;">GOOGL</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">美股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">0.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">-11.85%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP664</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP664</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">漢唐<br>
+            <span style="color:#aaa;font-size:13px;">2404.TW</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">台股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">100.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#d9534f;">+17.75%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP664</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP664</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">Tesla<br>
+            <span style="color:#aaa;font-size:13px;">TSLA</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">美股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;"> / -1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">0.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">-13.77%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP665</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP665</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">安森美<br>
+            <span style="color:#aaa;font-size:13px;">ON</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">美股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">0.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">-19.72%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP671</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP671</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">德州儀器<br>
+            <span style="color:#aaa;font-size:13px;">TXN</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">美股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">0.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">-5.45%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP671</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP671</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">Marvell Technology<br>
+            <span style="color:#aaa;font-size:13px;">MRVL</span></td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">美股</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;">1</td>
+          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">+1</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">0.0%</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:#2b8a3e;">-14.11%</td>
+          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP672</td>
+          <td style="padding:10px 8px;line-height:1.8;"><span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP672</span></td>
+        </tr></tbody>
+    </table>
+  </div>
+
+  <!-- Footer -->
+  <div style="padding:10px;text-align:center;font-size:13px;color:#bbb;border-top:1px solid #f0f0f0;">
+    台股基準 0050.TW · 美股基準 SPY · 僅供參考，非投資建議
+  </div>
+</div>
+
+<script>
+// ── Tab 切換 ─────────────────────────────────────────────
+function switchTab(tab) {
+  const isEp = tab === 'ep';
+  document.getElementById('view-ep').style.display = isEp ? '' : 'none';
+  document.getElementById('view-filters').style.display = isEp ? '' : 'none';
+  document.getElementById('view-stock').style.display = isEp ? 'none' : '';
+  document.getElementById('tab-ep').classList.toggle('btn-active', isEp);
+  document.getElementById('tab-stock').classList.toggle('btn-active', !isEp);
+}
+
+// ── 集數展開/收合 ─────────────────────────────────────────
+function toggleEp(ep) {
+  const rows = document.querySelectorAll('.ep-' + ep);
+  const hdr  = document.querySelector('.ep-header[data-ep="' + ep + '"] td');
+  const collapsed = rows[0] && rows[0].classList.contains('hidden');
+  rows.forEach(r => r.classList.toggle('hidden', !collapsed));
+  if (hdr) hdr.innerHTML = hdr.innerHTML.replace(/[▾▸]/, collapsed ? '▾' : '▸');
+}
+
+// ── 集數搜尋 ──────────────────────────────────────────────
+let epFilter = '';
+function filterEp(val) {
+  epFilter = val.replace(/^EP/i, '').trim();
+  applyAllFilters();
+}
+function clearEpFilter() {
+  epFilter = '';
+  document.getElementById('ep-search').value = '';
+  applyAllFilters();
+}
+
+// ── 分類篩選 ──────────────────────────────────────────────
+let tagFilter = 'all';
+let mktFilter = 'all';
+
+function filterTag(tag) {
+  tagFilter = tag; mktFilter = 'all';
+  document.querySelectorAll('button').forEach(b => b.classList.remove('btn-active'));
+  event.target.classList.add('btn-active');
+  applyAllFilters();
+}
+function filterMkt(mkt) {
+  mktFilter = mkt; tagFilter = 'all';
+  document.querySelectorAll('button').forEach(b => b.classList.remove('btn-active'));
+  event.target.classList.add('btn-active');
+  applyAllFilters();
+}
+
+function applyAllFilters() {
+  document.querySelectorAll('.ep-row').forEach(r => {
+    const epNum  = r.dataset.epnum;
+    const epId   = r.dataset.ep;
+    const epMatch  = !epFilter || epNum === epFilter || epId.toLowerCase().includes(epFilter.toLowerCase());
+    const tagMatch = tagFilter === 'all' || r.dataset.tag === tagFilter;
+    const mktMatch = mktFilter === 'all' || r.dataset.mkt === mktFilter;
+    r.classList.toggle('hidden', !(epMatch && tagMatch && mktMatch));
+  });
+  syncEpHeaders();
+}
+function syncEpHeaders() {
+  document.querySelectorAll('.ep-header').forEach(hdr => {
+    const ep      = hdr.dataset.ep;
+    const visible = document.querySelectorAll('.ep-' + ep + ':not(.hidden)').length;
+    hdr.style.display = visible === 0 ? 'none' : '';
+  });
+}
+
+// ── 欄位排序 ──────────────────────────────────────────────
+let sortDir = {};
+function sortBy(col) {
+  const tbody = document.getElementById('tbody');
+  const dir = (sortDir[col] === 1) ? -1 : 1;
+  sortDir[col] = dir;
+
+  const rowVal = r => {
+    if (col === 'epnum') return parseInt(r.dataset.epnum);
+    if (col === 'spct')  return parseFloat(r.dataset.spct);
+    if (col === 'bpct')  return parseFloat(r.dataset.bpct);
+    if (col === 'beat')  return parseInt(r.dataset.beat);
+    if (col === 'date')  return r.querySelector('td:nth-child(5)').innerText;
+    if (col === 'tag')   return r.dataset.tag;
+    return 0;
+  };
+
+  if (col === 'epnum') {
+    const headers = [...tbody.querySelectorAll('.ep-header')];
+    const groups  = headers.map(h => {
+      const ep   = h.dataset.ep;
+      const rows = [...tbody.querySelectorAll('.ep-' + CSS.escape(ep))];
+      return { header: h, rows, epnum: parseInt(ep.replace(/[^0-9]/g, '')) };
+    });
+    groups.sort((a, b) => a.epnum > b.epnum ? dir : a.epnum < b.epnum ? -dir : 0);
+    groups.forEach(g => {
+      tbody.appendChild(g.header);
+      g.rows.forEach(r => tbody.appendChild(r));
+    });
+  } else {
+    const headers = [...tbody.querySelectorAll('.ep-header')];
+    const groups  = headers.map(h => {
+      const ep   = h.dataset.ep;
+      const rows = [...tbody.querySelectorAll('.ep-' + CSS.escape(ep))];
+      return { header: h, rows };
+    });
+    groups.forEach(g => {
+      g.rows.sort((a, b) => rowVal(a) > rowVal(b) ? dir : rowVal(a) < rowVal(b) ? -dir : 0);
+      tbody.appendChild(g.header);
+      g.rows.forEach(r => tbody.appendChild(r));
+    });
+  }
+}
+</script>
+</body>
+</html>
