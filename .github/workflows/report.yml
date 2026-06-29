@@ -11,6 +11,9 @@ on:
         required: false
         default: '50'
 
+permissions:
+  contents: write   # 需要 push gh-pages
+
 jobs:
   send-report:
     runs-on: ubuntu-latest
@@ -26,9 +29,28 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Send report
+      - name: Generate detail HTML and send email
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           REPORT_TO: ${{ secrets.REPORT_TO }}
-        run: python notifier.py --last ${{ github.event.inputs.last_n || '50' }}
+        run: |
+          python notifier.py \
+            --last ${{ github.event.inputs.last_n || '50' }} \
+            --detail-url https://Jack20773.github.io/stock-signal/
+
+      - name: Deploy detail HTML to GitHub Pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin
+          # 用 git plumbing 直接寫入 gh-pages，不需切換 branch
+          BLOB=$(git hash-object -w report_detail.html)
+          TREE=$(printf "100644 blob %s\tindex.html\n" "$BLOB" | git mktree)
+          PARENT=$(git rev-parse origin/gh-pages 2>/dev/null || echo "")
+          if [ -n "$PARENT" ]; then
+            COMMIT=$(git commit-tree "$TREE" -p "$PARENT" -m "chore: update report [skip ci]")
+          else
+            COMMIT=$(git commit-tree "$TREE" -m "chore: init gh-pages [skip ci]")
+          fi
+          git push origin "$COMMIT":refs/heads/gh-pages
