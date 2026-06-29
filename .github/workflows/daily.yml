@@ -1,4 +1,4 @@
-name: 股癌訊號追蹤
+name: stock-signal-tracker
 
 on:
   schedule:
