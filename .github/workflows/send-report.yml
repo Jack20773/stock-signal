@@ -33,5 +33,4 @@ jobs:
           python -X utf8 notifier.py \
             --no-fill \
             --last ${{ github.event.inputs.report_last || '50' }} \
-            --send \
             --detail-url https://Jack20773.github.io/stock-signal/
