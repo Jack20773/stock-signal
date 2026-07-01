@@ -215,6 +215,41 @@ def _render_signal_row(r: dict, ep: str, ep_num_val: int) -> str:
         </tr>{reason_html}"""
 
 
+def _mini_bar(pct: float, color: str, label: str, n: int) -> str:
+    w = min(max(round(pct), 0), 100)
+    c = color if pct >= 50 else "#2b8a3e"
+    return (
+        f'<div style="margin-bottom:8px;">'
+        f'<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">'
+        f'<span style="color:#555;">{label}</span>'
+        f'<span style="font-weight:bold;color:{c};">{pct}%</span>'
+        f'<span style="color:#ccc;font-size:11px;">{n}筆</span>'
+        f'</div>'
+        f'<div style="background:#eee;border-radius:3px;height:8px;overflow:hidden;">'
+        f'<div style="background:{c};width:{w}%;height:8px;"></div>'
+        f'</div></div>'
+    )
+
+
+def _conf_bars(high_wr, high_n, low_wr, low_n) -> str:
+    rows = ""
+    if high_wr is not None:
+        rows += _mini_bar(high_wr, "#d9534f", "高信心（超級看好）", high_n)
+    if low_wr is not None:
+        rows += _mini_bar(low_wr, "#d9534f", "普通信心（看好/看壞）", low_n)
+    return rows or '<span style="color:#ccc;font-size:12px;">尚無資料</span>'
+
+
+def _hold_bars(hold_stats: dict) -> str:
+    order = ["≤30天", "31–90天", "90天+"]
+    rows = ""
+    for g in order:
+        if g in hold_stats:
+            wr, n = hold_stats[g]
+            rows += _mini_bar(wr, "#d9534f", g, n)
+    return rows or '<span style="color:#ccc;font-size:12px;">尚無資料</span>'
+
+
 # ── 詳細版 HTML（瀏覽器）────────────────────────────────────────────────────
 
 def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
@@ -226,6 +261,28 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     avg_ret  = round(sum(all_rets) / len(all_rets), 2) if all_rets else None
     med_ret  = round(all_rets[len(all_rets) // 2], 2) if all_rets else None
     latest_ep = max((r.get("episode_id", "") for r in results if r.get("episode_id")), key=_ep_num, default="N/A")
+
+    # 信心等級準確率
+    decided = [r for r in results if r.get("beat_benchmark") is not None and r.get("action") != "0"]
+    high_dec = [r for r in decided if r.get("confidence_level") == "High"]
+    low_dec  = [r for r in decided if r.get("confidence_level") != "High"]
+    high_wr  = round(sum(1 for r in high_dec if r["beat_benchmark"]) / len(high_dec) * 100, 1) if high_dec else None
+    low_wr   = round(sum(1 for r in low_dec  if r["beat_benchmark"]) / len(low_dec)  * 100, 1) if low_dec  else None
+
+    # 持倉時間分組勝率
+    def _hold_group(days):
+        if days is None: return None
+        return "≤30天" if days <= 30 else ("31–90天" if days <= 90 else "90天+")
+
+    hold_groups: dict[str, list] = {"≤30天": [], "31–90天": [], "90天+": []}
+    for r in decided:
+        g = _hold_group(r.get("days_held"))
+        if g:
+            hold_groups[g].append(r)
+    hold_stats = {
+        g: (round(sum(1 for r in rs if r["beat_benchmark"]) / len(rs) * 100, 1), len(rs))
+        for g, rs in hold_groups.items() if rs
+    }
 
     def _fs(v, pct=True):
         if v is None: return "N/A"
@@ -365,6 +422,23 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   <!-- 計算說明 -->
   <div style="padding:6px 20px 10px;background:#fafcff;font-size:11px;color:#bbb;border-bottom:1px solid #eee;">
     個股報酬＝播出日收盤價至今漲跌幅；對標大盤＝同期 0050（台股）或 SPY（美股）漲跌幅；未扣除手續費
+  </div>
+
+  <!-- 信心等級 + 持倉時間分組勝率 -->
+  <div style="display:flex;border-bottom:1px solid #eee;">
+
+    <!-- 信心等級準確率 -->
+    <div style="flex:1;padding:14px 20px;border-right:1px solid #eee;">
+      <div style="font-size:12px;font-weight:bold;color:#666;margin-bottom:10px;">信心等級準確率</div>
+      {_conf_bars(high_wr, len(high_dec), low_wr, len(low_dec))}
+    </div>
+
+    <!-- 持倉時間分組勝率 -->
+    <div style="flex:1;padding:14px 20px;">
+      <div style="font-size:12px;font-weight:bold;color:#666;margin-bottom:10px;">持倉時間分組勝率</div>
+      {_hold_bars(hold_stats)}
+    </div>
+
   </div>
 
   <!-- 趨勢圖 -->
