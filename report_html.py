@@ -758,22 +758,200 @@ function initChart() {{
 
 # ── 簡要版 HTML（Gmail）──────────────────────────────────────────────────────
 
+def _pbar(pct: float, color: str = "#d9534f") -> str:
+    """純 HTML 進度條，email 相容。"""
+    w = min(max(round(pct), 0), 100)
+    rest = 100 - w
+    return (
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0" '
+        f'style="border-radius:4px;overflow:hidden;background:#eee;">'
+        f'<tr>'
+        f'<td width="{w}%" style="background:{color};height:10px;font-size:0;line-height:0;">&nbsp;</td>'
+        f'<td style="height:10px;font-size:0;line-height:0;"></td>'
+        f'</tr></table>'
+    )
+
+
 def generate_html_email(results: list[dict], title: str, stats: dict,
                         detail_url: str = "") -> str:
-    today     = date.today().isoformat()
-    win_pct   = stats.get("win_rate", 0)
+    today   = date.today().isoformat()
+    win_pct = stats.get("win_rate", 0)
     win_color = "#d9534f" if win_pct >= 50 else "#2b8a3e"
 
-    # 排序：獲勝（報酬高→低）→ 落後 → 待定
-    def _sort_key(r):
-        beat  = r.get("beat_benchmark")
-        group = 0 if beat is True else (1 if beat is False else 2)
-        s_pct = r.get("stock_return_pct") or -9999
-        return (group, -s_pct)
+    # ── 額外統計 ─────────────────────────────────────────────
+    bullish_dec = [r for r in results if r.get("action") == "+1" and r.get("beat_benchmark") is not None]
+    bull_wr     = round(sum(1 for r in bullish_dec if r["beat_benchmark"]) / len(bullish_dec) * 100, 1) if bullish_dec else None
+    bull_color  = "#d9534f" if (bull_wr or 0) >= 50 else "#2b8a3e"
 
-    sorted_res = sorted(results, key=_sort_key)
+    # ── 本週最新訊號（最新 2 集，僅看多/看空，排除中立）────────
+    eps_sorted     = sorted({r["episode_id"] for r in results if r.get("episode_id")}, key=_ep_num)
+    latest_ep_ids  = set(eps_sorted[-2:])
+    latest_signals = [
+        r for r in results
+        if r.get("episode_id") in latest_ep_ids and r.get("action") in ("+1", "-1")
+    ]
+    latest_signals.sort(key=lambda r: (
+        -_ep_num(r.get("episode_id", "")),
+        0 if r.get("confidence_level") == "High" else 1,
+        r.get("action") != "+1",
+    ))
 
-    # 查看完整報告按鈕
+    latest_cards = ""
+    for r in latest_signals:
+        action  = r.get("action", "0")
+        conf    = r.get("confidence_level", "")
+        name    = r.get("stock_name", "")
+        code    = r.get("stock_code", "")
+        ep      = r.get("episode_id", "")
+        reason  = (r.get("raw_reason") or "").strip()[:90]
+        if reason and len(r.get("raw_reason", "")) > 90:
+            reason += "..."
+        entry_d = r.get("entry_date") or ""
+
+        if action == "+1" and conf == "High":
+            badge_txt = "超級看好"
+            border_c  = "#c0392b"
+            bg_c      = "#fff5f5"
+        elif action == "+1":
+            badge_txt = "看好"
+            border_c  = "#d9534f"
+            bg_c      = "#fff8f8"
+        else:
+            badge_txt = "看壞"
+            border_c  = "#888"
+            bg_c      = "#f8f9fa"
+
+        latest_cards += f"""
+          <div style="background:{bg_c};border-left:4px solid {border_c};
+                      padding:10px 14px;margin-bottom:8px;border-radius:0 4px 4px 0;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td>
+                  <span style="font-weight:bold;font-size:15px;color:#1a252f;">{name}</span>
+                  <span style="color:#aaa;font-size:12px;margin-left:6px;">{code}</span>
+                </td>
+                <td align="right">
+                  <span style="background:{border_c};color:#fff;font-size:12px;font-weight:bold;
+                               padding:2px 8px;border-radius:3px;">{badge_txt}</span>
+                  <span style="color:#aaa;font-size:12px;margin-left:6px;">{ep}</span>
+                </td>
+              </tr>
+            </table>
+            {'<div style="color:#555;font-size:13px;margin-top:6px;">「' + reason + '」</div>' if reason else ''}
+            {'<div style="color:#bbb;font-size:12px;margin-top:4px;">進場日 ' + entry_d + '</div>' if entry_d else ''}
+          </div>"""
+
+    latest_section = ""
+    if latest_cards:
+        latest_ep_label = "、".join(sorted(latest_ep_ids, key=_ep_num))
+        latest_section = f"""
+        <tr>
+          <td style="padding:16px 20px 8px;">
+            <div style="font-size:13px;font-weight:bold;color:#1a252f;margin-bottom:10px;">
+              🔥 本週最新訊號（{latest_ep_label}）
+            </div>
+            {latest_cards}
+          </td>
+        </tr>
+        <tr><td><div style="height:1px;background:#f0f0f0;"></div></td></tr>"""
+
+    # ── 進行中的看多標的（pending bullish，還可考慮進場）────────
+    active_longs = [
+        r for r in results
+        if r.get("action") == "+1"
+        and r.get("beat_benchmark") is None
+        and r.get("entry_price")
+        and r.get("episode_id") not in latest_ep_ids   # 最新集已在上面顯示
+    ]
+    active_longs.sort(key=lambda r: -(r.get("days_held") or 0))
+
+    active_rows = ""
+    for r in active_longs[:8]:
+        name    = r.get("stock_name", "")
+        code    = r.get("stock_code", "")
+        ep      = r.get("episode_id", "")
+        s_pct   = r.get("stock_return_pct")
+        b_pct   = r.get("benchmark_return_pct")
+        days    = r.get("days_held")
+        bm      = r.get("benchmark_ticker") or benchmark_for(code)
+        ahead   = (s_pct is not None and b_pct is not None and s_pct > b_pct)
+        s_color = _pct_color(s_pct)
+        active_rows += f"""
+              <tr style="border-bottom:1px solid #f5f5f5;">
+                <td style="padding:7px 12px;font-weight:bold;font-size:14px;">
+                  {name}<br><span style="color:#aaa;font-size:12px;">{code}</span></td>
+                <td style="padding:7px 6px;font-size:13px;color:#888;">{ep}</td>
+                <td style="padding:7px 6px;font-size:14px;font-weight:bold;
+                    color:{s_color};text-align:right;">{_fmt_pct(s_pct)}</td>
+                <td style="padding:7px 6px;font-size:12px;color:#999;text-align:right;">
+                  {_fmt_pct(b_pct)}<br><span style="color:#ccc;">{bm}</span></td>
+                <td style="padding:7px 6px;font-size:12px;color:#aaa;text-align:center;">
+                  {'🔴 領先' if ahead else ('—' if s_pct is None else '⬇ 落後')}</td>
+                <td style="padding:7px 6px;font-size:12px;color:#ccc;text-align:right;">
+                  {str(days)+'天' if days else 'N/A'}</td>
+              </tr>"""
+
+    active_section = ""
+    if active_rows:
+        active_section = f"""
+        <tr>
+          <td style="padding:14px 20px 8px;">
+            <div style="font-size:13px;font-weight:bold;color:#1a252f;margin-bottom:8px;">
+              ⏳ 進行中的看多標的（持倉中，仍可參考）
+            </div>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="border-collapse:collapse;font-size:14px;">
+              <thead>
+                <tr style="background:#fafafa;font-size:12px;color:#999;">
+                  <th style="padding:6px 12px;text-align:left;font-weight:normal;">標的</th>
+                  <th style="padding:6px 6px;text-align:left;font-weight:normal;">集數</th>
+                  <th style="padding:6px 6px;text-align:right;font-weight:normal;">個股</th>
+                  <th style="padding:6px 6px;text-align:right;font-weight:normal;">大盤</th>
+                  <th style="padding:6px 6px;text-align:center;font-weight:normal;">狀態</th>
+                  <th style="padding:6px 6px;text-align:right;font-weight:normal;">持倉</th>
+                </tr>
+              </thead>
+              <tbody>{active_rows}</tbody>
+            </table>
+          </td>
+        </tr>
+        <tr><td><div style="height:1px;background:#f0f0f0;"></div></td></tr>"""
+
+    # ── 績效儀表板 ───────────────────────────────────────────
+    bull_wr_bar = _pbar(bull_wr or 0) if bull_wr is not None else "<span style='color:#aaa;font-size:13px;'>尚無資料</span>"
+    overall_bar = _pbar(win_pct)
+
+    dashboard = f"""
+        <tr>
+          <td style="padding:14px 20px 16px;">
+            <div style="font-size:13px;font-weight:bold;color:#1a252f;margin-bottom:12px;">
+              📊 績效儀表板
+            </div>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td width="80" style="font-size:13px;color:#666;padding-bottom:10px;">整體勝率</td>
+                <td style="padding-bottom:10px;">
+                  <div style="margin-bottom:4px;">{overall_bar}</div>
+                  <span style="font-size:13px;font-weight:bold;color:{win_color};">{win_pct}%</span>
+                  <span style="font-size:12px;color:#aaa;margin-left:6px;">{stats['wins']}勝 / {stats['losses']}負 / {stats['total']-stats['decided']}待定</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="font-size:13px;color:#666;padding-bottom:4px;">看多勝率</td>
+                <td style="padding-bottom:4px;">
+                  <div style="margin-bottom:4px;">{bull_wr_bar}</div>
+                  <span style="font-size:13px;font-weight:bold;color:{bull_color};">
+                    {str(bull_wr)+'%' if bull_wr is not None else 'N/A'}
+                  </span>
+                  <span style="font-size:12px;color:#aaa;margin-left:6px;">（{len(bullish_dec)} 筆已決）</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr><td><div style="height:1px;background:#f0f0f0;"></div></td></tr>"""
+
+    # ── 查看完整報告按鈕 ─────────────────────────────────────
     detail_btn = ""
     if detail_url:
         detail_btn = f"""
@@ -784,11 +962,18 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
               查看完整報告 →
             </a>
           </td>
-        </tr>"""
+        </tr>
+        <tr><td><div style="height:1px;background:#f0f0f0;"></div></td></tr>"""
 
-    # 結果列
-    prev_group = None
-    table_rows = ""
+    # ── 全訊號表（移到最後）──────────────────────────────────
+    def _sort_key(r):
+        beat  = r.get("beat_benchmark")
+        group = 0 if beat is True else (1 if beat is False else 2)
+        return (group, -(r.get("stock_return_pct") or -9999))
+
+    sorted_res    = sorted(results, key=_sort_key)
+    prev_group    = None
+    table_rows    = ""
     group_labels  = ["獲勝", "落後", "待定"]
     group_counts  = [stats["wins"], stats["losses"], stats["total"] - stats["decided"]]
     group_colors  = ["#fff3f3", "#f3fff3", "#f8f8f8"]
@@ -796,43 +981,41 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
     for r in sorted_res:
         beat  = r.get("beat_benchmark")
         group = 0 if beat is True else (1 if beat is False else 2)
-
         if group != prev_group:
             table_rows += f"""
               <tr>
                 <td colspan="6" style="padding:6px 12px;background:{group_colors[group]};
-                    font-size:13px;font-weight:bold;color:#777;border-top:2px solid #e8e8e8;">
+                    font-size:12px;font-weight:bold;color:#777;border-top:2px solid #e8e8e8;">
                   {group_labels[group]}（{group_counts[group]} 筆）
                 </td>
               </tr>"""
             prev_group = group
 
-        code       = r.get("stock_code", "")
-        name       = r.get("stock_name", "")
-        ep         = r.get("episode_id", "")
-        action     = r.get("action", "0")
-        s_pct      = r.get("stock_return_pct")
-        b_pct      = r.get("benchmark_return_pct")
-        bm         = r.get("benchmark_ticker") or benchmark_for(code)
-        action_lbl = _action_label(action, r.get("confidence_level", ""))
-        badge      = (
+        code    = r.get("stock_code", "")
+        name    = r.get("stock_name", "")
+        ep      = r.get("episode_id", "")
+        action  = r.get("action", "0")
+        s_pct   = r.get("stock_return_pct")
+        b_pct   = r.get("benchmark_return_pct")
+        bm      = r.get("benchmark_ticker") or benchmark_for(code)
+        act_lbl = _action_label(action, r.get("confidence_level", ""))
+        badge   = (
             ' <span style="font-size:11px;background:#e8f4fd;color:#1a6b9a;'
             'border-radius:3px;padding:1px 4px;">空</span>'
             if action == "-1" else ""
         )
-        row_bg = "#fffafa" if beat is True else ("#f5fff5" if beat is False else "#fafafa")
-
+        row_bg  = "#fffafa" if beat is True else ("#f5fff5" if beat is False else "#fafafa")
         table_rows += f"""
               <tr style="background:{row_bg};border-bottom:1px solid #f0f0f0;">
-                <td style="padding:8px 10px;font-size:14px;font-weight:bold;">
-                  {name}<br><span style="color:#aaa;font-size:12px;">{code}</span></td>
-                <td style="padding:8px 6px;font-size:13px;color:#666;">{ep}</td>
-                <td style="padding:8px 6px;font-size:13px;color:#555;">{action_lbl}{badge}</td>
-                <td style="padding:8px 6px;font-size:14px;font-weight:bold;
+                <td style="padding:7px 10px;font-size:13px;font-weight:bold;">
+                  {name}<br><span style="color:#aaa;font-size:11px;">{code}</span></td>
+                <td style="padding:7px 5px;font-size:12px;color:#888;">{ep}</td>
+                <td style="padding:7px 5px;font-size:12px;color:#555;">{act_lbl}{badge}</td>
+                <td style="padding:7px 5px;font-size:13px;font-weight:bold;
                     color:{_pct_color(s_pct)};text-align:right;">{_fmt_pct(s_pct)}</td>
-                <td style="padding:8px 6px;font-size:12px;color:#999;text-align:right;">
+                <td style="padding:7px 5px;font-size:11px;color:#999;text-align:right;">
                   {_fmt_pct(b_pct)}<br><span style="color:#ccc;">{bm}</span></td>
-                <td style="padding:8px 6px;text-align:center;">{_beat_label(beat)}</td>
+                <td style="padding:7px 5px;text-align:center;">{_beat_label(beat)}</td>
               </tr>"""
 
     return f"""<!DOCTYPE html>
@@ -854,52 +1037,36 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
           </td>
         </tr>
 
+        <!-- 本週最新訊號 -->
+        {latest_section}
+
+        <!-- 進行中的看多標的 -->
+        {active_section}
+
+        <!-- 績效儀表板 -->
+        {dashboard}
+
+        <!-- 查看完整報告 -->
         {detail_btn}
 
-        <!-- Stats -->
+        <!-- 全訊號表 -->
         <tr>
-          <td style="padding:0;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                   style="border-bottom:1px solid #eee;">
-              <tr>
-                <td align="center" style="padding:14px 0;border-right:1px solid #eee;">
-                  <div style="font-size:12px;color:#999;">總訊號</div>
-                  <div style="font-size:24px;font-weight:bold;color:#2c3e50;">{stats['total']}</div>
-                </td>
-                <td align="center" style="padding:14px 0;border-right:1px solid #eee;">
-                  <div style="font-size:12px;color:#999;">對標大盤勝率</div>
-                  <div style="font-size:24px;font-weight:bold;color:{win_color};">{win_pct}%</div>
-                </td>
-                <td align="center" style="padding:14px 0;border-right:1px solid #eee;">
-                  <div style="font-size:12px;color:#999;">Win / Lose</div>
-                  <div style="font-size:22px;font-weight:bold;">
-                    <span style="color:#d9534f;">{stats['wins']}</span>
-                    <span style="color:#ccc;"> / </span>
-                    <span style="color:#2b8a3e;">{stats['losses']}</span>
-                  </div>
-                </td>
-                <td align="center" style="padding:14px 0;">
-                  <div style="font-size:12px;color:#999;">待定</div>
-                  <div style="font-size:24px;font-weight:bold;color:#aaa;">{stats['total'] - stats['decided']}</div>
-                </td>
-              </tr>
-            </table>
+          <td style="padding:12px 20px 4px;">
+            <div style="font-size:12px;font-weight:bold;color:#999;">全部訊號（最新 {len(results)} 筆）</div>
           </td>
         </tr>
-
-        <!-- Results table -->
         <tr>
           <td>
             <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                   style="font-size:14px;border-collapse:collapse;">
+                   style="font-size:13px;border-collapse:collapse;">
               <thead>
                 <tr style="background:#f1f3f5;">
-                  <th style="padding:9px 10px;text-align:left;font-size:13px;color:#495057;">標的</th>
-                  <th style="padding:9px 6px;text-align:left;font-size:13px;color:#495057;">集數</th>
-                  <th style="padding:9px 6px;text-align:left;font-size:13px;color:#495057;">動作</th>
-                  <th style="padding:9px 6px;text-align:right;font-size:13px;color:#495057;">個股報酬</th>
-                  <th style="padding:9px 6px;text-align:right;font-size:13px;color:#495057;">大盤</th>
-                  <th style="padding:9px 6px;text-align:center;font-size:13px;color:#495057;">勝負</th>
+                  <th style="padding:8px 10px;text-align:left;font-size:12px;color:#495057;">標的</th>
+                  <th style="padding:8px 5px;text-align:left;font-size:12px;color:#495057;">集數</th>
+                  <th style="padding:8px 5px;text-align:left;font-size:12px;color:#495057;">動作</th>
+                  <th style="padding:8px 5px;text-align:right;font-size:12px;color:#495057;">個股</th>
+                  <th style="padding:8px 5px;text-align:right;font-size:12px;color:#495057;">大盤</th>
+                  <th style="padding:8px 5px;text-align:center;font-size:12px;color:#495057;">勝負</th>
                 </tr>
               </thead>
               <tbody>{table_rows}</tbody>
