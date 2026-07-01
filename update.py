@@ -33,11 +33,13 @@ def run(args):
     dl_main(last_n=args.last)
 
     # ── Step 2：批次分析（跳過已分析集數）────────────────────────────
-    step(2, f"批次分析最新 {args.last} 集（Gemini API）")
+    from_ep = getattr(args, "from_ep", 0) or 0
+    label = f"EP{from_ep}+" if from_ep else f"最新 {args.last} 集"
+    step(2, f"批次分析 {label}（Gemini API）")
     from database import init_db
     from batch import load_transcripts, run_batch
     init_db()
-    files = load_transcripts(last_n=args.last)
+    files = load_transcripts(from_ep=from_ep, last_n=0 if from_ep else args.last)
     if files:
         logging.info(f"待處理 {len(files)} 集")
         run_batch(files, dry_run=args.dry_run)
@@ -75,7 +77,8 @@ def run(args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--last",       type=int, default=20, help="分析最新 N 集（預設 20）")
+    parser.add_argument("--last",       type=int, default=20,  help="分析最新 N 集（預設 20）")
+    parser.add_argument("--from-ep",    type=int, default=0,   help="從第幾集開始分析（例：400 = EP400 起）")
     parser.add_argument("--dry-run",    action="store_true",  help="只列清單，不呼叫 Gemini API")
     parser.add_argument("--send",       action="store_true",  help="完成後寄出 email 報告")
     parser.add_argument("--report-last", type=int, default=50, help="email 只顯示最新 N 集（預設 50）")
