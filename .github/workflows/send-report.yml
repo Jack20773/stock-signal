@@ -1,0 +1,37 @@
+name: 寄出訊號報告
+
+on:
+  workflow_dispatch:
+    inputs:
+      report_last:
+        description: '顯示最新 N 集（預設 50）'
+        default: '50'
+        required: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - name: 生成並寄出報告
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          REPORT_TO: ${{ secrets.REPORT_TO }}
+        run: |
+          python -X utf8 notifier.py \
+            --no-fill \
+            --last ${{ github.event.inputs.report_last || '50' }} \
+            --send \
+            --detail-url https://Jack20773.github.io/stock-signal/

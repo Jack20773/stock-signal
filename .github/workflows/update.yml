@@ -39,19 +39,10 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GMAIL_USER: ${{ secrets.GMAIL_USER }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          REPORT_TO: ${{ secrets.REPORT_TO }}
         run: |
-          python -X utf8 update.py \
-            --last 5 \
-            --report-last 50 \
-            --send \
-            --detail-url https://Jack20773.github.io/stock-signal/
+          python -X utf8 update.py --last 5
         # --last 5：只跑最新 5 集（已分析的會自動跳過）
-        # --report-last 50：email 顯示最新 50 集
-        # --send：分析完寄 Email 報告
-        # --detail-url：email 按鈕連到 GitHub Pages 完整報告
+        # 寄信改由 send-report.yml 負責（LINE 觸發或手動）
 
       - name: 生成完整報告（GitHub Pages 用）
         env:
