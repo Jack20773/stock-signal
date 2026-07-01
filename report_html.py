@@ -342,9 +342,9 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     <div style="flex:1;padding:14px 0;border-right:1px solid #eee;">
       <div style="font-size:12px;color:#999;">Win / Lose</div>
       <div style="font-size:22px;font-weight:bold;">
-        <span style="color:#d9534f;">{stats['wins']}</span>
+        <span style="color:#2b8a3e;">{stats['wins']}</span>
         <span style="color:#ccc;"> / </span>
-        <span style="color:#2b8a3e;">{stats['losses']}</span>
+        <span style="color:#d9534f;">{stats['losses']}</span>
       </div>
     </div>
     <div style="flex:1;padding:14px 0;">
@@ -873,9 +873,9 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
                 <td align="center" style="padding:14px 0;border-right:1px solid #eee;">
                   <div style="font-size:12px;color:#999;">Win / Lose</div>
                   <div style="font-size:22px;font-weight:bold;">
-                    <span style="color:#d9534f;">{stats['wins']}</span>
+                    <span style="color:#2b8a3e;">{stats['wins']}</span>
                     <span style="color:#ccc;"> / </span>
-                    <span style="color:#2b8a3e;">{stats['losses']}</span>
+                    <span style="color:#d9534f;">{stats['losses']}</span>
                   </div>
                 </td>
                 <td align="center" style="padding:14px 0;">
