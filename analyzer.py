@@ -25,7 +25,7 @@ def analyze(transcript: str) -> dict:
         model=GEMINI_MODEL,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
-            max_output_tokens=4096,
+            max_output_tokens=8192,
         ),
         contents=user_content,
     )
