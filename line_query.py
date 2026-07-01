@@ -8,13 +8,12 @@ LINE Bot 查詢介面。由 linebot/stock_handler.py 以 subprocess 呼叫。
 """
 import sys
 import glob
-import sqlite3
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
-from database import init_db, list_signals, save_result, DB_PATH
+from database import init_db, list_signals, save_result, _conn
 from performance import calc_performance, _fill_entry_prices
 from analyzer import analyze
 
@@ -112,14 +111,14 @@ def cmd_perf():
 
 def cmd_latest():
     init_db()
-    with sqlite3.connect(DB_PATH) as conn:
-        row = conn.execute(
-            "SELECT episode_id FROM signals ORDER BY created_at DESC LIMIT 1"
-        ).fetchone()
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT episode_id FROM signals ORDER BY created_at DESC LIMIT 1")
+            row = cur.fetchone()
     if not row:
         print("尚未分析任何集數。")
         return
-    cmd_query(row[0])
+    cmd_query(row["episode_id"])
 
 
 def cmd_analyze(episode_id: str):

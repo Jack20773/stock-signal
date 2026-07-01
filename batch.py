@@ -10,14 +10,13 @@
 import sys
 import re
 import time
-import sqlite3
 import argparse
 import logging
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-from database import init_db, save_result, DB_PATH
+from database import init_db, save_result, _conn
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,9 +62,10 @@ def load_transcripts(from_ep: int = 0, last_n: int = 0) -> list[Path]:
 
 def load_analyzed_set() -> set[str]:
     """一次載入所有已分析的 episode_id，避免每集開一次 DB。"""
-    with sqlite3.connect(DB_PATH) as conn:
-        rows = conn.execute("SELECT DISTINCT episode_id FROM signals").fetchall()
-    return {r[0] for r in rows}
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT DISTINCT episode_id FROM signals")
+            return {r["episode_id"] for r in cur.fetchall()}
 
 
 def run_batch(files: list[Path], dry_run: bool = False):

@@ -1,0 +1,40 @@
+name: 每週自動分析
+
+on:
+  schedule:
+    # 每週一 UTC 23:00 = 台灣時間週二早上 07:00
+    - cron: "0 23 * * 1"
+  workflow_dispatch:  # 允許手動觸發
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: 下載逐字稿 + 分析 + 更新績效
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python -X utf8 update.py --last 5 --send
+        # --last 5：只跑最新 5 集（已分析的會自動跳過）
+        # --send：分析完寄 Email 報告
+
+      - name: 上傳執行 log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: batch-log-${{ github.run_number }}
+          path: batch.log
+          retention-days: 14

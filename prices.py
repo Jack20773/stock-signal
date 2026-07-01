@@ -1,16 +1,13 @@
 import math
 import sys
-import sqlite3
 from datetime import date, timedelta
+
 import yfinance as yf
-from database import DB_PATH, init_db
 
 sys.stdout.reconfigure(encoding="utf-8")
 
 BENCHMARK_TW = "0050.TW"
 BENCHMARK_US = "SPY"
-
-_cache_ready = False
 
 
 def benchmark_for(stock_code: str) -> str:
@@ -25,38 +22,23 @@ def _safe_float(val) -> float | None:
         return None
 
 
-def _ensure_cache_table():
-    global _cache_ready
-    if _cache_ready:
-        return
-    init_db()
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS price_cache (
-                ticker     TEXT NOT NULL,
-                ref_date   TEXT NOT NULL,
-                price      REAL,
-                cache_date TEXT NOT NULL,
-                PRIMARY KEY (ticker, ref_date)
-            )
-        """)
-    _cache_ready = True
-
-
 def _fetch_history(ticker: str, start: str, end: str):
     return yf.Ticker(ticker).history(start=start, end=end, auto_adjust=True)
 
 
 def get_close_on_or_before(ticker: str, target_date: str) -> float | None:
-    """歷史收盤價：target_date 當天或之前最近交易日，結果永久 cache 於 SQLite。"""
-    _ensure_cache_table()
-    with sqlite3.connect(DB_PATH) as conn:
-        row = conn.execute(
-            "SELECT price FROM price_cache WHERE ticker=? AND ref_date=?",
-            (ticker, target_date)
-        ).fetchone()
+    """歷史收盤價：target_date 當天或之前最近交易日，結果永久 cache 於 PostgreSQL。"""
+    from database import _conn, init_db
+    init_db()
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT price FROM price_cache WHERE ticker=%s AND ref_date=%s",
+                (ticker, target_date)
+            )
+            row = cur.fetchone()
     if row is not None:
-        return row[0]
+        return row["price"]
 
     d     = date.fromisoformat(target_date)
     start = str(d - timedelta(days=10))
@@ -69,25 +51,32 @@ def get_close_on_or_before(ticker: str, target_date: str) -> float | None:
             price = _safe_float(hist["Close"].iloc[-1])
 
     if price is not None:
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO price_cache (ticker, ref_date, price, cache_date) VALUES (?,?,?,?)",
-                (ticker, target_date, price, date.today().isoformat())
-            )
+        from database import _conn as _c2
+        with _c2() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO price_cache (ticker, ref_date, price, cache_date)
+                       VALUES (%s,%s,%s,%s)
+                       ON CONFLICT (ticker, ref_date) DO UPDATE SET price=EXCLUDED.price""",
+                    (ticker, target_date, price, date.today().isoformat())
+                )
     return price
 
 
 def get_latest_close(ticker: str) -> float | None:
-    """當日最新收盤價：以今日為 key，同一天只抓一次 yfinance。"""
-    _ensure_cache_table()
+    """當日最新收盤價：以今日為 TTL key，同一天只抓一次 yfinance。"""
+    from database import _conn, init_db
+    init_db()
     today = date.today().isoformat()
-    with sqlite3.connect(DB_PATH) as conn:
-        row = conn.execute(
-            "SELECT price FROM price_cache WHERE ticker=? AND ref_date='LATEST' AND cache_date=?",
-            (ticker, today)
-        ).fetchone()
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT price FROM price_cache WHERE ticker=%s AND ref_date='LATEST' AND cache_date=%s",
+                (ticker, today)
+            )
+            row = cur.fetchone()
     if row is not None:
-        return row[0]
+        return row["price"]
 
     hist  = yf.Ticker(ticker).history(period="5d", auto_adjust=True)
     price = None
@@ -97,9 +86,80 @@ def get_latest_close(ticker: str) -> float | None:
             price = _safe_float(hist["Close"].iloc[-1])
 
     if price is not None:
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO price_cache (ticker, ref_date, price, cache_date) VALUES (?,'LATEST',?,?)",
-                (ticker, price, today)
-            )
+        from database import _conn as _c2
+        with _c2() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO price_cache (ticker, ref_date, price, cache_date)
+                       VALUES (%s,'LATEST',%s,%s)
+                       ON CONFLICT (ticker, ref_date) DO UPDATE
+                           SET price=EXCLUDED.price, cache_date=EXCLUDED.cache_date""",
+                    (ticker, price, today)
+                )
     return price
+
+
+def batch_get_close_on_or_before(
+    requests: list[tuple[str, str]]
+) -> dict[tuple[str, str], float | None]:
+    """批次查詢多個 (ticker, target_date) 歷史收盤價；命中 cache 時單一 SQL 搞定。"""
+    if not requests:
+        return {}
+
+    from database import _conn, init_db
+    init_db()
+
+    result: dict[tuple[str, str], float | None] = {}
+    uncached: list[tuple[str, str]] = []
+
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT ticker, ref_date, price FROM price_cache WHERE (ticker, ref_date) IN %s",
+                (tuple(requests),)
+            )
+            cached = {(r["ticker"], r["ref_date"]): r["price"] for r in cur.fetchall()}
+
+    for key in requests:
+        if key in cached:
+            result[key] = cached[key]
+        else:
+            uncached.append(key)
+
+    for ticker, target_date in uncached:
+        result[(ticker, target_date)] = get_close_on_or_before(ticker, target_date)
+
+    return result
+
+
+def batch_get_latest_close(tickers: list[str]) -> dict[str, float | None]:
+    """批次查詢多個 ticker 的最新收盤價；命中 cache 時單一 SQL 搞定。"""
+    if not tickers:
+        return {}
+
+    from database import _conn, init_db
+    init_db()
+    today = date.today().isoformat()
+
+    result: dict[str, float | None] = {}
+    uncached: list[str] = []
+
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT ticker, price FROM price_cache
+                   WHERE ticker IN %s AND ref_date='LATEST' AND cache_date=%s""",
+                (tuple(tickers), today)
+            )
+            cached = {r["ticker"]: r["price"] for r in cur.fetchall()}
+
+    for ticker in tickers:
+        if ticker in cached:
+            result[ticker] = cached[ticker]
+        else:
+            uncached.append(ticker)
+
+    for ticker in uncached:
+        result[ticker] = get_latest_close(ticker)
+
+    return result

@@ -5,3 +5,4 @@ load_dotenv(override=True)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL   = "gemini-1.5-flash"
+DATABASE_URL   = os.getenv("DATABASE_URL", "")

@@ -1,18 +1,22 @@
 """
 計算每筆訊號的即時績效，並與大盤比較勝率。
+批次查詢 price_cache 以減少 DB round-trips。
 """
 import sys
 import json
-import sqlite3
 import urllib.request
 from datetime import date
-from prices import get_close_on_or_before, get_latest_close, benchmark_for
-from database import DB_PATH, init_db, save_perf_results
+from prices import (
+    get_close_on_or_before, get_latest_close,
+    batch_get_close_on_or_before, batch_get_latest_close,
+    benchmark_for,
+)
+from database import init_db, save_perf_results, _conn
 
 sys.stdout.reconfigure(encoding="utf-8")
 
 _EPISODES_URL  = "https://whatmkreallysaid.com/episodes.json"
-_episodes_cache: dict[str, str] = {}   # ep_number_str → date (YYYY-MM-DD)
+_episodes_cache: dict[str, str] = {}
 
 
 def _load_episodes() -> dict[str, str]:
@@ -33,41 +37,51 @@ def _load_episodes() -> dict[str, str]:
 
 
 def _episode_date(episode_id: str, fallback: str) -> str:
-    """用集數 ID（如 EP672）查播出日，抓不到就回傳 fallback。"""
     return _load_episodes().get(episode_id, fallback)
 
 
 def _fill_entry_prices():
     """對 entry_price 為 NULL 的訊號補抓進場價（用集數播出日，非分析日）。"""
+    import psycopg2.extras
     init_db()
-    _load_episodes()  # pre-warm cache
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT id, episode_id, stock_code, analysis_date FROM signals "
-            "WHERE action != '0' AND (entry_price IS NULL OR entry_price = 0)"
-        ).fetchall()
+    _load_episodes()
 
-    updates = []
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT id, episode_id, stock_code, analysis_date FROM signals
+                   WHERE action != '0' AND (entry_price IS NULL OR entry_price = 0)"""
+            )
+            rows = [dict(r) for r in cur.fetchall()]
+
+    requests = []
+    meta = []
     for r in rows:
-        code  = r["stock_code"]
-        ep_id = r["episode_id"] or ""
-        # 優先用播出日，退而求其次用分析日
+        code    = r["stock_code"]
+        ep_id   = r["episode_id"] or ""
         entry_d = _episode_date(ep_id, r["analysis_date"])
         if not code or code == "Unknown" or not entry_d:
             continue
-        price = get_close_on_or_before(code, entry_d)
-        bm    = benchmark_for(code)
+        requests.append((code, entry_d))
+        meta.append((r["id"], code, entry_d, benchmark_for(code)))
+
+    prices = batch_get_close_on_or_before(requests)
+
+    updates = []
+    for sig_id, code, entry_d, bm in meta:
+        price = prices.get((code, entry_d))
         if price:
-            updates.append((price, bm, entry_d, r["id"]))
+            updates.append((price, bm, entry_d, sig_id))
             print(f"  {code} @ {entry_d} = {price}")
 
     if updates:
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.executemany(
-                "UPDATE signals SET entry_price=?, benchmark_ticker=?, entry_date=? WHERE id=?",
-                updates
-            )
+        with _conn() as conn:
+            with conn.cursor() as cur:
+                psycopg2.extras.execute_batch(cur, """
+                    UPDATE signals
+                    SET entry_price=%s, benchmark_ticker=%s, entry_date=%s
+                    WHERE id=%s
+                """, updates)
     return len(updates)
 
 
@@ -77,67 +91,76 @@ def calc_performance() -> list[dict]:
       stock_return_pct, benchmark_return_pct, beat_benchmark, current_price, days_held
     """
     init_db()
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT * FROM signals WHERE action != '0' ORDER BY entry_date ASC"
-        ).fetchall()
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT * FROM signals WHERE action != '0' ORDER BY entry_date ASC"
+            )
+            rows = [dict(r) for r in cur.fetchall()]
+
+    # 收集所有需要的價格 key，一次批次抓完
+    hist_keys: set[tuple[str, str]] = set()
+    live_tickers: set[str] = set()
+
+    for r in rows:
+        code    = r.get("stock_code", "")
+        entry_p = r.get("entry_price")
+        entry_d = r.get("entry_date") or r.get("analysis_date")
+        if not code or code == "Unknown" or not entry_p or not entry_d:
+            continue
+        bm = r.get("benchmark_ticker") or benchmark_for(code)
+        hist_keys.add((code, entry_d))
+        hist_keys.add((bm, entry_d))
+        live_tickers.add(code)
+        live_tickers.add(bm)
+
+    hist_cache   = batch_get_close_on_or_before(list(hist_keys))
+    latest_cache = batch_get_latest_close(list(live_tickers))
 
     results = []
 
     for r in rows:
-        row = dict(r)
-        code     = row.get("stock_code", "")
-        action   = row.get("action", "0")
-        entry_p  = row.get("entry_price")
-        entry_d  = row.get("entry_date") or row.get("analysis_date")
-        bm       = row.get("benchmark_ticker") or benchmark_for(code)
+        code    = r.get("stock_code", "")
+        entry_p = r.get("entry_price")
+        entry_d = r.get("entry_date") or r.get("analysis_date")
+        bm      = r.get("benchmark_ticker") or benchmark_for(code)
 
         if not entry_p or not entry_d or not code or code == "Unknown":
-            row.update(dict.fromkeys(
+            r.update(dict.fromkeys(
                 ["stock_return_pct", "benchmark_return_pct", "beat_benchmark", "current_price", "days_held"]
             ))
-            results.append(row)
+            results.append(r)
             continue
 
-        # 個股報酬：重抓 entry 價確保與 current 在同一 auto_adjust 基礎上
-        # 統一用買進視角：不論原始訊號多空，都比較「買進後是否贏大盤」
-        live_entry = get_close_on_or_before(code, entry_d) or entry_p
-        current_p = get_latest_close(code)
+        live_entry = hist_cache.get((code, entry_d)) or entry_p
+        current_p  = latest_cache.get(code)
+
         if current_p and live_entry:
-            raw_pct = (current_p - live_entry) / live_entry * 100
-            stock_pct = round(raw_pct, 2)
+            stock_pct = round((current_p - live_entry) / live_entry * 100, 2)
         else:
             stock_pct = current_p = None
 
-        # 大盤報酬（同期，方向固定為多）
-        bm_entry = get_close_on_or_before(bm, entry_d)
-        bm_now   = get_latest_close(bm)
+        bm_entry = hist_cache.get((bm, entry_d))
+        bm_now   = latest_cache.get(bm)
         if bm_entry and bm_now and bm_entry != 0:
             bm_pct = round((bm_now - bm_entry) / bm_entry * 100, 2)
         else:
             bm_pct = None
 
-        # 勝負
-        if stock_pct is not None and bm_pct is not None:
-            beat = stock_pct > bm_pct
-        else:
-            beat = None
+        beat = (stock_pct > bm_pct) if (stock_pct is not None and bm_pct is not None) else None
 
-        # 持倉天數
         try:
-            d0 = date.fromisoformat(entry_d)
-            days = (date.today() - d0).days
+            days = (date.today() - date.fromisoformat(entry_d)).days
         except Exception:
             days = None
 
-        row["stock_return_pct"]     = stock_pct
-        row["benchmark_return_pct"] = bm_pct
-        row["beat_benchmark"]       = beat
-        row["current_price"]        = current_p
-        row["days_held"]            = days
-        row["live_entry_price"]     = live_entry  # 計算用的調整後進場價（顯示用）
-        results.append(row)
+        r["stock_return_pct"]     = stock_pct
+        r["benchmark_return_pct"] = bm_pct
+        r["beat_benchmark"]       = beat
+        r["current_price"]        = current_p
+        r["days_held"]            = days
+        r["live_entry_price"]     = live_entry
+        results.append(r)
 
     save_perf_results(results)
     return results

@@ -12,6 +12,11 @@ __pycache__/
 # 逐字稿（從 whatmkreallysaid.com 動態下載，不進 repo）
 transcripts/
 
+# 資料庫（本機用，不進 repo）
+*.db
+*.db-wal
+*.db-shm
+
 # 產出物
 report_preview.html
 batch.log
