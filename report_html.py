@@ -223,8 +223,6 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     bearish_dec = [r for r in results if r.get("action") == "-1" and r.get("beat_benchmark") is not None]
     all_rets    = sorted([r["stock_return_pct"] for r in results
                           if r.get("stock_return_pct") is not None and r.get("action") != "0"])
-    bull_wr  = round(sum(1 for r in bullish_dec if r["beat_benchmark"]) / len(bullish_dec) * 100, 1) if bullish_dec else None
-    bear_wr  = round(sum(1 for r in bearish_dec if r["beat_benchmark"]) / len(bearish_dec) * 100, 1) if bearish_dec else None
     avg_ret  = round(sum(all_rets) / len(all_rets), 2) if all_rets else None
     med_ret  = round(all_rets[len(all_rets) // 2], 2) if all_rets else None
     latest_ep = max((r.get("episode_id", "") for r in results if r.get("episode_id")), key=_ep_num, default="N/A")
@@ -236,8 +234,6 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
         suf   = "%" if pct else ""
         return f'<span style="color:{color};">{sign}{v}{suf}</span>'
 
-    bull_wr_html = _fs(bull_wr)
-    bear_wr_html = _fs(bear_wr)
     avg_ret_html = _fs(avg_ret)
     med_ret_html = _fs(med_ret)
 
@@ -356,20 +352,12 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   <!-- Stats 第二列 -->
   <div style="display:flex;text-align:center;border-bottom:1px solid #eee;background:#fafcff;">
     <div style="flex:1;padding:10px 0;">
-      <div style="font-size:11px;color:#aaa;">看多勝率</div>
-      <div style="font-size:17px;">{bull_wr_html}</div>
-    </div>
-    <div style="flex:1;padding:10px 0;border-left:1px solid #eee;">
-      <div style="font-size:11px;color:#aaa;">看空勝率</div>
-      <div style="font-size:17px;">{bear_wr_html}</div>
-    </div>
-    <div style="flex:1;padding:10px 0;border-left:1px solid #eee;">
       <div style="font-size:11px;color:#aaa;">均個股報酬</div>
-      <div style="font-size:17px;">{avg_ret_html}</div>
+      <div style="font-size:17px;" title="所有看多/看空標的，從播出日收盤價至今的平均漲跌幅">{avg_ret_html}</div>
     </div>
     <div style="flex:1;padding:10px 0;border-left:1px solid #eee;">
       <div style="font-size:11px;color:#aaa;">中位數報酬</div>
-      <div style="font-size:17px;">{med_ret_html}</div>
+      <div style="font-size:17px;" title="排除極端值的影響，更能反映典型表現">{med_ret_html}</div>
     </div>
   </div>
 
@@ -779,9 +767,6 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
     win_color = "#d9534f" if win_pct >= 50 else "#2b8a3e"
 
     # ── 額外統計 ─────────────────────────────────────────────
-    bullish_dec = [r for r in results if r.get("action") == "+1" and r.get("beat_benchmark") is not None]
-    bull_wr     = round(sum(1 for r in bullish_dec if r["beat_benchmark"]) / len(bullish_dec) * 100, 1) if bullish_dec else None
-    bull_color  = "#d9534f" if (bull_wr or 0) >= 50 else "#2b8a3e"
 
     # ── 本週最新訊號（最新 2 集，僅看多/看空，排除中立）────────
     eps_sorted     = sorted({r["episode_id"] for r in results if r.get("episode_id")}, key=_ep_num)
@@ -861,7 +846,6 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
         <tr><td><div style="height:1px;background:#f0f0f0;"></div></td></tr>"""
 
     # ── 績效儀表板 ───────────────────────────────────────────
-    bull_wr_bar = _pbar(bull_wr or 0) if bull_wr is not None else "<span style='color:#aaa;font-size:15px;'>尚無資料</span>"
     overall_bar = _pbar(win_pct)
 
     dashboard = f"""
@@ -875,25 +859,13 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
             </div>
             <table width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr>
-                <td width="110" style="font-size:15px;color:#555;padding-bottom:16px;vertical-align:top;padding-top:4px;">
+                <td width="110" style="font-size:15px;color:#555;padding-bottom:8px;vertical-align:top;padding-top:4px;">
                   整體勝率<br><span style="font-size:13px;color:#bbb;">全部看多看空</span>
                 </td>
-                <td style="padding-bottom:16px;">
+                <td style="padding-bottom:8px;">
                   <div style="margin-bottom:6px;">{overall_bar}</div>
                   <span style="font-size:32px;font-weight:bold;color:{win_color};">{win_pct}%</span>
                   <span style="font-size:14px;color:#aaa;margin-left:10px;">{stats['wins']}勝 / {stats['losses']}負 / {stats['total']-stats['decided']}待定</span>
-                </td>
-              </tr>
-              <tr>
-                <td style="font-size:15px;color:#555;padding-bottom:4px;vertical-align:top;padding-top:4px;">
-                  看多勝率<br><span style="font-size:13px;color:#bbb;">僅計看好標的</span>
-                </td>
-                <td style="padding-bottom:4px;">
-                  <div style="margin-bottom:6px;">{bull_wr_bar}</div>
-                  <span style="font-size:32px;font-weight:bold;color:{bull_color};">
-                    {str(bull_wr)+'%' if bull_wr is not None else 'N/A'}
-                  </span>
-                  <span style="font-size:14px;color:#aaa;margin-left:10px;">（{len(bullish_dec)} 筆已決）</span>
                 </td>
               </tr>
             </table>
