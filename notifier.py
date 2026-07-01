@@ -30,7 +30,7 @@ load_dotenv(override=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
                     handlers=[logging.StreamHandler(sys.stdout)])
 
-from report_html import generate_html_detail, generate_html_email
+from report_html import generate_html_detail, generate_html_email, _ep_num
 
 # ── 寄信 ────────────────────────────────────────────────────────────────────
 

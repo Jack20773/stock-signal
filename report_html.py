@@ -290,7 +290,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     table_rows = "".join(rows_list)
 
     win_pct   = stats.get("win_rate", 0)
-    win_color = "#d9534f" if win_pct >= 50 else "#2b8a3e"
+    win_color = "#2b8a3e" if win_pct >= 50 else "#d9534f"
     today     = date.today().isoformat()
 
     tag_btns = "".join(
@@ -762,7 +762,7 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
                         detail_url: str = "") -> str:
     today     = date.today().isoformat()
     win_pct   = stats.get("win_rate", 0)
-    win_color = "#d9534f" if win_pct >= 50 else "#2b8a3e"
+    win_color = "#2b8a3e" if win_pct >= 50 else "#d9534f"
 
     # 排序：獲勝（報酬高→低）→ 落後 → 待定
     def _sort_key(r):
@@ -791,7 +791,7 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
     table_rows = ""
     group_labels  = ["獲勝", "落後", "待定"]
     group_counts  = [stats["wins"], stats["losses"], stats["total"] - stats["decided"]]
-    group_colors  = ["#fff3f3", "#f3fff3", "#f8f8f8"]
+    group_colors  = ["#f3fff3", "#fff3f3", "#f8f8f8"]
 
     for r in sorted_res:
         beat  = r.get("beat_benchmark")
@@ -820,7 +820,7 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
             'border-radius:3px;padding:1px 4px;">空</span>'
             if action == "-1" else ""
         )
-        row_bg = "#fffafa" if beat is True else ("#f5fff5" if beat is False else "#fafafa")
+        row_bg = "#f5fff5" if beat is True else ("#fffafa" if beat is False else "#fafafa")
 
         table_rows += f"""
               <tr style="background:{row_bg};border-bottom:1px solid #f0f0f0;">

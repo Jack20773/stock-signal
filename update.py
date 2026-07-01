@@ -61,6 +61,7 @@ def run(args):
     from notifier import run_report
     run_report(
         fill       = False,     # Step 3 已做過，跳過
+        last_n     = args.report_last,
         preview    = not args.send,
         no_send    = not args.send,
         detail_url = args.detail_url,
@@ -77,6 +78,7 @@ def main():
     parser.add_argument("--last",       type=int, default=20, help="分析最新 N 集（預設 20）")
     parser.add_argument("--dry-run",    action="store_true",  help="只列清單，不呼叫 Gemini API")
     parser.add_argument("--send",       action="store_true",  help="完成後寄出 email 報告")
+    parser.add_argument("--report-last", type=int, default=50, help="email 只顯示最新 N 集（預設 50）")
     parser.add_argument("--detail-url", default="",           help="詳細版 URL（加在 email 按鈕）")
     args = parser.parse_args()
     run(args)
