@@ -806,6 +806,9 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
         reason  = (r.get("raw_reason") or "").strip()[:90]
         if reason and len(r.get("raw_reason", "")) > 90:
             reason += "..."
+        quote   = (r.get("exact_quote") or "").strip()[:120]
+        if quote and len(r.get("exact_quote", "")) > 120:
+            quote += "..."
         entry_d = r.get("entry_date") or ""
 
         if action == "+1" and conf == "High":
@@ -822,23 +825,24 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
             bg_c      = "#f8f9fa"
 
         latest_cards += f"""
-          <div style="background:{bg_c};border-left:4px solid {border_c};
-                      padding:10px 14px;margin-bottom:8px;border-radius:0 4px 4px 0;">
+          <div style="background:{bg_c};border-left:5px solid {border_c};
+                      padding:14px 16px;margin-bottom:10px;border-radius:0 6px 6px 0;">
             <table width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr>
                 <td>
-                  <span style="font-weight:bold;font-size:15px;color:#1a252f;">{name}</span>
-                  <span style="color:#aaa;font-size:12px;margin-left:6px;">{code}</span>
+                  <span style="font-weight:bold;font-size:20px;color:#1a252f;">{name}</span>
+                  <span style="color:#bbb;font-size:13px;margin-left:8px;">{code}</span>
                 </td>
-                <td align="right">
-                  <span style="background:{border_c};color:#fff;font-size:12px;font-weight:bold;
-                               padding:2px 8px;border-radius:3px;">{badge_txt}</span>
-                  <span style="color:#aaa;font-size:12px;margin-left:6px;">{ep}</span>
+                <td align="right" style="vertical-align:top;">
+                  <span style="background:{border_c};color:#fff;font-size:13px;font-weight:bold;
+                               padding:4px 12px;border-radius:4px;">{badge_txt}</span>
+                  <br><span style="color:#bbb;font-size:12px;">{ep}</span>
                 </td>
               </tr>
             </table>
-            {'<div style="color:#555;font-size:13px;margin-top:6px;">「' + reason + '」</div>' if reason else ''}
-            {'<div style="color:#bbb;font-size:12px;margin-top:4px;">進場日 ' + entry_d + '</div>' if entry_d else ''}
+            {'<div style="color:#444;font-size:14px;margin-top:8px;line-height:1.5;">' + reason + '</div>' if reason else ''}
+            {'<div style="margin-top:8px;padding:8px 12px;background:rgba(0,0,0,.04);border-radius:4px;color:#888;font-style:italic;font-size:13px;line-height:1.5;">「' + quote + '」</div>' if quote else ''}
+            {'<div style="color:#ccc;font-size:12px;margin-top:6px;">進場日 ' + entry_d + '</div>' if entry_d else ''}
           </div>"""
 
     latest_section = ""
@@ -846,9 +850,11 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
         latest_ep_label = "、".join(sorted(latest_ep_ids, key=_ep_num))
         latest_section = f"""
         <tr>
-          <td style="padding:16px 20px 8px;">
-            <div style="font-size:13px;font-weight:bold;color:#1a252f;margin-bottom:10px;">
-              🔥 本週最新訊號（{latest_ep_label}）
+          <td style="padding:20px 20px 10px;">
+            <div style="font-size:16px;font-weight:bold;color:#1a252f;margin-bottom:12px;
+                        letter-spacing:0.3px;">
+              🔥 本週最新訊號
+              <span style="font-size:13px;font-weight:normal;color:#aaa;margin-left:6px;">{latest_ep_label}</span>
             </div>
             {latest_cards}
           </td>
@@ -860,8 +866,6 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
         r for r in results
         if r.get("action") == "+1"
         and r.get("beat_benchmark") is None
-        and r.get("entry_price")
-        and r.get("episode_id") not in latest_ep_ids   # 最新集已在上面顯示
     ]
     active_longs.sort(key=lambda r: -(r.get("days_held") or 0))
 
@@ -924,23 +928,30 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
     dashboard = f"""
         <tr>
           <td style="padding:14px 20px 16px;">
-            <div style="font-size:13px;font-weight:bold;color:#1a252f;margin-bottom:12px;">
+            <div style="font-size:13px;font-weight:bold;color:#1a252f;margin-bottom:4px;">
               📊 績效儀表板
+            </div>
+            <div style="font-size:11px;color:#bbb;margin-bottom:12px;">
+              勝率定義：主委看好/看壞的標的，從集數播出日起算，個股漲跌是否跑贏同期大盤（台股對比 0050，美股對比 SPY）
             </div>
             <table width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr>
-                <td width="80" style="font-size:13px;color:#666;padding-bottom:10px;">整體勝率</td>
+                <td width="90" style="font-size:13px;color:#555;padding-bottom:10px;vertical-align:top;padding-top:3px;">
+                  整體勝率<br><span style="font-size:11px;color:#bbb;">全部看多看空</span>
+                </td>
                 <td style="padding-bottom:10px;">
                   <div style="margin-bottom:4px;">{overall_bar}</div>
-                  <span style="font-size:13px;font-weight:bold;color:{win_color};">{win_pct}%</span>
+                  <span style="font-size:14px;font-weight:bold;color:{win_color};">{win_pct}%</span>
                   <span style="font-size:12px;color:#aaa;margin-left:6px;">{stats['wins']}勝 / {stats['losses']}負 / {stats['total']-stats['decided']}待定</span>
                 </td>
               </tr>
               <tr>
-                <td style="font-size:13px;color:#666;padding-bottom:4px;">看多勝率</td>
+                <td style="font-size:13px;color:#555;padding-bottom:4px;vertical-align:top;padding-top:3px;">
+                  看多勝率<br><span style="font-size:11px;color:#bbb;">僅計看好標的</span>
+                </td>
                 <td style="padding-bottom:4px;">
                   <div style="margin-bottom:4px;">{bull_wr_bar}</div>
-                  <span style="font-size:13px;font-weight:bold;color:{bull_color};">
+                  <span style="font-size:14px;font-weight:bold;color:{bull_color};">
                     {str(bull_wr)+'%' if bull_wr is not None else 'N/A'}
                   </span>
                   <span style="font-size:12px;color:#aaa;margin-left:6px;">（{len(bullish_dec)} 筆已決）</span>
@@ -965,59 +976,6 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
         </tr>
         <tr><td><div style="height:1px;background:#f0f0f0;"></div></td></tr>"""
 
-    # ── 全訊號表（移到最後）──────────────────────────────────
-    def _sort_key(r):
-        beat  = r.get("beat_benchmark")
-        group = 0 if beat is True else (1 if beat is False else 2)
-        return (group, -(r.get("stock_return_pct") or -9999))
-
-    sorted_res    = sorted(results, key=_sort_key)
-    prev_group    = None
-    table_rows    = ""
-    group_labels  = ["獲勝", "落後", "待定"]
-    group_counts  = [stats["wins"], stats["losses"], stats["total"] - stats["decided"]]
-    group_colors  = ["#fff3f3", "#f3fff3", "#f8f8f8"]
-
-    for r in sorted_res:
-        beat  = r.get("beat_benchmark")
-        group = 0 if beat is True else (1 if beat is False else 2)
-        if group != prev_group:
-            table_rows += f"""
-              <tr>
-                <td colspan="6" style="padding:6px 12px;background:{group_colors[group]};
-                    font-size:12px;font-weight:bold;color:#777;border-top:2px solid #e8e8e8;">
-                  {group_labels[group]}（{group_counts[group]} 筆）
-                </td>
-              </tr>"""
-            prev_group = group
-
-        code    = r.get("stock_code", "")
-        name    = r.get("stock_name", "")
-        ep      = r.get("episode_id", "")
-        action  = r.get("action", "0")
-        s_pct   = r.get("stock_return_pct")
-        b_pct   = r.get("benchmark_return_pct")
-        bm      = r.get("benchmark_ticker") or benchmark_for(code)
-        act_lbl = _action_label(action, r.get("confidence_level", ""))
-        badge   = (
-            ' <span style="font-size:11px;background:#e8f4fd;color:#1a6b9a;'
-            'border-radius:3px;padding:1px 4px;">空</span>'
-            if action == "-1" else ""
-        )
-        row_bg  = "#fffafa" if beat is True else ("#f5fff5" if beat is False else "#fafafa")
-        table_rows += f"""
-              <tr style="background:{row_bg};border-bottom:1px solid #f0f0f0;">
-                <td style="padding:7px 10px;font-size:13px;font-weight:bold;">
-                  {name}<br><span style="color:#aaa;font-size:11px;">{code}</span></td>
-                <td style="padding:7px 5px;font-size:12px;color:#888;">{ep}</td>
-                <td style="padding:7px 5px;font-size:12px;color:#555;">{act_lbl}{badge}</td>
-                <td style="padding:7px 5px;font-size:13px;font-weight:bold;
-                    color:{_pct_color(s_pct)};text-align:right;">{_fmt_pct(s_pct)}</td>
-                <td style="padding:7px 5px;font-size:11px;color:#999;text-align:right;">
-                  {_fmt_pct(b_pct)}<br><span style="color:#ccc;">{bm}</span></td>
-                <td style="padding:7px 5px;text-align:center;">{_beat_label(beat)}</td>
-              </tr>"""
-
     return f"""<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -1037,42 +995,17 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
           </td>
         </tr>
 
+        <!-- 績效儀表板（頂部） -->
+        {dashboard}
+
         <!-- 本週最新訊號 -->
         {latest_section}
 
         <!-- 進行中的看多標的 -->
         {active_section}
 
-        <!-- 績效儀表板 -->
-        {dashboard}
-
         <!-- 查看完整報告 -->
         {detail_btn}
-
-        <!-- 全訊號表 -->
-        <tr>
-          <td style="padding:12px 20px 4px;">
-            <div style="font-size:12px;font-weight:bold;color:#999;">全部訊號（最新 {len(results)} 筆）</div>
-          </td>
-        </tr>
-        <tr>
-          <td>
-            <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                   style="font-size:13px;border-collapse:collapse;">
-              <thead>
-                <tr style="background:#f1f3f5;">
-                  <th style="padding:8px 10px;text-align:left;font-size:12px;color:#495057;">標的</th>
-                  <th style="padding:8px 5px;text-align:left;font-size:12px;color:#495057;">集數</th>
-                  <th style="padding:8px 5px;text-align:left;font-size:12px;color:#495057;">動作</th>
-                  <th style="padding:8px 5px;text-align:right;font-size:12px;color:#495057;">個股</th>
-                  <th style="padding:8px 5px;text-align:right;font-size:12px;color:#495057;">大盤</th>
-                  <th style="padding:8px 5px;text-align:center;font-size:12px;color:#495057;">勝負</th>
-                </tr>
-              </thead>
-              <tbody>{table_rows}</tbody>
-            </table>
-          </td>
-        </tr>
 
         <!-- Footer -->
         <tr>
