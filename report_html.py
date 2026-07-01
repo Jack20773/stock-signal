@@ -353,12 +353,18 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   <div style="display:flex;text-align:center;border-bottom:1px solid #eee;background:#fafcff;">
     <div style="flex:1;padding:10px 0;">
       <div style="font-size:11px;color:#aaa;">均個股報酬</div>
-      <div style="font-size:17px;" title="所有看多/看空標的，從播出日收盤價至今的平均漲跌幅">{avg_ret_html}</div>
+      <div style="font-size:17px;" title="播出日收盤價→今日收盤價漲跌幅，未扣手續費">{avg_ret_html}</div>
+      <div style="font-size:10px;color:#ccc;margin-top:2px;">播出日→今日，未扣費</div>
     </div>
     <div style="flex:1;padding:10px 0;border-left:1px solid #eee;">
       <div style="font-size:11px;color:#aaa;">中位數報酬</div>
-      <div style="font-size:17px;" title="排除極端值的影響，更能反映典型表現">{med_ret_html}</div>
+      <div style="font-size:17px;" title="排除極端值，更能反映典型表現">{med_ret_html}</div>
+      <div style="font-size:10px;color:#ccc;margin-top:2px;">排除極端值</div>
     </div>
+  </div>
+  <!-- 計算說明 -->
+  <div style="padding:6px 20px 10px;background:#fafcff;font-size:11px;color:#bbb;border-bottom:1px solid #eee;">
+    個股報酬＝播出日收盤價至今漲跌幅；對標大盤＝同期 0050（台股）或 SPY（美股）漲跌幅；未扣除手續費
   </div>
 
   <!-- 趨勢圖 -->
@@ -854,8 +860,9 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
             <div style="font-size:18px;font-weight:bold;color:#1a252f;margin-bottom:6px;">
               📊 績效儀表板
             </div>
-            <div style="font-size:13px;color:#bbb;margin-bottom:18px;line-height:1.6;">
-              勝率定義：主委看好/看壞的標的，從集數播出日起算，<br>個股漲跌是否跑贏同期大盤（台股對比 0050，美股對比 SPY）
+            <div style="font-size:13px;color:#bbb;margin-bottom:18px;line-height:1.8;">
+              <b style="color:#aaa;">勝率</b>：主委看好/看壞的標的，個股漲跌是否跑贏同期大盤（台股 0050，美股 SPY）<br>
+              <b style="color:#aaa;">個股報酬</b>：集數播出日收盤價 → 今日最新收盤價的漲跌幅，未扣手續費
             </div>
             <table width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr>
