@@ -92,6 +92,7 @@ def run_batch(files: list[Path], dry_run: bool = False):
             transcript = path.read_text(encoding="utf-8")
             logging.info(f"{prefix} — 分析中（{len(transcript):,} chars）...")
             result = _analyze_with_retry(transcript)
+            result["episode_id"] = ep_id  # 用檔名 ep_id 覆蓋 Gemini 的萃取結果，避免誤讀集號
             count = save_result(result)
             logging.info(f"{prefix} — 完成，存入 {count} 個訊號")
             done += 1
