@@ -17,7 +17,6 @@ from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-from analyzer import analyze
 from database import init_db, save_result, DB_PATH
 
 logging.basicConfig(
@@ -35,6 +34,7 @@ MAX_RETRIES    = 3   # 單集最多重試次數
 
 
 def _analyze_with_retry(transcript: str) -> dict:
+    from analyzer import analyze  # lazy import，dry-run 時不需要 google.genai
     for attempt in range(MAX_RETRIES):
         try:
             return analyze(transcript)
