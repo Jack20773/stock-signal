@@ -27,9 +27,12 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          REPORT_TO: ${{ secrets.REPORT_TO }}
         run: python -X utf8 update.py --last 5 --send
         # --last 5：只跑最新 5 集（已分析的會自動跳過）
-        # --send：分析完寄 Email 報告
+        # --send：分析完寄 Email 報告（未設 email secrets 會跳過但不 crash）
 
       - name: 上傳執行 log
         if: always()

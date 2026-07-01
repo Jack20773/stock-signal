@@ -38,11 +38,11 @@ def send_email(subject: str, html_content: str) -> bool:
     user     = os.getenv("GMAIL_USER")
     password = os.getenv("GMAIL_APP_PASSWORD")
     # REPORT_TO 支援多個收件人，用逗號分隔，例如 a@gmail.com,b@gmail.com
-    to_raw   = os.getenv("REPORT_TO") or user
+    to_raw   = os.getenv("REPORT_TO") or user or ""
     to_list  = [a.strip() for a in to_raw.split(",") if a.strip()]
 
-    if not user or not password:
-        logging.error("未設定 GMAIL_USER / GMAIL_APP_PASSWORD，無法寄信")
+    if not user or not password or not to_list:
+        logging.error("未設定 GMAIL_USER / GMAIL_APP_PASSWORD / REPORT_TO，跳過寄信")
         return False
 
     msg = MIMEMultipart("alternative")
