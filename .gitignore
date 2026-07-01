@@ -21,6 +21,7 @@ transcripts/
 report_preview.html
 batch.log
 *.log
+episodes.json
 
 # 本地開發工具
 .vscode/

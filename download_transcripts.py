@@ -1,20 +1,21 @@
 import sys
 import json
 import time
+import argparse
 import urllib.request
 import urllib.parse
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-BASE_URL   = "https://whatmkreallysaid.com"
+BASE_URL     = "https://whatmkreallysaid.com"
 EPISODES_URL = f"{BASE_URL}/episodes.json"
-OUT_DIR    = Path(__file__).parent / "transcripts"
-DELAY_SEC  = 0.5   # 每次請求間隔，避免打爆伺服器
+OUT_DIR      = Path(__file__).parent / "transcripts"
+EPISODES_LOCAL = Path(__file__).parent / "episodes.json"
+DELAY_SEC    = 0.5
 
 
 def safe_filename(name: str) -> str:
-    """Replace Windows-illegal filename characters."""
     for ch in r'\/:*?"<>|':
         name = name.replace(ch, "_")
     return name
@@ -32,24 +33,32 @@ def fetch(url: str, retries: int = 3) -> bytes:
             time.sleep(2 ** attempt)
 
 
-def main():
+def main(last_n: int = 0):
     OUT_DIR.mkdir(exist_ok=True)
 
     print("Fetching episode list...")
-    episodes = json.loads(fetch(EPISODES_URL).decode("utf-8"))
+    raw = fetch(EPISODES_URL)
+    episodes = json.loads(raw.decode("utf-8"))
+
+    # C: 存成本地檔案，讓 performance.py 直接讀，不用再抓一次
+    EPISODES_LOCAL.write_bytes(raw)
+
     total = len(episodes)
-    print(f"Found {total} episodes\n")
+    if last_n > 0:
+        episodes = episodes[-last_n:]
+        print(f"Found {total} episodes (only downloading last {last_n})\n")
+    else:
+        print(f"Found {total} episodes\n")
 
     skipped = downloaded = failed = 0
-
     for i, ep in enumerate(episodes, 1):
-        filename  = ep["filename"]          # e.g. "EP1_EP1 _( _・ω・)╰—╯✄.md"
-        number    = ep.get("number", "?")
-        ep_date   = ep.get("date", "")
-        out_path  = OUT_DIR / safe_filename(filename)
+        filename = ep["filename"]
+        number   = ep.get("number", "?")
+        ep_date  = ep.get("date", "")
+        out_path = OUT_DIR / safe_filename(filename)
 
         if out_path.exists() and out_path.stat().st_size > 0:
-            print(f"[{i:>3}/{total}] SKIP   EP{number}")
+            print(f"[{number:>4}] SKIP   EP{number}")
             skipped += 1
             continue
 
@@ -58,10 +67,10 @@ def main():
             content = fetch(url)
             out_path.write_bytes(content)
             size_kb = len(content) / 1024
-            print(f"[{i:>3}/{total}] OK     EP{number} ({ep_date})  {size_kb:.1f} KB")
+            print(f"[{number:>4}] OK     EP{number} ({ep_date})  {size_kb:.1f} KB")
             downloaded += 1
         except Exception as e:
-            print(f"[{i:>3}/{total}] FAIL   EP{number}  {e}")
+            print(f"[{number:>4}] FAIL   EP{number}  {e}")
             failed += 1
 
         time.sleep(DELAY_SEC)
@@ -71,4 +80,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--last", type=int, default=0,
+                        help="只下載最新 N 集（0 = 全下載）")
+    args = parser.parse_args()
+    main(last_n=args.last)

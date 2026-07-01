@@ -27,6 +27,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Cache transcripts
+        uses: actions/cache@v4
+        with:
+          path: transcripts/
+          key: transcripts-${{ github.run_id }}
+          restore-keys: |
+            transcripts-
+
       - name: 下載逐字稿 + 分析 + 更新績效
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

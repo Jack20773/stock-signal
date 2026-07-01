@@ -6,6 +6,7 @@ import sys
 import json
 import urllib.request
 from datetime import date
+from pathlib import Path
 from prices import (
     get_close_on_or_before, get_latest_close,
     batch_get_close_on_or_before, batch_get_latest_close,
@@ -23,14 +24,24 @@ def _load_episodes() -> dict[str, str]:
     global _episodes_cache
     if _episodes_cache:
         return _episodes_cache
+
+    def _parse(data):
+        return {f"EP{e['number']}": e["date"] for e in data if e.get("date") and e.get("number")}
+
+    # 優先讀本地快取（由 download_transcripts.py 在同一次執行中寫入）
+    local = Path(__file__).parent / "episodes.json"
+    if local.exists():
+        try:
+            _episodes_cache = _parse(json.loads(local.read_text(encoding="utf-8")))
+            return _episodes_cache
+        except Exception:
+            pass
+
+    # 本地沒有才走網路
     try:
         req  = urllib.request.Request(_EPISODES_URL, headers={"User-Agent": "Mozilla/5.0"})
         data = json.loads(urllib.request.urlopen(req, timeout=15).read().decode("utf-8"))
-        _episodes_cache = {
-            f"EP{e['number']}": e["date"]
-            for e in data
-            if e.get("date") and e.get("number")
-        }
+        _episodes_cache = _parse(data)
     except Exception as ex:
         print(f"[warn] episodes.json 載入失敗：{ex}")
     return _episodes_cache

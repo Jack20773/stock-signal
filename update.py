@@ -30,7 +30,7 @@ def run(args):
     # ── Step 1：下載新逐字稿 ─────────────────────────────────────────
     step(1, "下載新逐字稿")
     from download_transcripts import main as dl_main
-    dl_main()
+    dl_main(last_n=args.last)
 
     # ── Step 2：批次分析（跳過已分析集數）────────────────────────────
     step(2, f"批次分析最新 {args.last} 集（Gemini API）")
