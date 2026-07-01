@@ -7,6 +7,7 @@ Gmail HTML 報告寄送模組。
   python notifier.py --preview            # 存 HTML 預覽，不寄信
   python notifier.py --detail-url URL     # email 附完整報告連結
 """
+import json
 import os
 import re
 import sys
@@ -206,16 +207,25 @@ def _render_signal_row(r: dict, ep: str, ep_num_val: int) -> str:
         if raw_reason or exact_quote else ""
     )
 
+    mkt_badge = (
+        '<span style="font-size:11px;background:#e8f0fe;color:#1a6b9a;'
+        'border-radius:3px;padding:1px 4px;margin-left:4px;">台</span>'
+        if is_tw else
+        '<span style="font-size:11px;background:#fff3cd;color:#856404;'
+        'border-radius:3px;padding:1px 4px;margin-left:4px;">美</span>'
+    )
+    days_disp = f"{days}天" if isinstance(days, int) else "N/A"
+
     return f"""
         <tr class="ep-row ep-{ep}"
             data-ep="{ep}" data-epnum="{ep_num_val}" data-tag="{tag}" data-mkt="{mkt}"
             data-spct="{s_pct_val}" data-bpct="{b_pct_val}"
-            data-beat="{beat_val}" data-days="{days}"
+            data-beat="{beat_val}" data-days="{days if isinstance(days, int) else -1}"
             data-name="{name}" data-code="{code}" data-kw="{kw}"
             style="border-bottom:none;">
           <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">{ep}</td>
           <td style="padding:9px 12px 4px;color:#888;font-size:14px;">{tag}</td>
-          <td style="padding:9px 12px 4px;font-weight:bold;">{name}<br>
+          <td style="padding:9px 12px 4px;font-weight:bold;">{name}{mkt_badge}<br>
             <span style="color:#aaa;font-size:13px;">{code}</span></td>
           <td style="padding:9px 12px 4px;color:#666;font-size:14px;">{action_lbl}{short_badge}</td>
           <td style="padding:9px 12px 4px;">{r.get('entry_date','N/A')}<br>
@@ -223,6 +233,7 @@ def _render_signal_row(r: dict, ep: str, ep_num_val: int) -> str:
           <td style="padding:9px 12px 4px;font-weight:bold;color:{_pct_color(s_pct)};">{_fmt_pct(s_pct)}</td>
           <td style="padding:9px 12px 4px;color:#666;">{_fmt_pct(b_pct)}<br>
             <span style="color:#bbb;font-size:12px;">{bm}</span></td>
+          <td style="padding:9px 12px 4px;text-align:center;color:#888;font-size:13px;">{days_disp}</td>
           <td style="padding:9px 12px 4px;">{_beat_label(beat)}</td>
         </tr>{reason_html}"""
 
@@ -230,12 +241,67 @@ def _render_signal_row(r: dict, ep: str, ep_num_val: int) -> str:
 # ── 詳細版 HTML（瀏覽器）────────────────────────────────────────────────────
 
 def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
-    all_tags = sorted({r.get("primary_tag", "") for r in results if r.get("primary_tag")})
+    # ── 增強版統計 ────────────────────────────────────────────
+    bullish_dec = [r for r in results if r.get("action") == "+1" and r.get("beat_benchmark") is not None]
+    bearish_dec = [r for r in results if r.get("action") == "-1" and r.get("beat_benchmark") is not None]
+    all_rets    = sorted([r["stock_return_pct"] for r in results
+                          if r.get("stock_return_pct") is not None and r.get("action") != "0"])
+    bull_wr  = round(sum(1 for r in bullish_dec if r["beat_benchmark"]) / len(bullish_dec) * 100, 1) if bullish_dec else None
+    bear_wr  = round(sum(1 for r in bearish_dec if r["beat_benchmark"]) / len(bearish_dec) * 100, 1) if bearish_dec else None
+    avg_ret  = round(sum(all_rets) / len(all_rets), 2) if all_rets else None
+    med_ret  = round(all_rets[len(all_rets) // 2], 2) if all_rets else None
+    latest_ep = max((r.get("episode_id", "") for r in results if r.get("episode_id")), key=_ep_num, default="N/A")
 
+    def _fs(v, pct=True):
+        if v is None: return "N/A"
+        color = "#d9534f" if v >= 0 else "#2b8a3e"
+        sign  = "+" if v >= 0 else ""
+        suf   = "%" if pct else ""
+        return f'<span style="color:{color};">{sign}{v}{suf}</span>'
+
+    bull_wr_html = _fs(bull_wr)
+    bear_wr_html = _fs(bear_wr)
+    avg_ret_html = _fs(avg_ret)
+    med_ret_html = _fs(med_ret)
+
+    # ── 趨勢圖資料（累計勝率按集數） ──────────────────────────
+    eps_sorted = sorted({r.get("episode_id", "") for r in results if r.get("episode_id")}, key=_ep_num)
+    trend_labels, trend_values = [], []
+    cum_dec = cum_wins = 0
+    for ep in eps_sorted:
+        ep_dec    = [r for r in results if r.get("episode_id") == ep and r.get("beat_benchmark") is not None]
+        cum_dec  += len(ep_dec)
+        cum_wins += sum(1 for r in ep_dec if r["beat_benchmark"])
+        if cum_dec > 0:
+            trend_labels.append(ep)
+            trend_values.append(round(cum_wins / cum_dec * 100, 1))
+    trend_labels_json = json.dumps(trend_labels, ensure_ascii=False)
+    trend_values_json = json.dumps(trend_values)
+
+    # ── Signals JSON for JS stock tab ──────────────────────────
+    _sigs = []
+    for r in results:
+        code  = r.get("stock_code") or ""
+        is_tw = code.endswith(".TW") or code.endswith(".TWO")
+        ep_id = r.get("episode_id", "")
+        _sigs.append({
+            "ep_num":           _ep_num(ep_id),
+            "episode_id":       ep_id,
+            "stock_name":       r.get("stock_name") or "",
+            "stock_code":       code,
+            "action":           r.get("action", "0"),
+            "primary_tag":      r.get("primary_tag") or "",
+            "beat_benchmark":   r.get("beat_benchmark"),
+            "stock_return_pct": r.get("stock_return_pct"),
+            "is_tw":            is_tw,
+        })
+    signals_json = json.dumps(_sigs, ensure_ascii=False)
+
+    # ── Build ep rows ─────────────────────────────────────────
+    all_tags   = sorted({r.get("primary_tag", "") for r in results if r.get("primary_tag")})
     rows_by_ep = defaultdict(list)
     for r in results:
         rows_by_ep[r.get("episode_id", "")].append(r)
-
     rows_list = []
     for ep in sorted(rows_by_ep, key=_ep_num):
         ep_signals = rows_by_ep[ep]
@@ -251,30 +317,29 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     today     = date.today().isoformat()
 
     tag_btns = "".join(
-        f'<button onclick="filterTag(\'{t}\')" style="margin:2px 4px;padding:4px 10px;'
-        f'border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:14px;">{t}</button>'
+        f'<button onclick="filterTag(\'{t}\')" class="filter-btn cls-btn"'
+        f' style="margin:2px 3px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;'
+        f'background:#fff;cursor:pointer;font-size:13px;">{t}</button>'
         for t in all_tags
     )
-
-    stock_tab_content = _stock_tab_html(results)
 
     return f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <style>
   body{{margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#333;}}
-  .wrap{{max-width:860px;margin:20px auto;background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.07);overflow-x:clip;}}
+  .wrap{{max-width:920px;margin:20px auto;background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.07);overflow-x:clip;}}
   @media(max-width:600px){{.wrap{{margin:0;border-radius:0;}}}}
   th{{cursor:pointer;user-select:none;}}
   th:hover{{background:#e2e6ea;}}
   .btn-active{{background:#1a252f!important;color:#fff!important;border-color:#1a252f!important;}}
   tr.ep-row.hidden{{display:none;}}
-  .tab-btn{{margin:0 4px;padding:6px 16px;border:1px solid #ddd;border-radius:6px;
-            background:#fff;cursor:pointer;font-size:14px;font-weight:bold;}}
-  .fs-btn{{margin:0 2px;padding:4px 10px;border:1px solid #ddd;border-radius:6px;
-           background:#fff;cursor:pointer;font-weight:bold;}}
+  .tab-btn{{margin:0 4px;padding:6px 16px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:14px;font-weight:bold;}}
+  .fs-btn{{margin:0 2px;padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-weight:bold;}}
+  .filter-btn{{margin:2px 3px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:13px;}}
 </style>
 <style id="dyn-font"></style>
 </head>
@@ -282,32 +347,60 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
 <div class="wrap">
 
   <!-- Header -->
-  <div style="background:#1a252f;padding:22px 20px;text-align:center;color:#fff;border-radius:8px 8px 0 0;">
+  <div style="background:#1a252f;padding:20px;text-align:center;color:#fff;border-radius:8px 8px 0 0;">
     <div style="font-size:22px;font-weight:bold;">股癌訊號勝率追蹤</div>
-    <div style="color:#b3c1cd;font-size:14px;margin-top:4px;">{title} · {today}</div>
+    <div style="color:#b3c1cd;font-size:13px;margin-top:4px;">{title} · {today} · 最新分析至 {latest_ep}</div>
   </div>
 
-  <!-- Stats -->
+  <!-- Stats 第一列 -->
   <div style="display:flex;text-align:center;border-bottom:1px solid #eee;">
-    <div style="flex:1;padding:16px 0;">
-      <div style="font-size:13px;color:#999;">總訊號</div>
-      <div style="font-size:26px;font-weight:bold;color:#2c3e50;">{stats['total']}</div>
+    <div style="flex:1;padding:14px 0;">
+      <div style="font-size:12px;color:#999;">總訊號</div>
+      <div style="font-size:24px;font-weight:bold;color:#2c3e50;">{stats['total']}</div>
     </div>
-    <div style="flex:1;padding:16px 0;border-left:1px solid #eee;border-right:1px solid #eee;">
-      <div style="font-size:13px;color:#999;">對標大盤勝率</div>
-      <div style="font-size:26px;font-weight:bold;color:{win_color};">{win_pct}%</div>
+    <div style="flex:1;padding:14px 0;border-left:1px solid #eee;border-right:1px solid #eee;">
+      <div style="font-size:12px;color:#999;">對標大盤勝率</div>
+      <div style="font-size:24px;font-weight:bold;color:{win_color};">{win_pct}%</div>
     </div>
-    <div style="flex:1;padding:16px 0;border-right:1px solid #eee;">
-      <div style="font-size:13px;color:#999;">Win / Lose</div>
-      <div style="font-size:24px;font-weight:bold;">
+    <div style="flex:1;padding:14px 0;border-right:1px solid #eee;">
+      <div style="font-size:12px;color:#999;">Win / Lose</div>
+      <div style="font-size:22px;font-weight:bold;">
         <span style="color:#d9534f;">{stats['wins']}</span>
         <span style="color:#ccc;"> / </span>
         <span style="color:#2b8a3e;">{stats['losses']}</span>
       </div>
     </div>
-    <div style="flex:1;padding:16px 0;">
-      <div style="font-size:13px;color:#999;">待定</div>
-      <div style="font-size:26px;font-weight:bold;color:#aaa;">{stats['total'] - stats['decided']}</div>
+    <div style="flex:1;padding:14px 0;">
+      <div style="font-size:12px;color:#999;">待定</div>
+      <div style="font-size:24px;font-weight:bold;color:#aaa;">{stats['total'] - stats['decided']}</div>
+    </div>
+  </div>
+
+  <!-- Stats 第二列 -->
+  <div style="display:flex;text-align:center;border-bottom:1px solid #eee;background:#fafcff;">
+    <div style="flex:1;padding:10px 0;">
+      <div style="font-size:11px;color:#aaa;">看多勝率</div>
+      <div style="font-size:17px;">{bull_wr_html}</div>
+    </div>
+    <div style="flex:1;padding:10px 0;border-left:1px solid #eee;">
+      <div style="font-size:11px;color:#aaa;">看空勝率</div>
+      <div style="font-size:17px;">{bear_wr_html}</div>
+    </div>
+    <div style="flex:1;padding:10px 0;border-left:1px solid #eee;">
+      <div style="font-size:11px;color:#aaa;">均個股報酬</div>
+      <div style="font-size:17px;">{avg_ret_html}</div>
+    </div>
+    <div style="flex:1;padding:10px 0;border-left:1px solid #eee;">
+      <div style="font-size:11px;color:#aaa;">中位數報酬</div>
+      <div style="font-size:17px;">{med_ret_html}</div>
+    </div>
+  </div>
+
+  <!-- 趨勢圖 -->
+  <div style="padding:14px 20px 10px;border-bottom:1px solid #eee;">
+    <div style="font-size:12px;color:#999;margin-bottom:6px;font-weight:bold;">累計勝率趨勢（對標大盤）</div>
+    <div style="position:relative;height:150px;">
+      <canvas id="trendChart"></canvas>
     </div>
   </div>
 
@@ -326,33 +419,41 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
 
   <!-- 集數篩選工具列 -->
   <div id="view-filters" style="padding:10px 16px 6px;border-bottom:1px solid #eee;background:#fafafa;">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-      <span style="font-size:14px;color:#888;white-space:nowrap;">搜尋：</span>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+      <span style="font-size:13px;color:#888;white-space:nowrap;">搜尋：</span>
       <input id="main-search" type="text"
-        placeholder="集數、標的、代碼、主委觀點、任意關鍵字..."
+        placeholder="集數、標的、代碼、主委觀點..."
         oninput="filterSearch(this.value)"
-        style="flex:1;max-width:380px;padding:5px 12px;border:1px solid #ddd;border-radius:12px;
-               font-size:14px;outline:none;">
-      <button onclick="clearSearch()"
-        style="padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;
-               cursor:pointer;font-size:14px;color:#888;">清除</button>
+        style="flex:1;max-width:340px;padding:5px 12px;border:1px solid #ddd;border-radius:12px;font-size:13px;outline:none;">
+      <button onclick="clearSearch()" class="filter-btn" style="color:#888;">清除</button>
     </div>
-    <div>
-      <span style="font-size:14px;color:#888;margin-right:4px;">分類：</span>
-      <button onclick="filterTag('all')" id="btn-all" class="btn-active"
-        style="margin:2px 4px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:14px;">全部</button>
-      <button onclick="filterMkt('tw')"
-        style="margin:2px 4px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:14px;">台股</button>
-      <button onclick="filterMkt('us')"
-        style="margin:2px 4px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:14px;">美股</button>
+    <div style="margin-bottom:4px;">
+      <span style="font-size:12px;color:#aaa;margin-right:4px;">分類：</span>
+      <button onclick="filterTag('all')" id="btn-all" class="filter-btn cls-btn btn-active">全部</button>
+      <button onclick="filterMkt('tw')" class="filter-btn cls-btn">台股</button>
+      <button onclick="filterMkt('us')" class="filter-btn cls-btn">美股</button>
       {tag_btns}
     </div>
-    <div style="font-size:12px;color:#bbb;margin-top:6px;">台股對比 0050.TW · 美股對比 SPY（同集台美混合時基準不同）</div>
+    <div style="margin-bottom:4px;">
+      <span style="font-size:12px;color:#aaa;margin-right:4px;">勝負：</span>
+      <button onclick="filterBeat('all')"  id="beat-all"  class="filter-btn beat-btn btn-active">全部</button>
+      <button onclick="filterBeat('win')"  id="beat-win"  class="filter-btn beat-btn">獲勝</button>
+      <button onclick="filterBeat('lose')" id="beat-lose" class="filter-btn beat-btn">落後</button>
+      <button onclick="filterBeat('tbd')"  id="beat-tbd"  class="filter-btn beat-btn">待定</button>
+    </div>
+    <div style="margin-bottom:4px;">
+      <span style="font-size:12px;color:#aaa;margin-right:4px;">持倉天數：</span>
+      <button onclick="filterDays(0)"  id="days-0"  class="filter-btn days-btn btn-active">全部</button>
+      <button onclick="filterDays(30)" id="days-30" class="filter-btn days-btn">≥30天</button>
+      <button onclick="filterDays(60)" id="days-60" class="filter-btn days-btn">≥60天</button>
+      <button onclick="filterDays(90)" id="days-90" class="filter-btn days-btn">≥90天</button>
+    </div>
+    <div style="font-size:11px;color:#ccc;">台股對比 0050.TW · 美股對比 SPY</div>
   </div>
 
   <!-- 以集數 Table -->
   <div id="view-ep" style="padding:0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;">
-    <table id="main-table" style="width:100%;border-collapse:collapse;font-size:15px;min-width:640px;">
+    <table id="main-table" style="width:100%;border-collapse:collapse;font-size:15px;min-width:720px;">
       <thead>
         <tr style="background:#f1f3f5;color:#495057;font-size:13px;">
           <th onclick="sortBy('epnum')" style="padding:10px 12px;text-align:left;">集數 ↕</th>
@@ -362,6 +463,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
           <th onclick="sortBy('date')"  style="padding:10px 12px;text-align:left;">進場日 ↕</th>
           <th onclick="sortBy('spct')"  style="padding:10px 12px;text-align:left;">個股報酬 ↕</th>
           <th onclick="sortBy('bpct')"  style="padding:10px 12px;text-align:left;">同期大盤 ↕</th>
+          <th onclick="sortBy('days')"  style="padding:10px 12px;text-align:center;">天數 ↕</th>
           <th onclick="sortBy('beat')"  style="padding:10px 12px;text-align:left;">勝負 ↕</th>
         </tr>
       </thead>
@@ -369,13 +471,21 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     </table>
   </div>
 
-  <!-- 以標的 Table -->
-  <div id="view-stock" style="display:none;padding:0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;">
-    {stock_tab_content}
+  <!-- 以標的 Table (JS driven) -->
+  <div id="view-stock" style="display:none;padding:0 0 12px;">
+    <div style="padding:10px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <span style="font-size:13px;color:#888;">範圍：</span>
+      <button id="sr-0"   class="filter-btn sr-btn btn-active" onclick="setStockRange(0)">全部</button>
+      <button id="sr-100" class="filter-btn sr-btn" onclick="setStockRange(100)">最新 100 集</button>
+      <button id="sr-50"  class="filter-btn sr-btn" onclick="setStockRange(50)">最新 50 集</button>
+      <button id="sr-20"  class="filter-btn sr-btn" onclick="setStockRange(20)">最新 20 集</button>
+      <span style="font-size:12px;color:#bbb;margin-left:6px;">點標的名稱可展開詳情</span>
+    </div>
+    <div id="stock-table-container" style="overflow-x:auto;-webkit-overflow-scrolling:touch;"></div>
   </div>
 
   <!-- Footer -->
-  <div style="padding:10px;text-align:center;font-size:13px;color:#bbb;border-top:1px solid #f0f0f0;">
+  <div style="padding:10px;text-align:center;font-size:12px;color:#bbb;border-top:1px solid #f0f0f0;">
     台股基準 0050.TW · 美股基準 SPY · 僅供參考，非投資建議
   </div>
 </div>
@@ -384,17 +494,15 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
 // ── 字體大小 ──────────────────────────────────────────────
 const FS = [12, 14, 16, 18];
 let fsIdx = parseInt(localStorage.getItem('fs-idx') || '1');
-
 function applyFontSize() {{
   const s = FS[fsIdx];
   document.getElementById('dyn-font').textContent =
     `.wrap td, .wrap th, .wrap div, .wrap span, .wrap button {{ font-size: ${{s}}px !important; }}`;
-  document.querySelectorAll('.fs-btn').forEach((b, i) =>
-    b.classList.toggle('btn-active', i === fsIdx));
+  document.querySelectorAll('.fs-btn').forEach((b, i) => b.classList.toggle('btn-active', i === fsIdx));
   localStorage.setItem('fs-idx', fsIdx);
 }}
 function setFontSize(i) {{ fsIdx = i; applyFontSize(); }}
-document.addEventListener('DOMContentLoaded', applyFontSize);
+document.addEventListener('DOMContentLoaded', () => {{ applyFontSize(); initChart(); }});
 
 // ── Tab 切換 ─────────────────────────────────────────────
 function switchTab(tab) {{
@@ -404,6 +512,7 @@ function switchTab(tab) {{
   document.getElementById('view-stock').style.display = isEp ? 'none' : '';
   document.getElementById('tab-ep').classList.toggle('btn-active', isEp);
   document.getElementById('tab-stock').classList.toggle('btn-active', !isEp);
+  if (!isEp) renderStockTab();
 }}
 
 // ── 集數展開/收合 ─────────────────────────────────────────
@@ -415,41 +524,52 @@ function toggleEp(ep) {{
   if (hdr) hdr.innerHTML = hdr.innerHTML.replace(/[▾▸]/, collapsed ? '▾' : '▸');
 }}
 
-// ── 統一搜尋 ──────────────────────────────────────────────
+// ── 搜尋 ──────────────────────────────────────────────────
 let searchFilter = '';
-function filterSearch(val) {{
-  searchFilter = val.trim().toLowerCase();
-  applyAllFilters();
-}}
-function clearSearch() {{
-  searchFilter = '';
-  document.getElementById('main-search').value = '';
-  applyAllFilters();
-}}
+function filterSearch(val) {{ searchFilter = val.trim().toLowerCase(); applyAllFilters(); }}
+function clearSearch() {{ searchFilter = ''; document.getElementById('main-search').value = ''; applyAllFilters(); }}
 
-// ── 分類篩選 ──────────────────────────────────────────────
-let tagFilter = 'all';
-let mktFilter = 'all';
+// ── 篩選狀態 ──────────────────────────────────────────────
+let tagFilter = 'all', mktFilter = 'all', beatFilter = 'all', daysFilter = 0;
 
 function filterTag(tag) {{
   tagFilter = tag; mktFilter = 'all';
-  document.querySelectorAll('button').forEach(b => b.classList.remove('btn-active'));
+  document.querySelectorAll('.cls-btn').forEach(b => b.classList.remove('btn-active'));
   event.target.classList.add('btn-active');
   applyAllFilters();
 }}
 function filterMkt(mkt) {{
   mktFilter = mkt; tagFilter = 'all';
-  document.querySelectorAll('button').forEach(b => b.classList.remove('btn-active'));
+  document.querySelectorAll('.cls-btn').forEach(b => b.classList.remove('btn-active'));
   event.target.classList.add('btn-active');
+  applyAllFilters();
+}}
+function filterBeat(val) {{
+  beatFilter = val;
+  document.querySelectorAll('.beat-btn').forEach(b => b.classList.remove('btn-active'));
+  document.getElementById('beat-' + val).classList.add('btn-active');
+  applyAllFilters();
+}}
+function filterDays(n) {{
+  daysFilter = n;
+  document.querySelectorAll('.days-btn').forEach(b => b.classList.remove('btn-active'));
+  document.getElementById('days-' + n).classList.add('btn-active');
   applyAllFilters();
 }}
 
 function applyAllFilters() {{
   document.querySelectorAll('.ep-row').forEach(r => {{
-    const kwMatch  = !searchFilter || (r.dataset.kw || '').toLowerCase().includes(searchFilter);
-    const tagMatch = tagFilter === 'all' || r.dataset.tag === tagFilter;
-    const mktMatch = mktFilter === 'all' || r.dataset.mkt === mktFilter;
-    r.classList.toggle('hidden', !(kwMatch && tagMatch && mktMatch));
+    const kwMatch   = !searchFilter || (r.dataset.kw || '').toLowerCase().includes(searchFilter);
+    const tagMatch  = tagFilter === 'all' || r.dataset.tag === tagFilter;
+    const mktMatch  = mktFilter === 'all' || r.dataset.mkt === mktFilter;
+    const beat      = parseInt(r.dataset.beat);
+    const beatMatch = beatFilter === 'all'
+      || (beatFilter === 'win'  && beat === 1)
+      || (beatFilter === 'lose' && beat === 0)
+      || (beatFilter === 'tbd'  && beat === -1);
+    const days      = parseInt(r.dataset.days);
+    const daysMatch = daysFilter === 0 || days >= daysFilter;
+    r.classList.toggle('hidden', !(kwMatch && tagMatch && mktMatch && beatMatch && daysMatch));
   }});
   syncEpHeaders();
 }}
@@ -461,48 +581,198 @@ function syncEpHeaders() {{
   }});
 }}
 
-// ── 欄位排序 ──────────────────────────────────────────────
+// ── 欄位排序（以集數）─────────────────────────────────────
 let sortDir = {{}};
 function sortBy(col) {{
   const tbody = document.getElementById('tbody');
-  const dir = (sortDir[col] === 1) ? -1 : 1;
+  const dir   = (sortDir[col] === 1) ? -1 : 1;
   sortDir[col] = dir;
-
   const rowVal = r => {{
     if (col === 'epnum') return parseInt(r.dataset.epnum);
     if (col === 'spct')  return parseFloat(r.dataset.spct);
     if (col === 'bpct')  return parseFloat(r.dataset.bpct);
     if (col === 'beat')  return parseInt(r.dataset.beat);
-    if (col === 'date')  return r.querySelector('td:nth-child(5)').innerText;
-    if (col === 'tag')   return r.dataset.tag;
+    if (col === 'days')  return parseInt(r.dataset.days);
+    if (col === 'date')  return r.querySelector('td:nth-child(5)') ? r.querySelector('td:nth-child(5)').innerText : '';
+    if (col === 'tag')   return r.dataset.tag || '';
     return 0;
   }};
-
   if (col === 'epnum') {{
     const headers = [...tbody.querySelectorAll('.ep-header')];
     const groups  = headers.map(h => {{
-      const ep   = h.dataset.ep;
-      const rows = [...tbody.querySelectorAll('.ep-' + CSS.escape(ep))];
-      return {{ header: h, rows, epnum: parseInt(ep.replace(/[^0-9]/g, '')) }};
+      const ep = h.dataset.ep;
+      return {{ header: h, rows: [...tbody.querySelectorAll('.ep-' + CSS.escape(ep))], epnum: parseInt(ep.replace(/[^0-9]/g,'')) }};
     }});
-    groups.sort((a, b) => a.epnum > b.epnum ? dir : a.epnum < b.epnum ? -dir : 0);
-    groups.forEach(g => {{
-      tbody.appendChild(g.header);
-      g.rows.forEach(r => tbody.appendChild(r));
-    }});
+    groups.sort((a,b) => (a.epnum - b.epnum) * dir);
+    groups.forEach(g => {{ tbody.appendChild(g.header); g.rows.forEach(r => tbody.appendChild(r)); }});
   }} else {{
     const headers = [...tbody.querySelectorAll('.ep-header')];
-    const groups  = headers.map(h => {{
-      const ep   = h.dataset.ep;
-      const rows = [...tbody.querySelectorAll('.ep-' + CSS.escape(ep))];
-      return {{ header: h, rows }};
-    }});
-    groups.forEach(g => {{
-      g.rows.sort((a, b) => rowVal(a) > rowVal(b) ? dir : rowVal(a) < rowVal(b) ? -dir : 0);
+    headers.map(h => {{
+      const ep = h.dataset.ep;
+      return {{ header: h, rows: [...tbody.querySelectorAll('.ep-' + CSS.escape(ep))] }};
+    }}).forEach(g => {{
+      g.rows.sort((a,b) => (rowVal(a) > rowVal(b) ? dir : rowVal(a) < rowVal(b) ? -dir : 0));
       tbody.appendChild(g.header);
       g.rows.forEach(r => tbody.appendChild(r));
     }});
   }}
+}}
+
+// ── 以標的 JS 動態渲染 ────────────────────────────────────
+const SIGNALS_DATA = {signals_json};
+let _sr = 0, _sCol = 'total', _sDir = -1;
+
+function setStockRange(n) {{
+  _sr = n;
+  document.querySelectorAll('.sr-btn').forEach(b => b.classList.remove('btn-active'));
+  document.getElementById('sr-' + n).classList.add('btn-active');
+  renderStockTab();
+}}
+function sortStock(col) {{
+  _sDir = (_sCol === col) ? -_sDir : -1;
+  _sCol = col;
+  renderStockTab();
+}}
+
+function renderStockTab() {{
+  const allNums = [...new Set(SIGNALS_DATA.map(s => s.ep_num))].sort((a,b)=>a-b);
+  const keep    = _sr === 0 ? new Set(allNums) : new Set(allNums.slice(-_sr));
+  const filt    = SIGNALS_DATA.filter(s => keep.has(s.ep_num));
+
+  const gmap = {{}};
+  filt.forEach(s => {{
+    if (!s.stock_code) return;
+    if (!gmap[s.stock_code]) gmap[s.stock_code] = {{ code: s.stock_code, name: s.stock_name, mkt: s.is_tw ? '台股' : '美股', sigs: [] }};
+    gmap[s.stock_code].sigs.push(s);
+  }});
+
+  const groups = Object.values(gmap).map(g => {{
+    const dec  = g.sigs.filter(s => s.beat_benchmark !== null && s.beat_benchmark !== undefined);
+    const wins = dec.filter(s => s.beat_benchmark === true).length;
+    const rets = g.sigs.filter(s => s.stock_return_pct !== null && s.stock_return_pct !== undefined).map(s => s.stock_return_pct);
+    return {{
+      ...g, total: g.sigs.length,
+      bull: g.sigs.filter(s=>s.action==='+1').length,
+      bear: g.sigs.filter(s=>s.action==='-1').length,
+      wins, dec: dec.length,
+      win_rate: dec.length ? Math.round(wins/dec.length*1000)/10 : null,
+      avg_ret:  rets.length ? Math.round(rets.reduce((a,b)=>a+b,0)/rets.length*100)/100 : null,
+      latest:   Math.max(...g.sigs.map(s=>s.ep_num)),
+    }};
+  }}).sort((a,b) => {{
+    const va = a[_sCol] ?? -9999, vb = b[_sCol] ?? -9999;
+    return (va > vb ? 1 : va < vb ? -1 : 0) * _sDir;
+  }});
+
+  if (!groups.length) {{
+    document.getElementById('stock-table-container').innerHTML =
+      "<div style='padding:20px;color:#888;text-align:center;'>此範圍內無標的資料</div>";
+    return;
+  }}
+
+  const fp  = v => v == null ? 'N/A' : (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+  const fc  = v => v == null ? '#888' : v >= 0 ? '#d9534f' : '#2b8a3e';
+  const arr = c => c === _sCol ? (_sDir === -1 ? ' ↓' : ' ↑') : ' ↕';
+
+  const rows = groups.map((g, idx) => {{
+    const wrC   = g.win_rate !== null && g.win_rate >= 50 ? '#d9534f' : '#2b8a3e';
+    const wrT   = g.win_rate !== null ? g.win_rate + '%' : '待定';
+    const bb    = [g.bull ? '+'+g.bull : '', g.bear ? '-'+g.bear : ''].filter(Boolean).join(' / ');
+    const chips = [...new Set(g.sigs.map(s=>s.ep_num))].sort((a,b)=>a-b).map(n=>
+      `<span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP${{n}}</span>`
+    ).join('');
+    const actLbl = s => s.action==='+1' ? '看好' : s.action==='-1' ? '看壞' : '中性';
+    const beatLbl = s => s.beat_benchmark===true ? '✅' : s.beat_benchmark===false ? '❌' : '⏳';
+    const detailHtml = g.sigs.map(s => `
+      <tr class="sd-${{idx}}" style="display:none;background:#f8f9fa;">
+        <td colspan="8" style="padding:5px 12px 5px 28px;border-bottom:1px solid #f0f0f0;font-size:13px;color:#555;">
+          <span style="color:#888;margin-right:6px;">EP${{s.ep_num}}</span>
+          ${{actLbl(s)}}
+          <span style="margin:0 6px;color:#ccc;">|</span>
+          <span style="color:${{fc(s.stock_return_pct)}};">${{fp(s.stock_return_pct)}}</span>
+          <span style="margin-left:6px;">${{beatLbl(s)}}</span>
+        </td>
+      </tr>`).join('');
+    return `<tr style="border-bottom:1px solid #f0f0f0;cursor:pointer;" onclick="toggleSD(${{idx}}, this)">
+      <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">
+        <span class="sd-arrow-${{idx}}">▸</span> ${{g.name}}<br><span style="color:#aaa;font-size:13px;">${{g.code}}</span></td>
+      <td style="padding:10px 8px;color:#888;font-size:13px;">${{g.mkt}}</td>
+      <td style="padding:10px 8px;text-align:center;font-weight:bold;">${{g.total}}</td>
+      <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">${{bb}}</td>
+      <td style="padding:10px 8px;text-align:center;font-weight:bold;color:${{wrC}};">${{wrT}}</td>
+      <td style="padding:10px 8px;text-align:center;font-weight:bold;color:${{fc(g.avg_ret)}};">${{fp(g.avg_ret)}}</td>
+      <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP${{g.latest}}</td>
+      <td style="padding:10px 8px;line-height:1.8;">${{chips}}</td>
+    </tr>${{detailHtml}}`;
+  }}).join('');
+
+  document.getElementById('stock-table-container').innerHTML = `
+  <table width="100%" style="border-collapse:collapse;font-size:15px;">
+    <thead><tr style="background:#f1f3f5;color:#495057;font-size:13px;">
+      <th onclick="sortStock('name')"     style="padding:10px 12px;text-align:left;cursor:pointer;">標的${{arr('name')}}</th>
+      <th style="padding:10px 8px;text-align:left;">市場</th>
+      <th onclick="sortStock('total')"    style="padding:10px 8px;text-align:center;cursor:pointer;">次數${{arr('total')}}</th>
+      <th style="padding:10px 8px;text-align:center;">多/空</th>
+      <th onclick="sortStock('win_rate')" style="padding:10px 8px;text-align:center;cursor:pointer;">勝率${{arr('win_rate')}}</th>
+      <th onclick="sortStock('avg_ret')"  style="padding:10px 8px;text-align:center;cursor:pointer;">均報酬${{arr('avg_ret')}}</th>
+      <th onclick="sortStock('latest')"   style="padding:10px 8px;text-align:left;cursor:pointer;">最近集${{arr('latest')}}</th>
+      <th style="padding:10px 8px;text-align:left;">提及集數</th>
+    </tr></thead>
+    <tbody>${{rows}}</tbody>
+  </table>`;
+}}
+
+function toggleSD(idx, clickedRow) {{
+  const rows  = document.querySelectorAll('.sd-' + idx);
+  const arrow = document.querySelector('.sd-arrow-' + idx);
+  const open  = rows.length > 0 && rows[0].style.display === 'table-row';
+  rows.forEach(r => r.style.display = open ? 'none' : 'table-row');
+  if (arrow) arrow.textContent = open ? '▸' : '▾';
+}}
+
+// ── 趨勢圖 ────────────────────────────────────────────────
+function initChart() {{
+  const ctx = document.getElementById('trendChart');
+  if (!ctx || typeof Chart === 'undefined') return;
+  new Chart(ctx, {{
+    type: 'line',
+    data: {{
+      labels: {trend_labels_json},
+      datasets: [
+        {{
+          label: '累計勝率',
+          data: {trend_values_json},
+          borderColor: '#1a252f',
+          backgroundColor: 'rgba(26,37,47,0.07)',
+          borderWidth: 2,
+          pointRadius: 3,
+          tension: 0.3,
+          fill: true,
+        }},
+        {{
+          label: '50% 基準',
+          data: Array({len(trend_labels)}).fill(50),
+          borderColor: '#e74c3c',
+          borderWidth: 1,
+          borderDash: [4,4],
+          pointRadius: 0,
+          fill: false,
+        }}
+      ]
+    }},
+    options: {{
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {{
+        legend: {{ display: false }},
+        tooltip: {{ callbacks: {{ label: c => c.dataset.label + ': ' + c.parsed.y + '%' }} }}
+      }},
+      scales: {{
+        x: {{ ticks: {{ maxTicksLimit: 10, font: {{ size: 11 }} }}, grid: {{ display: false }} }},
+        y: {{ min: 0, max: 100, ticks: {{ callback: v => v + '%', font: {{ size: 11 }} }} }}
+      }}
+    }}
+  }});
 }}
 </script>
 </body>

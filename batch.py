@@ -74,7 +74,8 @@ def run_batch(files: list[Path], dry_run: bool = False):
     analyzed = load_analyzed_set()
 
     for i, path in enumerate(files, 1):
-        ep_id  = path.stem          # 直接用檔名如 EP672，避免 regex 不 match 時產生 EP0
+        ep_num = ep_number(path)
+        ep_id  = f"EP{ep_num}" if ep_num else path.stem
         prefix = f"[{i}/{total}] {ep_id}"
 
         if ep_id in analyzed:
