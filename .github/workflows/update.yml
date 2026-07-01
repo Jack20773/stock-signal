@@ -4,7 +4,12 @@ on:
   schedule:
     # 每週一 UTC 23:00 = 台灣時間週二早上 07:00
     - cron: "0 23 * * 1"
-  workflow_dispatch:  # 允許手動觸發
+  workflow_dispatch:
+    inputs:
+      from_ep:
+        description: '從第幾集開始補跑（0 = 用 --last 5 模式）'
+        default: '0'
+        required: false
 
 permissions:
   contents: write   # 需要 push gh-pages
@@ -12,7 +17,7 @@ permissions:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 180
 
     steps:
       - name: Checkout code
@@ -40,9 +45,14 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          python -X utf8 update.py --last 5
-        # --last 5：只跑最新 5 集（已分析的會自動跳過）
-        # 寄信改由 send-report.yml 負責（LINE 觸發或手動）
+          FROM_EP="${{ github.event.inputs.from_ep || '0' }}"
+          if [ "$FROM_EP" != "0" ]; then
+            python -X utf8 update.py --from-ep "$FROM_EP"
+          else
+            python -X utf8 update.py --last 5
+          fi
+        # 平常：--last 5（只跑最新 5 集）
+        # 補跑：手動填 from_ep=400 即可回補歷史
 
       - name: 生成完整報告（GitHub Pages 用）
         env:
