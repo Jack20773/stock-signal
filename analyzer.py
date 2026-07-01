@@ -4,6 +4,7 @@ import re
 from datetime import date
 from google import genai
 from google.genai import types
+from config import GEMINI_MODEL
 from prompt import SYSTEM_PROMPT
 
 _client = None
@@ -22,7 +23,7 @@ def analyze(transcript: str) -> dict:
     user_content = f"今天日期：{today}\n\n以下是今天的逐字稿：\n\n{transcript}"
 
     response = _get_client().models.generate_content(
-        model="gemini-1.5-flash",
+        model=GEMINI_MODEL,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
             max_output_tokens=4096,

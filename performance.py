@@ -7,7 +7,7 @@ import sqlite3
 import urllib.request
 from datetime import date
 from prices import get_close_on_or_before, get_latest_close, benchmark_for
-from database import DB_PATH, init_db
+from database import DB_PATH, init_db, save_perf_results
 
 sys.stdout.reconfigure(encoding="utf-8")
 
@@ -139,6 +139,7 @@ def calc_performance() -> list[dict]:
         row["live_entry_price"]     = live_entry  # 計算用的調整後進場價（顯示用）
         results.append(row)
 
+    save_perf_results(results)
     return results
 
 
