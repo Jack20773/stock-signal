@@ -594,16 +594,23 @@ function renderStockTab() {{
     const bb    = [g.bull ? '+'+g.bull : '', g.bear ? '-'+g.bear : ''].filter(Boolean).join(' / ');
     const actLbl = s => s.action==='+1' ? '看好' : s.action==='-1' ? '看壞' : '中性';
     const beatLbl = s => s.beat===true ? '✅' : s.beat===false ? '❌' : '⏳';
-    const detailHtml = g.sigs.map(s => `
+    const detailHtml = g.sigs.map(s => {{
+      const quoteHtml = s.quote
+        ? `<div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「${{s.quote}}」</div>`
+        : '';
+      return `
       <tr class="sd-${{idx}}" style="display:none;background:#f8f9fa;">
-        <td colspan="7" style="padding:5px 12px 5px 28px;border-bottom:1px solid #f0f0f0;font-size:13px;color:#555;">
+        <td colspan="7" style="padding:8px 12px 10px 28px;border-bottom:1px solid #f0f0f0;font-size:13px;color:#555;">
           <span style="color:#888;margin-right:6px;">EP${{s.ep_num}}</span>
           ${{actLbl(s)}}
           <span style="margin:0 6px;color:#ccc;">|</span>
           <span style="color:${{fc(s.s_pct)}};">${{fp(s.s_pct)}}</span>
           <span style="margin-left:6px;">${{beatLbl(s)}}</span>
+          ${{s.raw_reason ? `<div style="margin-top:5px;color:#555;">${{s.raw_reason}}</div>` : ''}}
+          ${{quoteHtml}}
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }}).join('');
     return `<tr style="border-bottom:1px solid #f0f0f0;cursor:pointer;" onclick="toggleSD(${{idx}}, this)">
       <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">
         <span class="sd-arrow-${{idx}}">▸</span> ${{g.name}}<br><span style="color:#aaa;font-size:13px;">${{g.code}}</span></td>
