@@ -401,7 +401,7 @@ function renderDetailTab() {{
       const sPctVal  = s.s_pct ?? -9999, bPctVal = s.b_pct ?? -9999;
       const beatVal  = s.beat === true ? 1 : (s.beat === false ? 0 : -1);
       const kw = [ep, String(epNum), s.name, s.code, s.code.split('.')[0], s.raw_reason, s.quote]
-        .filter(Boolean).join(' ').replace(/"/g, ' ').replace(/\n/g, ' ');
+        .filter(Boolean).join(' ').replace(/"/g, ' ').replace(/\\n/g, ' ');
 
       html += `<tr class="ep-row ep-${{ep}}" data-ep="${{ep}}" data-epnum="${{epNum}}" data-tag="${{s.tag}}" data-mkt="${{s.mkt}}"
           data-spct="${{sPctVal}}" data-bpct="${{bPctVal}}" data-beat="${{beatVal}}" data-days="${{s.days || -1}}"
