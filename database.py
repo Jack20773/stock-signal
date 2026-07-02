@@ -16,7 +16,7 @@ _initialized = False
 
 _TW_PAT = re.compile(r"^\d{4,5}\.(TW|TWO)$")
 _US_PAT = re.compile(r"^[A-Z]{1,5}(\.[A-Z])?$")
-_KNOWN_PRIVATE = {"SPACEX", "BYTEDANCE", "STRIPE", "SHEIN"}
+_KNOWN_PRIVATE = {"BYTEDANCE", "STRIPE", "SHEIN"}  # SpaceX 已於 2026-06-12 IPO（SPCX），移出名單
 
 
 def _valid_ticker(code: str) -> bool:

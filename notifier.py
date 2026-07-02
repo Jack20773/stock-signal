@@ -71,15 +71,17 @@ def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
         n = _fill_entry_prices()
         logging.info(f"已更新 {n} 筆進場價")
 
-    results = calc_performance()
+    all_results = calc_performance()
+    stats = win_rate(all_results)  # 勝率永遠用全集計算，email/詳細版才不會對不上
 
+    results = all_results
     if ep_filter:
-        results = [r for r in results if r.get("episode_id") == ep_filter]
+        results = [r for r in all_results if r.get("episode_id") == ep_filter]
         title = f"集數 {ep_filter}"
     elif last_n:
-        eps  = sorted({r["episode_id"] for r in results if r.get("episode_id")}, key=_ep_num)
+        eps  = sorted({r["episode_id"] for r in all_results if r.get("episode_id")}, key=_ep_num)
         keep = set(eps[-last_n:])
-        results = [r for r in results if r.get("episode_id") in keep]
+        results = [r for r in all_results if r.get("episode_id") in keep]
         title = f"最新 {last_n} 集匯總"
     else:
         title = "全集匯總"
@@ -90,7 +92,6 @@ def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
         logging.warning("無符合條件的訊號資料")
         return
 
-    stats   = win_rate(results)
     subject = f"【股癌訊號追蹤】{title}  勝率 {stats['win_rate']}%  Win {stats['wins']}/{stats['decided']}"
 
     if preview:

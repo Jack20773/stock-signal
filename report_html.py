@@ -4,215 +4,13 @@ HTML 報告生成模組（詳細版＋Email 版）。
 """
 import json
 import re
-from collections import defaultdict
 from datetime import date
-from prices import benchmark_for
 
 # ── 小工具 ──────────────────────────────────────────────────────────────────
-
-def _pct_color(v) -> str:
-    if v is None: return "#888888"
-    return "#d9534f" if v >= 0 else "#2b8a3e"
-
-def _fmt_pct(v) -> str:
-    if v is None: return "N/A"
-    return f"{'+'if v>=0 else ''}{v:.2f}%"
-
-def _beat_label(beat) -> str:
-    if beat is True:  return "<span style='color:#d9534f;font-weight:bold;'>獲勝</span>"
-    if beat is False: return "<span style='color:#2b8a3e;font-weight:bold;'>落後</span>"
-    return "<span style='color:#888;'>待定</span>"
-
-def _action_label(action: str, confidence: str) -> str:
-    if action == "+1": return "超級看好" if confidence == "High" else "看好"
-    if action == "-1": return "看壞"
-    return "中立"
 
 def _ep_num(ep: str) -> int:
     m = re.search(r"\d+", ep)
     return int(m.group()) if m else 0
-
-
-# ── 標的彙整 ────────────────────────────────────────────────────────────────
-
-def _build_stock_groups(results: list[dict]) -> list[dict]:
-    groups = defaultdict(list)
-    for r in results:
-        code = r.get("stock_code", "")
-        if code:
-            groups[code].append(r)
-
-    out = []
-    for code, sigs in groups.items():
-        decided = [s for s in sigs if s.get("beat_benchmark") is not None]
-        wins = sum(1 for s in decided if s.get("beat_benchmark"))
-        rets = [s["stock_return_pct"] for s in sigs if s.get("stock_return_pct") is not None]
-        is_tw = str(code).endswith(".TW") or str(code).endswith(".TWO")
-        out.append({
-            "code": code,
-            "name": sigs[0].get("stock_name", ""),
-            "tag": sigs[0].get("primary_tag", ""),
-            "mkt": "台股" if is_tw else "美股",
-            "signals": sorted(sigs, key=lambda s: _ep_num(s.get("episode_id", ""))),
-            "total": len(sigs),
-            "bullish": sum(1 for s in sigs if s.get("action") == "+1"),
-            "bearish": sum(1 for s in sigs if s.get("action") == "-1"),
-            "wins": wins,
-            "decided": len(decided),
-            "win_rate": round(wins / len(decided) * 100, 1) if decided else None,
-            "avg_ret": round(sum(rets) / len(rets), 2) if rets else None,
-            "latest_ep": max(sigs, key=lambda s: _ep_num(s.get("episode_id", ""))).get("episode_id", ""),
-        })
-
-    return sorted(out, key=lambda g: g["total"], reverse=True)
-
-
-def _stock_tab_html(results: list[dict]) -> str:
-    groups = _build_stock_groups(results)
-    if not groups:
-        return "<div style='padding:20px;color:#888;text-align:center;'>無標的資料</div>"
-
-    rows_list = []
-    for g in groups:
-        wr = g["win_rate"]
-        wr_color = "#d9534f" if wr is not None and wr >= 50 else "#2b8a3e"
-        wr_txt = f"{wr}%" if wr is not None else "待定"
-        avg_color = _pct_color(g["avg_ret"])
-        avg_txt = _fmt_pct(g["avg_ret"])
-        parts = ([f'+{g["bullish"]}'] if g["bullish"] else []) + ([f'-{g["bearish"]}'] if g["bearish"] else [])
-        bull_bear = " / ".join(parts)
-        ep_tags = "".join(
-            f'<span style="font-size:11px;background:#f0f0f0;padding:1px 5px;'
-            f'border-radius:3px;margin:1px 2px;display:inline-block;">'
-            f'{s.get("episode_id","")}</span>'
-            for s in g["signals"]
-        )
-        rows_list.append(f"""
-        <tr style="border-bottom:1px solid #f0f0f0;">
-          <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">{g['name']}<br>
-            <span style="color:#aaa;font-size:13px;">{g['code']}</span></td>
-          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">{g['mkt']}</td>
-          <td style="padding:10px 8px;text-align:center;font-weight:bold;">{g['total']}</td>
-          <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">{bull_bear}</td>
-          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:{wr_color};">{wr_txt}</td>
-          <td style="padding:10px 8px;text-align:center;font-weight:bold;color:{avg_color};">{avg_txt}</td>
-          <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">{g['latest_ep']}</td>
-          <td style="padding:10px 8px;line-height:1.8;">{ep_tags}</td>
-        </tr>""")
-
-    return f"""
-    <table width="100%" style="border-collapse:collapse;font-size:15px;">
-      <thead>
-        <tr style="background:#f1f3f5;color:#495057;font-size:13px;">
-          <th style="padding:10px 12px;text-align:left;">標的</th>
-          <th style="padding:10px 8px;text-align:left;">市場</th>
-          <th style="padding:10px 8px;text-align:center;">次數</th>
-          <th style="padding:10px 8px;text-align:center;">多/空</th>
-          <th style="padding:10px 8px;text-align:center;">勝率</th>
-          <th style="padding:10px 8px;text-align:center;">均報酬</th>
-          <th style="padding:10px 8px;text-align:left;">最近集</th>
-          <th style="padding:10px 8px;text-align:left;">提及集數</th>
-        </tr>
-      </thead>
-      <tbody>{"".join(rows_list)}</tbody>
-    </table>"""
-
-
-# ── 詳細版 row helpers ───────────────────────────────────────────────────────
-
-def _render_ep_header(ep: str, ep_date: str, count: int) -> str:
-    return f"""
-        <tr class="ep-header" data-ep="{ep}"
-            style="background:#e8ecf0;cursor:pointer;"
-            onclick="toggleEp('{ep}')">
-          <td colspan="8" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
-            ▾ {ep}
-            <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;">{ep_date} · {count} 筆</span>
-          </td>
-        </tr>"""
-
-
-def _render_signal_row(r: dict, ep: str, ep_num_val: int) -> str:
-    action     = r.get("action", "0")
-    s_pct      = r.get("stock_return_pct")
-    b_pct      = r.get("benchmark_return_pct")
-    beat       = r.get("beat_benchmark")
-    name       = r.get("stock_name", "")
-    code       = r.get("stock_code", "")
-    tag        = r.get("primary_tag", "")
-    is_tw      = str(code).endswith(".TW") or str(code).endswith(".TWO")
-    bm         = r.get("benchmark_ticker") or ("0050.TW" if is_tw else "SPY")
-    action_lbl = _action_label(action, r.get("confidence_level", ""))
-    short_badge = (
-        '<span style="font-size:14px;background:#e8f4fd;color:#1a6b9a;'
-        'border-radius:3px;padding:1px 4px;margin-left:4px;">空</span>'
-        if action == "-1" else ""
-    )
-    _ep_p   = r.get("live_entry_price") or r.get("entry_price")
-    entry_p = f"{_ep_p:.2f}" if _ep_p else "N/A"
-    curr_p  = f"{r['current_price']:.2f}" if r.get("current_price") else "N/A"
-    days    = r.get("days_held") or "N/A"
-
-    s_pct_val = s_pct if s_pct is not None else -9999
-    b_pct_val = b_pct if b_pct is not None else -9999
-    beat_val  = 1 if beat is True else (0 if beat is False else -1)
-    mkt       = "tw" if is_tw else "us"
-
-    raw_reason  = (r.get("raw_reason")  or "").strip()
-    exact_quote = (r.get("exact_quote") or "").strip()
-    quote_html  = (
-        f'<div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;'
-        f'color:#888;font-style:italic;font-size:14px;">「{exact_quote}」</div>'
-        if exact_quote else ""
-    )
-
-    # 全站搜尋關鍵字：集數、數字、標的名、代碼、純數字代碼、主委觀點、原文引用
-    kw = " ".join(filter(None, [
-        ep, str(ep_num_val), name, code, code.split(".")[0], raw_reason, exact_quote
-    ])).replace('"', ' ').replace('\n', ' ')
-
-    reason_html = (
-        f'<tr class="ep-row ep-{ep} reason-row" data-ep="{ep}" data-epnum="{ep_num_val}"'
-        f' data-tag="{tag}" data-mkt="{mkt}" data-spct="{s_pct_val}"'
-        f' data-bpct="{b_pct_val}" data-beat="{beat_val}"'
-        f' data-name="{name}" data-code="{code}" data-kw="{kw}"'
-        f' style="background:#f8f9fa;">'
-        f'<td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;">'
-        f'<span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span>'
-        f'<span style="font-size:14px;color:#555;margin-left:6px;">{raw_reason}</span>'
-        f'{quote_html}</td></tr>'
-        if raw_reason or exact_quote else ""
-    )
-
-    mkt_badge = (
-        '<span style="font-size:11px;background:#e8f0fe;color:#1a6b9a;'
-        'border-radius:3px;padding:1px 4px;margin-left:4px;">台</span>'
-        if is_tw else
-        '<span style="font-size:11px;background:#fff3cd;color:#856404;'
-        'border-radius:3px;padding:1px 4px;margin-left:4px;">美</span>'
-    )
-    days_disp = f"{days}天" if isinstance(days, int) else "N/A"
-
-    return f"""
-        <tr class="ep-row ep-{ep}"
-            data-ep="{ep}" data-epnum="{ep_num_val}" data-tag="{tag}" data-mkt="{mkt}"
-            data-spct="{s_pct_val}" data-bpct="{b_pct_val}"
-            data-beat="{beat_val}" data-days="{days if isinstance(days, int) else -1}"
-            data-name="{name}" data-code="{code}" data-kw="{kw}"
-            style="border-bottom:none;">
-          <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">{ep}</td>
-          <td style="padding:9px 12px 4px;color:#888;font-size:14px;">{tag}</td>
-          <td style="padding:9px 12px 4px;font-weight:bold;">{name}{mkt_badge}<br>
-            <span style="color:#aaa;font-size:13px;">{code}</span></td>
-          <td style="padding:9px 12px 4px;color:#666;font-size:14px;">{action_lbl}{short_badge}</td>
-          <td style="padding:9px 12px 4px;">{r.get('entry_date','N/A')}<br>
-            <span style="color:#aaa;font-size:13px;">{entry_p} → {curr_p}</span></td>
-          <td style="padding:9px 12px 4px;font-weight:bold;color:{_pct_color(s_pct)};">{_fmt_pct(s_pct)}</td>
-          <td style="padding:9px 12px 4px;color:#666;">{_fmt_pct(b_pct)}<br>
-            <span style="color:#bbb;font-size:12px;">{bm}</span></td>
-          <td style="padding:9px 12px 4px;text-align:center;color:#888;font-size:13px;">{days_disp}</td>
-          <td style="padding:9px 12px 4px;">{_beat_label(beat)}</td>
-        </tr>{reason_html}"""
 
 
 def _mini_bar(pct: float, color: str, label: str, n: int) -> str:
@@ -308,39 +106,34 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     trend_labels_json = json.dumps(trend_labels, ensure_ascii=False)
     trend_values_json = json.dumps(trend_values)
 
-    # ── Signals JSON for JS stock tab ──────────────────────────
+    # ── Signals JSON：兩個 tab（以集數／以標的）共用同一份，前端 JS render ──
     _sigs = []
     for r in results:
         code  = r.get("stock_code") or ""
         is_tw = code.endswith(".TW") or code.endswith(".TWO")
-        ep_id = r.get("episode_id", "")
         _sigs.append({
-            "ep_num":           _ep_num(ep_id),
-            "episode_id":       ep_id,
-            "stock_name":       r.get("stock_name") or "",
-            "stock_code":       code,
-            "action":           r.get("action", "0"),
-            "primary_tag":      r.get("primary_tag") or "",
-            "beat_benchmark":   r.get("beat_benchmark"),
-            "stock_return_pct": r.get("stock_return_pct"),
-            "is_tw":            is_tw,
+            "ep":         r.get("episode_id", ""),
+            "ep_num":     _ep_num(r.get("episode_id", "")),
+            "tag":        r.get("primary_tag") or "",
+            "name":       r.get("stock_name") or "",
+            "code":       code,
+            "mkt":        "tw" if is_tw else "us",
+            "action":     r.get("action", "0"),
+            "conf":       r.get("confidence_level", ""),
+            "entry_date": r.get("entry_date") or "",
+            "entry_p":    r.get("live_entry_price") or r.get("entry_price"),
+            "curr_p":     r.get("current_price"),
+            "s_pct":      r.get("stock_return_pct"),
+            "b_pct":      r.get("benchmark_return_pct"),
+            "bm":         r.get("benchmark_ticker") or ("0050.TW" if is_tw else "SPY"),
+            "beat":       r.get("beat_benchmark"),
+            "days":       r.get("days_held"),
+            "raw_reason": (r.get("raw_reason") or "").strip(),
+            "quote":      (r.get("exact_quote") or "").strip(),
         })
     signals_json = json.dumps(_sigs, ensure_ascii=False)
 
-    # ── Build ep rows ─────────────────────────────────────────
-    all_tags   = sorted({r.get("primary_tag", "") for r in results if r.get("primary_tag")})
-    rows_by_ep = defaultdict(list)
-    for r in results:
-        rows_by_ep[r.get("episode_id", "")].append(r)
-    rows_list = []
-    for ep in sorted(rows_by_ep, key=_ep_num):
-        ep_signals = rows_by_ep[ep]
-        ep_date    = ep_signals[0].get("entry_date", "") or ""
-        ep_num_val = _ep_num(ep)
-        rows_list.append(_render_ep_header(ep, ep_date, len(ep_signals)))
-        for r in ep_signals:
-            rows_list.append(_render_signal_row(r, ep, ep_num_val))
-    table_rows = "".join(rows_list)
+    all_tags = sorted({r.get("primary_tag", "") for r in results if r.get("primary_tag")})
 
     win_pct   = stats.get("win_rate", 0)
     win_color = "#d9534f" if win_pct >= 50 else "#2b8a3e"
@@ -512,7 +305,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
           <th onclick="sortBy('beat')"  style="padding:10px 12px;text-align:left;">勝負 ↕</th>
         </tr>
       </thead>
-      <tbody id="tbody">{table_rows}</tbody>
+      <tbody id="tbody"></tbody>
     </table>
   </div>
 
@@ -547,7 +340,7 @@ function applyFontSize() {{
   localStorage.setItem('fs-idx', fsIdx);
 }}
 function setFontSize(i) {{ fsIdx = i; applyFontSize(); }}
-document.addEventListener('DOMContentLoaded', () => {{ applyFontSize(); initChart(); }});
+document.addEventListener('DOMContentLoaded', () => {{ applyFontSize(); initChart(); renderDetailTab(); }});
 
 // ── Tab 切換 ─────────────────────────────────────────────
 function switchTab(tab) {{
@@ -567,6 +360,82 @@ function toggleEp(ep) {{
   const collapsed = rows[0] && rows[0].classList.contains('hidden');
   rows.forEach(r => r.classList.toggle('hidden', !collapsed));
   if (hdr) hdr.innerHTML = hdr.innerHTML.replace(/[▾▸]/, collapsed ? '▾' : '▸');
+}}
+
+// ── 以集數 Table：純前端從 SIGNALS_DATA render（與全集 HTML 分開存放會浪費一倍空間）──
+function renderDetailTab() {{
+  const pctColor  = v => v == null ? '#888' : (v >= 0 ? '#d9534f' : '#2b8a3e');
+  const fmtPct    = v => v == null ? 'N/A' : (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+  const beatFull  = b => b === true ? '<span style="color:#d9534f;font-weight:bold;">獲勝</span>'
+    : b === false ? '<span style="color:#2b8a3e;font-weight:bold;">落後</span>'
+    : '<span style="color:#888;">待定</span>';
+  const actionFull = (a, c) => a === '+1' ? (c === 'High' ? '超級看好' : '看好') : a === '-1' ? '看壞' : '中立';
+
+  const byEp = {{}};
+  SIGNALS_DATA.forEach(s => {{ (byEp[s.ep] = byEp[s.ep] || []).push(s); }});
+  const eps = Object.keys(byEp).sort((a, b) => byEp[b][0].ep_num - byEp[a][0].ep_num);
+
+  let html = '';
+  eps.forEach(ep => {{
+    const sigs   = byEp[ep];
+    const epNum  = sigs[0].ep_num;
+    const epDate = sigs[0].entry_date || '';
+    html += `<tr class="ep-header" data-ep="${{ep}}" style="background:#e8ecf0;cursor:pointer;" onclick="toggleEp('${{ep}}')">
+      <td colspan="8" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
+        ▾ ${{ep}}
+        <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;">${{epDate}} · ${{sigs.length}} 筆</span>
+      </td>
+    </tr>`;
+
+    sigs.forEach(s => {{
+      const isTw    = s.mkt === 'tw';
+      const mktBadge = isTw
+        ? '<span style="font-size:11px;background:#e8f0fe;color:#1a6b9a;border-radius:3px;padding:1px 4px;margin-left:4px;">台</span>'
+        : '<span style="font-size:11px;background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4px;margin-left:4px;">美</span>';
+      const shortBadge = s.action === '-1'
+        ? '<span style="font-size:14px;background:#e8f4fd;color:#1a6b9a;border-radius:3px;padding:1px 4px;margin-left:4px;">空</span>'
+        : '';
+      const entryP   = s.entry_p ? s.entry_p.toFixed(2) : 'N/A';
+      const currP    = s.curr_p  ? s.curr_p.toFixed(2)  : 'N/A';
+      const daysDisp = s.days ? s.days + '天' : 'N/A';
+      const sPctVal  = s.s_pct ?? -9999, bPctVal = s.b_pct ?? -9999;
+      const beatVal  = s.beat === true ? 1 : (s.beat === false ? 0 : -1);
+      const kw = [ep, String(epNum), s.name, s.code, s.code.split('.')[0], s.raw_reason, s.quote]
+        .filter(Boolean).join(' ').replace(/"/g, ' ').replace(/\n/g, ' ');
+
+      html += `<tr class="ep-row ep-${{ep}}" data-ep="${{ep}}" data-epnum="${{epNum}}" data-tag="${{s.tag}}" data-mkt="${{s.mkt}}"
+          data-spct="${{sPctVal}}" data-bpct="${{bPctVal}}" data-beat="${{beatVal}}" data-days="${{s.days || -1}}"
+          data-name="${{s.name}}" data-code="${{s.code}}" data-kw="${{kw}}" style="border-bottom:none;">
+        <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">${{ep}}</td>
+        <td style="padding:9px 12px 4px;color:#888;font-size:14px;">${{s.tag}}</td>
+        <td style="padding:9px 12px 4px;font-weight:bold;">${{s.name}}${{mktBadge}}<br>
+          <span style="color:#aaa;font-size:13px;">${{s.code}}</span></td>
+        <td style="padding:9px 12px 4px;color:#666;font-size:14px;">${{actionFull(s.action, s.conf)}}${{shortBadge}}</td>
+        <td style="padding:9px 12px 4px;">${{s.entry_date || 'N/A'}}<br>
+          <span style="color:#aaa;font-size:13px;">${{entryP}} → ${{currP}}</span></td>
+        <td style="padding:9px 12px 4px;font-weight:bold;color:${{pctColor(s.s_pct)}};">${{fmtPct(s.s_pct)}}</td>
+        <td style="padding:9px 12px 4px;color:#666;">${{fmtPct(s.b_pct)}}<br>
+          <span style="color:#bbb;font-size:12px;">${{s.bm}}</span></td>
+        <td style="padding:9px 12px 4px;text-align:center;color:#888;font-size:13px;">${{daysDisp}}</td>
+        <td style="padding:9px 12px 4px;">${{beatFull(s.beat)}}</td>
+      </tr>`;
+
+      if (s.raw_reason || s.quote) {{
+        const quoteHtml = s.quote
+          ? `<div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「${{s.quote}}」</div>`
+          : '';
+        html += `<tr class="ep-row ep-${{ep}} reason-row" data-ep="${{ep}}" data-epnum="${{epNum}}" data-tag="${{s.tag}}" data-mkt="${{s.mkt}}"
+            data-spct="${{sPctVal}}" data-bpct="${{bPctVal}}" data-beat="${{beatVal}}"
+            data-name="${{s.name}}" data-code="${{s.code}}" data-kw="${{kw}}" style="background:#f8f9fa;">
+          <td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;">
+            <span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span>
+            <span style="font-size:14px;color:#555;margin-left:6px;">${{s.raw_reason}}</span>
+            ${{quoteHtml}}</td></tr>`;
+      }}
+    }});
+  }});
+
+  document.getElementById('tbody').innerHTML = html;
 }}
 
 // ── 搜尋 ──────────────────────────────────────────────────
@@ -686,15 +555,15 @@ function renderStockTab() {{
 
   const gmap = {{}};
   filt.forEach(s => {{
-    if (!s.stock_code) return;
-    if (!gmap[s.stock_code]) gmap[s.stock_code] = {{ code: s.stock_code, name: s.stock_name, mkt: s.is_tw ? '台股' : '美股', sigs: [] }};
-    gmap[s.stock_code].sigs.push(s);
+    if (!s.code) return;
+    if (!gmap[s.code]) gmap[s.code] = {{ code: s.code, name: s.name, mkt: s.mkt === 'tw' ? '台股' : '美股', sigs: [] }};
+    gmap[s.code].sigs.push(s);
   }});
 
   const groups = Object.values(gmap).map(g => {{
-    const dec  = g.sigs.filter(s => s.beat_benchmark !== null && s.beat_benchmark !== undefined);
-    const wins = dec.filter(s => s.beat_benchmark === true).length;
-    const rets = g.sigs.filter(s => s.stock_return_pct !== null && s.stock_return_pct !== undefined).map(s => s.stock_return_pct);
+    const dec  = g.sigs.filter(s => s.beat !== null && s.beat !== undefined);
+    const wins = dec.filter(s => s.beat === true).length;
+    const rets = g.sigs.filter(s => s.s_pct !== null && s.s_pct !== undefined).map(s => s.s_pct);
     return {{
       ...g, total: g.sigs.length,
       bull: g.sigs.filter(s=>s.action==='+1').length,
@@ -723,18 +592,15 @@ function renderStockTab() {{
     const wrC   = g.win_rate !== null && g.win_rate >= 50 ? '#d9534f' : '#2b8a3e';
     const wrT   = g.win_rate !== null ? g.win_rate + '%' : '待定';
     const bb    = [g.bull ? '+'+g.bull : '', g.bear ? '-'+g.bear : ''].filter(Boolean).join(' / ');
-    const chips = [...new Set(g.sigs.map(s=>s.ep_num))].sort((a,b)=>a-b).map(n=>
-      `<span style="font-size:11px;background:#f0f0f0;padding:1px 5px;border-radius:3px;margin:1px 2px;display:inline-block;">EP${{n}}</span>`
-    ).join('');
     const actLbl = s => s.action==='+1' ? '看好' : s.action==='-1' ? '看壞' : '中性';
-    const beatLbl = s => s.beat_benchmark===true ? '✅' : s.beat_benchmark===false ? '❌' : '⏳';
+    const beatLbl = s => s.beat===true ? '✅' : s.beat===false ? '❌' : '⏳';
     const detailHtml = g.sigs.map(s => `
       <tr class="sd-${{idx}}" style="display:none;background:#f8f9fa;">
-        <td colspan="8" style="padding:5px 12px 5px 28px;border-bottom:1px solid #f0f0f0;font-size:13px;color:#555;">
+        <td colspan="7" style="padding:5px 12px 5px 28px;border-bottom:1px solid #f0f0f0;font-size:13px;color:#555;">
           <span style="color:#888;margin-right:6px;">EP${{s.ep_num}}</span>
           ${{actLbl(s)}}
           <span style="margin:0 6px;color:#ccc;">|</span>
-          <span style="color:${{fc(s.stock_return_pct)}};">${{fp(s.stock_return_pct)}}</span>
+          <span style="color:${{fc(s.s_pct)}};">${{fp(s.s_pct)}}</span>
           <span style="margin-left:6px;">${{beatLbl(s)}}</span>
         </td>
       </tr>`).join('');
@@ -747,7 +613,6 @@ function renderStockTab() {{
       <td style="padding:10px 8px;text-align:center;font-weight:bold;color:${{wrC}};">${{wrT}}</td>
       <td style="padding:10px 8px;text-align:center;font-weight:bold;color:${{fc(g.avg_ret)}};">${{fp(g.avg_ret)}}</td>
       <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP${{g.latest}}</td>
-      <td style="padding:10px 8px;line-height:1.8;">${{chips}}</td>
     </tr>${{detailHtml}}`;
   }}).join('');
 
@@ -761,7 +626,6 @@ function renderStockTab() {{
       <th onclick="sortStock('win_rate')" style="padding:10px 8px;text-align:center;cursor:pointer;">勝率${{arr('win_rate')}}</th>
       <th onclick="sortStock('avg_ret')"  style="padding:10px 8px;text-align:center;cursor:pointer;">均報酬${{arr('avg_ret')}}</th>
       <th onclick="sortStock('latest')"   style="padding:10px 8px;text-align:left;cursor:pointer;">最近集${{arr('latest')}}</th>
-      <th style="padding:10px 8px;text-align:left;">提及集數</th>
     </tr></thead>
     <tbody>${{rows}}</tbody>
   </table>`;

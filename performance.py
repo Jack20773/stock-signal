@@ -51,6 +51,15 @@ def _episode_date(episode_id: str, fallback: str) -> str:
     return _load_episodes().get(episode_id, fallback)
 
 
+def _swap_tw_suffix(code: str) -> str | None:
+    """Gemini 常分不清台股上市(.TW)/上櫃(.TWO)，回傳另一種尾綴供重試。"""
+    if code.endswith(".TWO"):
+        return code[:-4] + ".TW"
+    if code.endswith(".TW"):
+        return code[:-3] + ".TWO"
+    return None
+
+
 def _fill_entry_prices():
     """對 entry_price 為 NULL 的訊號補抓進場價（用集數播出日，非分析日）。"""
     import psycopg2.extras
@@ -65,8 +74,8 @@ def _fill_entry_prices():
             )
             rows = [dict(r) for r in cur.fetchall()]
 
-    requests = []
     meta = []
+    requests = []
     for r in rows:
         code    = r["stock_code"]
         ep_id   = r["episode_id"] or ""
@@ -74,23 +83,39 @@ def _fill_entry_prices():
         if not code or code == "Unknown" or not entry_d:
             continue
         requests.append((code, entry_d))
-        meta.append((r["id"], code, entry_d, benchmark_for(code)))
+        meta.append({"id": r["id"], "code": code, "date": entry_d})
 
     prices = batch_get_close_on_or_before(requests)
 
+    # 查不到價格時，自動改用另一種台股上市/上櫃尾綴重試
+    retry_requests = []
+    for m in meta:
+        if prices.get((m["code"], m["date"])) is None:
+            alt = _swap_tw_suffix(m["code"])
+            if alt:
+                retry_requests.append((alt, m["date"]))
+    if retry_requests:
+        alt_prices = batch_get_close_on_or_before(retry_requests)
+        for m in meta:
+            if prices.get((m["code"], m["date"])) is None:
+                alt = _swap_tw_suffix(m["code"])
+                if alt and alt_prices.get((alt, m["date"])):
+                    m["code"] = alt  # 修正為實際有效代號
+                    prices[(alt, m["date"])] = alt_prices[(alt, m["date"])]
+
     updates = []
-    for sig_id, code, entry_d, bm in meta:
-        price = prices.get((code, entry_d))
+    for m in meta:
+        price = prices.get((m["code"], m["date"]))
         if price:
-            updates.append((price, bm, entry_d, sig_id))
-            print(f"  {code} @ {entry_d} = {price}")
+            updates.append((price, benchmark_for(m["code"]), m["date"], m["code"], m["id"]))
+            print(f"  {m['code']} @ {m['date']} = {price}")
 
     if updates:
         with _conn() as conn:
             with conn.cursor() as cur:
                 psycopg2.extras.execute_batch(cur, """
                     UPDATE signals
-                    SET entry_price=%s, benchmark_ticker=%s, entry_date=%s
+                    SET entry_price=%s, benchmark_ticker=%s, entry_date=%s, stock_code=%s
                     WHERE id=%s
                 """, updates)
     return len(updates)
