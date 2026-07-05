@@ -50,16 +50,18 @@ def get_close_on_or_before(ticker: str, target_date: str) -> float | None:
         if not hist.empty:
             price = _safe_float(hist["Close"].iloc[-1])
 
-    if price is not None:
-        from database import _conn as _c2
-        with _c2() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """INSERT INTO price_cache (ticker, ref_date, price, cache_date)
-                       VALUES (%s,%s,%s,%s)
-                       ON CONFLICT (ticker, ref_date) DO UPDATE SET price=EXCLUDED.price""",
-                    (ticker, target_date, price, date.today().isoformat())
-                )
+    # 無論查到價格與否都寫入 cache（含「確認查無資料」的 NULL），
+    # 否則下市/查無資料的股票會在每次執行時被重新打一次 yfinance，永遠學不會。
+    # 如果之後這檔股票真的補上歷史資料，手動刪掉 price_cache 對應那筆即可強制重查。
+    from database import _conn as _c2
+    with _c2() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO price_cache (ticker, ref_date, price, cache_date)
+                   VALUES (%s,%s,%s,%s)
+                   ON CONFLICT (ticker, ref_date) DO UPDATE SET price=EXCLUDED.price""",
+                (ticker, target_date, price, date.today().isoformat())
+            )
     return price
 
 
