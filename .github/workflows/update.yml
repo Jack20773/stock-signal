@@ -1,9 +1,11 @@
-name: 每週自動分析
+name: 定期分析與寄信
 
 on:
   schedule:
-    # 每週一 UTC 23:00 = 台灣時間週二早上 07:00
-    - cron: "0 23 * * 1"
+    # 週六 UTC 23:00 = 台灣時間週日早上 07:00
+    - cron: "0 23 * * 6"
+    # 週三 UTC 23:00 = 台灣時間週四早上 07:00
+    - cron: "0 23 * * 3"
   workflow_dispatch:
     inputs:
       from_ep:
@@ -51,10 +53,14 @@ jobs:
         # 平常：--last 5（只跑最新 5 集）
         # 補跑：手動填 from_ep=400 即可回補歷史
 
-      - name: 生成完整報告（GitHub Pages 用）
+      - name: 生成完整報告並寄信
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python -X utf8 notifier.py --no-fill --no-send
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          REPORT_TO: ${{ secrets.REPORT_TO }}
+          UNSUBSCRIBE_BASE_URL: ${{ secrets.UNSUBSCRIBE_BASE_URL }}
+        run: python -X utf8 notifier.py --no-fill --detail-url https://Jack20773.github.io/stock-signal/
 
       - name: 準備 Pages 站台目錄
         run: |
