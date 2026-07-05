@@ -104,12 +104,17 @@ def init_db():
             """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS subscribers (
-                    id         BIGSERIAL PRIMARY KEY,
-                    email      TEXT UNIQUE NOT NULL,
-                    token      TEXT UNIQUE NOT NULL,
-                    status     TEXT NOT NULL DEFAULT 'active',
-                    created_at TIMESTAMPTZ DEFAULT NOW()
+                    id                  BIGSERIAL PRIMARY KEY,
+                    email               TEXT UNIQUE NOT NULL,
+                    token               TEXT UNIQUE NOT NULL,
+                    status              TEXT NOT NULL DEFAULT 'active',
+                    created_at          TIMESTAMPTZ DEFAULT NOW(),
+                    last_subscribed_at  TIMESTAMPTZ DEFAULT NOW()
                 )
+            """)
+            cur.execute("""
+                ALTER TABLE subscribers
+                ADD COLUMN IF NOT EXISTS last_subscribed_at TIMESTAMPTZ DEFAULT NOW()
             """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS latest_report (
