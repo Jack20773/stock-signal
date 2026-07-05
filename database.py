@@ -111,7 +111,28 @@ def init_db():
                     created_at TIMESTAMPTZ DEFAULT NOW()
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS latest_report (
+                    id         INTEGER PRIMARY KEY DEFAULT 1,
+                    subject    TEXT,
+                    html       TEXT,
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    CHECK (id = 1)
+                )
+            """)
     _initialized = True
+
+
+def save_latest_report(subject: str, html: str) -> None:
+    """存一份最新的 mail 版報告，供 linebot 在新訂閱者確認訂閱時直接撈來寄送（單行表，只存最新一份）"""
+    init_db()
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO latest_report (id, subject, html, updated_at)
+                VALUES (1, %s, %s, NOW())
+                ON CONFLICT (id) DO UPDATE SET subject=EXCLUDED.subject, html=EXCLUDED.html, updated_at=NOW()
+            """, (subject, html))
 
 
 def list_active_subscribers() -> list[dict]:

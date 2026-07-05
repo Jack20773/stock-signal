@@ -6,6 +6,7 @@ Gmail HTML 報告寄送模組。
   python notifier.py --last 50            # 最新 50 集匯總
   python notifier.py --preview            # 存 HTML 預覽，不寄信
   python notifier.py --detail-url URL     # email 附完整報告連結
+  python notifier.py --to a@x.com,b@x.com # 只寄給指定的人（略過 REPORT_TO 與訂閱者清單）
 """
 import json
 import os
@@ -32,15 +33,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
                     handlers=[logging.StreamHandler(sys.stdout)])
 
 from report_html import generate_html_detail, generate_html_email, _ep_num
-from database import list_active_subscribers
+from database import list_active_subscribers, save_latest_report
 
 # ── 寄信 ────────────────────────────────────────────────────────────────────
 
-def send_email(subject: str, html_content: str) -> bool:
+def send_email(subject: str, html_content: str, override_to: str = "") -> bool:
     user     = os.getenv("GMAIL_USER")
     password = os.getenv("GMAIL_APP_PASSWORD")
-    # REPORT_TO 支援多個收件人，用逗號分隔，例如 a@gmail.com,b@gmail.com
-    to_raw   = os.getenv("REPORT_TO") or user or ""
+    # override_to 有值時（手動指定收件人）優先於 REPORT_TO；都支援多個收件人，用逗號分隔
+    to_raw   = override_to or os.getenv("REPORT_TO") or user or ""
     to_list  = [a.strip() for a in to_raw.split(",") if a.strip()]
 
     if not user or not password or not to_list:
@@ -118,7 +119,8 @@ def send_subscriber_emails(subject: str, html_content: str) -> None:
 # ── 主流程 ──────────────────────────────────────────────────────────────────
 
 def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
-               preview: bool = False, detail_url: str = "", no_send: bool = False):
+               preview: bool = False, detail_url: str = "", no_send: bool = False,
+               override_to: str = ""):
     if fill:
         logging.info("補抓進場價中...")
         n = _fill_entry_prices()
@@ -166,8 +168,14 @@ def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
         if not no_send:
             # 寄送簡要版 email
             html_email = generate_html_email(results, title, stats, detail_url)
-            send_email(subject, html_email)
-            send_subscriber_emails(subject, html_email)
+            send_email(subject, html_email, override_to=override_to)
+            if not override_to:
+                # 手動指定收件人時視為一次性測試/單獨寄送，不連帶寄給全體訂閱者
+                send_subscriber_emails(subject, html_email)
+            try:
+                save_latest_report(subject, html_email)
+            except Exception as e:
+                logging.error(f"存最新報告失敗（不影響本次寄信）：{e}")
 
 
 def main():
@@ -178,15 +186,17 @@ def main():
     parser.add_argument("--preview",    action="store_true", help="只存 HTML 預覽，不寄信")
     parser.add_argument("--no-send",    action="store_true", help="只存 report_detail.html，不寄信")
     parser.add_argument("--detail-url", default="",  help="詳細版 URL（加在 email 按鈕）")
+    parser.add_argument("--to",         default="",  help="手動指定收件人（逗號分隔），會取代 REPORT_TO 且不寄給訂閱者清單")
     args = parser.parse_args()
 
     run_report(
-        ep_filter  = args.ep or None,
-        last_n     = args.last,
-        fill       = not args.no_fill,
-        preview    = args.preview,
-        no_send    = args.no_send,
-        detail_url = args.detail_url,
+        ep_filter   = args.ep or None,
+        last_n      = args.last,
+        fill        = not args.no_fill,
+        preview     = args.preview,
+        no_send     = args.no_send,
+        detail_url  = args.detail_url,
+        override_to = args.to,
     )
 
 

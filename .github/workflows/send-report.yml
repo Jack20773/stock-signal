@@ -7,6 +7,10 @@ on:
         description: '顯示最新 N 集（預設 50）'
         default: '50'
         required: false
+      to:
+        description: '指定收件人（逗號分隔，留空則寄給 REPORT_TO + 訂閱者清單）'
+        default: ''
+        required: false
 
 jobs:
   send:
@@ -30,8 +34,10 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           REPORT_TO: ${{ secrets.REPORT_TO }}
           UNSUBSCRIBE_BASE_URL: ${{ secrets.UNSUBSCRIBE_BASE_URL }}
+          MANUAL_TO: ${{ github.event.inputs.to }}
         run: |
-          python -X utf8 notifier.py \
-            --no-fill \
-            --last ${{ github.event.inputs.report_last || '50' }} \
-            --detail-url https://Jack20773.github.io/stock-signal/
+          ARGS=(--no-fill --last "${{ github.event.inputs.report_last || '50' }}" --detail-url "https://Jack20773.github.io/stock-signal/")
+          if [ -n "$MANUAL_TO" ]; then
+            ARGS+=(--to "$MANUAL_TO")
+          fi
+          python -X utf8 notifier.py "${ARGS[@]}"
