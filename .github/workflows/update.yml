@@ -56,8 +56,8 @@ jobs:
       - name: 生成完整報告並寄信
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          BREVO_SMTP_LOGIN: ${{ secrets.BREVO_SMTP_LOGIN }}
-          BREVO_SMTP_KEY: ${{ secrets.BREVO_SMTP_KEY }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           REPORT_TO: ${{ secrets.REPORT_TO }}
           UNSUBSCRIBE_BASE_URL: ${{ secrets.UNSUBSCRIBE_BASE_URL }}
         run: python -X utf8 notifier.py --no-fill --detail-url https://Jack20773.github.io/stock-signal/

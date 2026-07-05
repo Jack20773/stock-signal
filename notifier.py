@@ -1,5 +1,5 @@
 """
-HTML 報告寄送模組（透過 Brevo SMTP relay）。
+Gmail HTML 報告寄送模組。
 
 用法：
   python notifier.py --ep EP672           # 單集報告
@@ -38,28 +38,26 @@ from database import list_active_subscribers, save_latest_report
 # ── 寄信 ────────────────────────────────────────────────────────────────────
 
 def send_email(subject: str, html_content: str, override_to: str = "") -> bool:
-    smtp_login = os.getenv("BREVO_SMTP_LOGIN")
-    smtp_key   = os.getenv("BREVO_SMTP_KEY")
-    from_email = smtp_login
+    user     = os.getenv("GMAIL_USER")
+    password = os.getenv("GMAIL_APP_PASSWORD")
     # override_to 有值時（手動指定收件人）優先於 REPORT_TO；都支援多個收件人，用逗號分隔
-    to_raw   = override_to or os.getenv("REPORT_TO") or from_email or ""
+    to_raw   = override_to or os.getenv("REPORT_TO") or user or ""
     to_list  = [a.strip() for a in to_raw.split(",") if a.strip()]
 
-    if not smtp_login or not smtp_key or not to_list:
-        logging.error("未設定 BREVO_SMTP_LOGIN / BREVO_SMTP_KEY / REPORT_TO，跳過寄信")
+    if not user or not password or not to_list:
+        logging.error("未設定 GMAIL_USER / GMAIL_APP_PASSWORD / REPORT_TO，跳過寄信")
         return False
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"]    = from_email
+    msg["From"]    = user
     msg["To"]      = ", ".join(to_list)
     msg.attach(MIMEText(html_content, "html", "utf-8"))
 
     try:
-        with smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=15) as server:
-            server.starttls()
-            server.login(smtp_login, smtp_key)
-            server.sendmail(from_email, to_list, msg.as_string())
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
+            server.login(user, password)
+            server.sendmail(user, to_list, msg.as_string())
         logging.info(f"報告已寄出 → {', '.join(to_list)}")
         return True
     except Exception as e:
@@ -79,18 +77,16 @@ def send_subscriber_emails(subject: str, html_content: str) -> None:
     if not subs:
         return
 
-    smtp_login = os.getenv("BREVO_SMTP_LOGIN")
-    smtp_key   = os.getenv("BREVO_SMTP_KEY")
-    from_email = smtp_login
+    user     = os.getenv("GMAIL_USER")
+    password = os.getenv("GMAIL_APP_PASSWORD")
     unsub_base = os.getenv("UNSUBSCRIBE_BASE_URL")  # linebot 的 /unsubscribe 網址
-    if not smtp_login or not smtp_key:
-        logging.error("未設定 BREVO_SMTP_LOGIN / BREVO_SMTP_KEY，跳過訂閱名單寄信")
+    if not user or not password:
+        logging.error("未設定 GMAIL_USER / GMAIL_APP_PASSWORD，跳過訂閱名單寄信")
         return
 
     try:
-        server = smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=15)
-        server.starttls()
-        server.login(smtp_login, smtp_key)
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15)
+        server.login(user, password)
     except Exception as e:
         logging.error(f"訂閱名單寄信失敗（登入 SMTP 失敗）：{e}")
         return
@@ -108,10 +104,10 @@ def send_subscriber_emails(subject: str, html_content: str) -> None:
                 personalized = html_content.replace("</body>", footer + "</body>") if footer else html_content
                 msg = MIMEMultipart("alternative")
                 msg["Subject"] = subject
-                msg["From"]    = from_email
+                msg["From"]    = user
                 msg["To"]      = email
                 msg.attach(MIMEText(personalized, "html", "utf-8"))
-                server.sendmail(from_email, [email], msg.as_string())
+                server.sendmail(user, [email], msg.as_string())
                 sent += 1
             except Exception as e:
                 logging.error(f"訂閱者寄信失敗（{email}），跳過繼續下一位：{e}")
