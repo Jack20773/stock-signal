@@ -102,7 +102,25 @@ def init_db():
                 CREATE INDEX IF NOT EXISTS idx_signals_stock_code
                 ON signals(stock_code)
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS subscribers (
+                    id         BIGSERIAL PRIMARY KEY,
+                    email      TEXT UNIQUE NOT NULL,
+                    token      TEXT UNIQUE NOT NULL,
+                    status     TEXT NOT NULL DEFAULT 'active',
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
     _initialized = True
+
+
+def list_active_subscribers() -> list[dict]:
+    """回傳 rijian-studio 訂閱名單中狀態為 active 的 email + 個人化退訂 token"""
+    init_db()
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT email, token FROM subscribers WHERE status='active'")
+            return [dict(r) for r in cur.fetchall()]
 
 
 def save_result(result: dict) -> int:

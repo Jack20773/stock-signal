@@ -18,6 +18,7 @@ from collections import defaultdict
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import date
+from urllib.parse import quote
 
 sys.stdout.reconfigure(encoding="utf-8")
 
@@ -31,6 +32,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
                     handlers=[logging.StreamHandler(sys.stdout)])
 
 from report_html import generate_html_detail, generate_html_email, _ep_num
+from database import list_active_subscribers
 
 # ── 寄信 ────────────────────────────────────────────────────────────────────
 
@@ -60,6 +62,57 @@ def send_email(subject: str, html_content: str) -> bool:
     except Exception as e:
         logging.error(f"寄信失敗：{e}")
         return False
+
+
+# ── rijian-studio 訂閱名單（stock-signal 自己的 Postgres，linebot /subscribe 寫入） ──
+
+def send_subscriber_emails(subject: str, html_content: str) -> None:
+    """把報告寄給 rijian-studio 訂閱名單，逐一寄送並附上各自的個人化退訂連結（token-based）"""
+    try:
+        subs = list_active_subscribers()
+    except Exception as e:
+        logging.error(f"讀取訂閱名單失敗：{e}")
+        return
+    if not subs:
+        return
+
+    user     = os.getenv("GMAIL_USER")
+    password = os.getenv("GMAIL_APP_PASSWORD")
+    unsub_base = os.getenv("UNSUBSCRIBE_BASE_URL")  # linebot 的 /unsubscribe 網址
+    if not user or not password:
+        logging.error("未設定 GMAIL_USER / GMAIL_APP_PASSWORD，跳過訂閱名單寄信")
+        return
+
+    try:
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15)
+        server.login(user, password)
+    except Exception as e:
+        logging.error(f"訂閱名單寄信失敗（登入 SMTP 失敗）：{e}")
+        return
+
+    sent = 0
+    try:
+        for sub in subs:
+            email, token = sub["email"], sub["token"]
+            try:
+                footer = ""
+                if unsub_base:
+                    unsub_link = f"{unsub_base}?token={quote(token)}"
+                    footer = (f'<p style="font-size:11px;color:#bbb;text-align:center;margin-top:16px;">'
+                              f'不想再收到這份報告？<a href="{unsub_link}" style="color:#999;">點此退訂</a></p>')
+                personalized = html_content.replace("</body>", footer + "</body>") if footer else html_content
+                msg = MIMEMultipart("alternative")
+                msg["Subject"] = subject
+                msg["From"]    = user
+                msg["To"]      = email
+                msg.attach(MIMEText(personalized, "html", "utf-8"))
+                server.sendmail(user, [email], msg.as_string())
+                sent += 1
+            except Exception as e:
+                logging.error(f"訂閱者寄信失敗（{email}），跳過繼續下一位：{e}")
+    finally:
+        server.quit()
+    logging.info(f"訂閱名單報告已寄出 → {sent}/{len(subs)} 位")
 
 
 # ── 主流程 ──────────────────────────────────────────────────────────────────
@@ -114,6 +167,7 @@ def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
             # 寄送簡要版 email
             html_email = generate_html_email(results, title, stats, detail_url)
             send_email(subject, html_email)
+            send_subscriber_emails(subject, html_email)
 
 
 def main():

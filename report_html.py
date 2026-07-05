@@ -244,8 +244,8 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
 
   <!-- Tab 切換 + 字體控制 -->
   <div style="padding:10px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:8px;">
-    <button id="tab-ep" class="tab-btn btn-active" onclick="switchTab('ep')">以集數</button>
-    <button id="tab-stock" class="tab-btn" onclick="switchTab('stock')">以標的</button>
+    <button id="tab-ep" class="tab-btn" onclick="switchTab('ep')">以集數</button>
+    <button id="tab-stock" class="tab-btn btn-active" onclick="switchTab('stock')">以標的</button>
     <div style="margin-left:auto;display:flex;align-items:center;gap:4px;">
       <span style="font-size:12px;color:#999;">字體</span>
       <button class="fs-btn" id="fs0" onclick="setFontSize(0)" style="font-size:11px;">小</button>
@@ -256,7 +256,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   </div>
 
   <!-- 集數篩選工具列 -->
-  <div id="view-filters" style="padding:10px 16px 6px;border-bottom:1px solid #eee;background:#fafafa;">
+  <div id="view-filters" style="display:none;padding:10px 16px 6px;border-bottom:1px solid #eee;background:#fafafa;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
       <span style="font-size:13px;color:#888;white-space:nowrap;">搜尋：</span>
       <input id="main-search" type="text"
@@ -290,7 +290,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   </div>
 
   <!-- 以集數 Table -->
-  <div id="view-ep" style="padding:0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;">
+  <div id="view-ep" style="display:none;padding:0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;">
     <table id="main-table" style="width:100%;border-collapse:collapse;font-size:15px;min-width:720px;">
       <thead>
         <tr style="background:#f1f3f5;color:#495057;font-size:13px;">
@@ -310,7 +310,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   </div>
 
   <!-- 以標的 Table (JS driven) -->
-  <div id="view-stock" style="display:none;padding:0 0 12px;">
+  <div id="view-stock" style="padding:0 0 12px;">
     <div style="padding:10px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
       <span style="font-size:13px;color:#888;">範圍：</span>
       <button id="sr-0"   class="filter-btn sr-btn btn-active" onclick="setStockRange(0)">全部</button>
@@ -340,7 +340,7 @@ function applyFontSize() {{
   localStorage.setItem('fs-idx', fsIdx);
 }}
 function setFontSize(i) {{ fsIdx = i; applyFontSize(); }}
-document.addEventListener('DOMContentLoaded', () => {{ applyFontSize(); initChart(); renderDetailTab(); }});
+document.addEventListener('DOMContentLoaded', () => {{ applyFontSize(); initChart(); renderStockTab(); }});
 
 // ── Tab 切換 ─────────────────────────────────────────────
 function switchTab(tab) {{
@@ -351,6 +351,7 @@ function switchTab(tab) {{
   document.getElementById('tab-ep').classList.toggle('btn-active', isEp);
   document.getElementById('tab-stock').classList.toggle('btn-active', !isEp);
   if (!isEp) renderStockTab();
+  if (isEp) renderDetailTab();
 }}
 
 // ── 集數展開/收合 ─────────────────────────────────────────
