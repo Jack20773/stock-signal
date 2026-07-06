@@ -183,7 +183,16 @@ def calc_performance() -> list[dict]:
         else:
             bm_pct = None
 
-        beat = (stock_pct > bm_pct) if (stock_pct is not None and bm_pct is not None) else None
+        if stock_pct is not None and bm_pct is not None:
+            action = r.get("action", "0")
+            if action == "+1":
+                beat = stock_pct > bm_pct
+            elif action == "-1":
+                beat = stock_pct < bm_pct
+            else:
+                beat = None
+        else:
+            beat = None
 
         try:
             days = (date.today() - date.fromisoformat(entry_d)).days
