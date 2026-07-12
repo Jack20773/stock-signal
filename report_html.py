@@ -156,6 +156,8 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   body{{margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#333;}}
   .wrap{{max-width:920px;margin:20px auto;background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.07);overflow-x:clip;}}
   #main-table thead th{{position:sticky;top:0;background:#f1f3f5;z-index:2;}}
+  /* 個股排行：標的欄保底寬度，不被數字欄擠壓 */
+  #stock-table-container td:first-child{{min-width:96px;}}
   @media(max-width:600px){{
     .wrap{{margin:0;border-radius:0;}}
     /* 手機版：拿掉表格最小寬度並藏次要欄位，讓內容塞進一屏、不用左右滑 */
@@ -429,7 +431,7 @@ function renderDetailTab() {{
   eps.forEach(ep => {{
     const sigs   = byEp[ep];
     const epNum  = sigs[0].ep_num;
-    const epDate = sigs[0].entry_date || '';
+    const epDate = (sigs.find(x => x.entry_date) || sigs[0]).entry_date || '';
     const epRets = sigs.map(s => s.s_pct).filter(v => v !== null && v !== undefined);
     const epAvg  = epRets.length ? epRets.reduce((a,b)=>a+b,0)/epRets.length : null;
     const epAvgHtml = epAvg === null ? ''
@@ -683,12 +685,12 @@ function renderStockTab() {{
     return `<tr style="border-bottom:1px solid #f0f0f0;cursor:pointer;" onclick="toggleSD(${{idx}}, this)">
       <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">
         <span class="sd-arrow-${{idx}}">▸</span> ${{g.name}}<br><span style="color:#aaa;font-size:13px;">${{g.code}}</span></td>
-      <td class="hm" style="padding:10px 8px;color:#888;font-size:13px;">${{g.mkt}}</td>
+      <td style="padding:10px 8px;color:#888;font-size:13px;">${{g.mkt}}</td>
       <td style="padding:10px 8px;text-align:center;font-weight:bold;">${{g.total}}</td>
       <td class="hm" style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">${{bb}}</td>
       <td style="padding:10px 8px;text-align:center;font-weight:bold;color:${{wrC}};">${{wrT}}</td>
       <td style="padding:10px 8px;text-align:center;font-weight:bold;color:${{fc(g.avg_ret)}};">${{fp(g.avg_ret)}}</td>
-      <td class="hm" style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP${{g.latest}}</td>
+      <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP${{g.latest}}</td>
     </tr>${{detailHtml}}`;
   }}).join('');
 
@@ -696,7 +698,7 @@ function renderStockTab() {{
   <table width="100%" style="border-collapse:collapse;font-size:15px;">
     <thead><tr style="background:#f1f3f5;color:#495057;font-size:13px;">
       <th onclick="sortStock('name')"     style="padding:10px 12px;text-align:left;cursor:pointer;">標的${{arr('name')}}</th>
-      <th class="hm" style="padding:10px 8px;text-align:left;">市場</th>
+      <th style="padding:10px 8px;text-align:left;">市場</th>
       <th onclick="sortStock('total')"    style="padding:10px 8px;text-align:center;cursor:pointer;">次數${{arr('total')}}</th>
       <th class="hm" style="padding:10px 8px;text-align:center;">多/空</th>
       <th onclick="sortStock('win_rate')" style="padding:10px 8px;text-align:center;cursor:pointer;">勝率${{arr('win_rate')}}</th>
