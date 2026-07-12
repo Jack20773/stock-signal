@@ -155,12 +155,15 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
 <style>
   body{{margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#333;}}
   .wrap{{max-width:920px;margin:20px auto;background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.07);overflow-x:clip;}}
+  #main-table thead th{{position:sticky;top:0;background:#f1f3f5;z-index:2;}}
   @media(max-width:600px){{
     .wrap{{margin:0;border-radius:0;}}
     /* 手機版：拿掉表格最小寬度並藏次要欄位，讓內容塞進一屏、不用左右滑 */
     #main-table{{min-width:0!important;}}
     .hm{{display:none!important;}}
     .wrap th,.wrap td{{padding-left:6px!important;padding-right:6px!important;}}
+    .reason-row td{{padding-left:12px!important;}}
+    .wrap td{{word-break:break-word;}}
   }}
   th{{cursor:pointer;user-select:none;}}
   th:hover{{background:#e2e6ea;}}
@@ -205,7 +208,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     </div>
   </div>
 
-  <!-- Stats 第二列 -->
+  <!-- Stats 第二列（均報酬獨立常駐） -->
   <div style="display:flex;text-align:center;border-bottom:1px solid #eee;background:#fafcff;">
     <div style="flex:1;padding:10px 0;">
       <div style="font-size:11px;color:#aaa;">均個股報酬</div>
@@ -218,6 +221,14 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
       <div style="font-size:10px;color:#ccc;margin-top:2px;">排除極端值</div>
     </div>
   </div>
+  <!-- 進階統計（預設收合，上色讓人知道可以點） -->
+  <div onclick="toggleAdv()"
+       style="padding:10px 20px;border-bottom:1px solid #dce9f7;background:#eef4fb;cursor:pointer;font-size:13px;color:#2b6cb0;font-weight:bold;">
+    <span id="adv-arrow">▸</span> 進階統計
+    <span style="color:#8fb3dc;font-size:12px;margin-left:6px;font-weight:normal;">信心等級 · 持倉分組 · 勝率趨勢圖</span>
+    <span style="float:right;color:#8fb3dc;font-size:12px;font-weight:normal;">點擊展開</span>
+  </div>
+  <div id="adv-stats" style="display:none;">
   <!-- 計算說明 -->
   <div style="padding:6px 20px 10px;background:#fafcff;font-size:11px;color:#bbb;border-bottom:1px solid #eee;">
     個股報酬＝播出日收盤價至今漲跌幅；對標大盤＝同期 0050（台股）或 SPY（美股）漲跌幅；未扣除手續費
@@ -247,11 +258,12 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
       <canvas id="trendChart"></canvas>
     </div>
   </div>
+  </div><!-- /adv-stats -->
 
   <!-- Tab 切換 + 字體控制 -->
-  <div style="padding:10px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:8px;">
-    <button id="tab-ep" class="tab-btn" onclick="switchTab('ep')">以集數</button>
-    <button id="tab-stock" class="tab-btn btn-active" onclick="switchTab('stock')">以標的</button>
+  <div style="padding:10px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <button id="tab-ep" class="tab-btn btn-active" onclick="switchTab('ep')">每集訊號</button>
+    <button id="tab-stock" class="tab-btn" onclick="switchTab('stock')">個股排行</button>
     <div style="margin-left:auto;display:flex;align-items:center;gap:4px;">
       <span style="font-size:12px;color:#999;">字體</span>
       <button class="fs-btn" id="fs0" onclick="setFontSize(0)" style="font-size:11px;">小</button>
@@ -261,8 +273,13 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     </div>
   </div>
 
+  <!-- 目前頁籤說明 -->
+  <div id="tab-hint" style="padding:6px 16px;font-size:12px;color:#999;background:#fafafa;border-bottom:1px solid #eee;">
+    依節目集數列出每一筆選股訊號：講了哪檔、看多還看空、至今績效如何
+  </div>
+
   <!-- 集數篩選工具列 -->
-  <div id="view-filters" style="display:none;padding:10px 16px 6px;border-bottom:1px solid #eee;background:#fafafa;">
+  <div id="view-filters" style="padding:10px 16px 6px;border-bottom:1px solid #eee;background:#fafafa;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
       <span style="font-size:13px;color:#888;white-space:nowrap;">搜尋：</span>
       <input id="main-search" type="text"
@@ -270,7 +287,9 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
         oninput="filterSearch(this.value)"
         style="flex:1;max-width:340px;padding:5px 12px;border:1px solid #ddd;border-radius:12px;font-size:13px;outline:none;">
       <button onclick="clearSearch()" class="filter-btn" style="color:#888;">清除</button>
+      <button onclick="toggleFilterAdv()" class="filter-btn" id="filter-adv-btn">篩選 ▸</button>
     </div>
+    <div id="filter-adv" style="display:none;">
     <div style="margin-bottom:4px;">
       <span style="font-size:12px;color:#aaa;margin-right:4px;">分類：</span>
       <button onclick="filterTag('all')" id="btn-all" class="filter-btn cls-btn btn-active">全部</button>
@@ -293,14 +312,15 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
       <button onclick="filterDays(90)" id="days-90" class="filter-btn days-btn">≥90天</button>
     </div>
     <div style="font-size:11px;color:#ccc;">台股對比 0050.TW · 美股對比 SPY</div>
+    </div><!-- /filter-adv -->
   </div>
 
   <!-- 以集數 Table -->
-  <div id="view-ep" style="display:none;padding:0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;">
+  <div id="view-ep" style="padding:0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;">
     <table id="main-table" style="width:100%;border-collapse:collapse;font-size:15px;min-width:720px;">
       <thead>
         <tr style="background:#f1f3f5;color:#495057;font-size:13px;">
-          <th onclick="sortBy('epnum')" style="padding:10px 12px;text-align:left;">集數 ↕</th>
+          <th onclick="sortBy('epnum')" class="hm" style="padding:10px 12px;text-align:left;">集數 ↕</th>
           <th onclick="sortBy('tag')"   class="hm" style="padding:10px 12px;text-align:left;">分類 ↕</th>
           <th style="padding:10px 12px;text-align:left;">標的</th>
           <th style="padding:10px 12px;text-align:left;">動作</th>
@@ -316,7 +336,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   </div>
 
   <!-- 以標的 Table (JS driven) -->
-  <div id="view-stock" style="padding:0 0 12px;">
+  <div id="view-stock" style="display:none;padding:0 0 12px;">
     <div style="padding:10px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
       <span style="font-size:13px;color:#888;">範圍：</span>
       <button id="sr-0"   class="filter-btn sr-btn btn-active" onclick="setStockRange(0)">全部</button>
@@ -340,13 +360,32 @@ const FS = [12, 14, 16, 18];
 let fsIdx = parseInt(localStorage.getItem('fs-idx') || '1');
 function applyFontSize() {{
   const s = FS[fsIdx];
+  // 只縮放 td/th 基準字級，span/div 保留各自的行內字級，層級（主字/副字/徽章）才不會被壓平
   document.getElementById('dyn-font').textContent =
-    `.wrap td, .wrap th, .wrap div, .wrap span, .wrap button {{ font-size: ${{s}}px !important; }}`;
+    `.wrap td, .wrap th {{ font-size: ${{s}}px !important; }}`;
   document.querySelectorAll('.fs-btn').forEach((b, i) => b.classList.toggle('btn-active', i === fsIdx));
   localStorage.setItem('fs-idx', fsIdx);
 }}
 function setFontSize(i) {{ fsIdx = i; applyFontSize(); }}
-document.addEventListener('DOMContentLoaded', () => {{ applyFontSize(); initChart(); renderStockTab(); }});
+document.addEventListener('DOMContentLoaded', () => {{ applyFontSize(); renderDetailTab(); }});
+
+// ── 進階統計收合（趨勢圖等首次展開才初始化，收合狀態下 canvas 量不到尺寸）──
+let _chartInited = false;
+function toggleAdv() {{
+  const box = document.getElementById('adv-stats');
+  const open = box.style.display === 'none';
+  box.style.display = open ? '' : 'none';
+  document.getElementById('adv-arrow').textContent = open ? '▾' : '▸';
+  if (open && !_chartInited) {{ _chartInited = true; initChart(); }}
+}}
+
+// ── 篩選按鈕群收合 ────────────────────────────────────────
+function toggleFilterAdv() {{
+  const box = document.getElementById('filter-adv');
+  const open = box.style.display === 'none';
+  box.style.display = open ? '' : 'none';
+  document.getElementById('filter-adv-btn').textContent = open ? '篩選 ▾' : '篩選 ▸';
+}}
 
 // ── Tab 切換 ─────────────────────────────────────────────
 function switchTab(tab) {{
@@ -356,6 +395,9 @@ function switchTab(tab) {{
   document.getElementById('view-stock').style.display = isEp ? 'none' : '';
   document.getElementById('tab-ep').classList.toggle('btn-active', isEp);
   document.getElementById('tab-stock').classList.toggle('btn-active', !isEp);
+  document.getElementById('tab-hint').textContent = isEp
+    ? '依節目集數列出每一筆選股訊號：講了哪檔、看多還看空、至今績效如何'
+    : '依股票彙總：每檔被提到幾次、看多看空比例、勝率與平均報酬，點標的可展開歷次紀錄';
   if (!isEp) renderStockTab();
   if (isEp) renderDetailTab();
 }}
@@ -373,9 +415,9 @@ function toggleEp(ep) {{
 function renderDetailTab() {{
   const pctColor  = v => v == null ? '#888' : (v >= 0 ? '#d9534f' : '#2b8a3e');
   const fmtPct    = v => v == null ? 'N/A' : (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
-  const beatFull  = b => b === true ? '<span style="color:#d9534f;font-weight:bold;">獲勝</span>'
-    : b === false ? '<span style="color:#2b8a3e;font-weight:bold;">落後</span>'
-    : '<span style="color:#888;">待定</span>';
+  const beatFull  = b => b === true ? '<span style="background:#fdecea;color:#d9534f;font-weight:bold;font-size:12px;border-radius:10px;padding:2px 8px;white-space:nowrap;">獲勝</span>'
+    : b === false ? '<span style="background:#e6f4ea;color:#2b8a3e;font-weight:bold;font-size:12px;border-radius:10px;padding:2px 8px;white-space:nowrap;">落後</span>'
+    : '<span style="background:#f1f3f5;color:#888;font-size:12px;border-radius:10px;padding:2px 8px;white-space:nowrap;">待定</span>';
   const actionFull = (a, c) => a === '+1' ? (c === 'High' ? '超級看好' : '看好') : a === '-1' ? '看壞' : '中立';
 
   const byEp = {{}};
@@ -387,10 +429,14 @@ function renderDetailTab() {{
     const sigs   = byEp[ep];
     const epNum  = sigs[0].ep_num;
     const epDate = sigs[0].entry_date || '';
+    const epRets = sigs.map(s => s.s_pct).filter(v => v !== null && v !== undefined);
+    const epAvg  = epRets.length ? epRets.reduce((a,b)=>a+b,0)/epRets.length : null;
+    const epAvgHtml = epAvg === null ? ''
+      : ` · 均報酬 <span style="color:${{epAvg >= 0 ? '#d9534f' : '#2b8a3e'}};">${{(epAvg>=0?'+':'') + epAvg.toFixed(2)}}%</span>`;
     html += `<tr class="ep-header" data-ep="${{ep}}" style="background:#e8ecf0;cursor:pointer;" onclick="toggleEp('${{ep}}')">
-      <td colspan="8" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
+      <td colspan="9" style="padding:8px 12px;font-weight:bold;color:#1a252f;font-size:15px;">
         ▾ ${{ep}}
-        <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;">${{epDate}} · ${{sigs.length}} 筆</span>
+        <span style="font-weight:normal;color:#7f8c8d;font-size:14px;margin-left:8px;">${{epDate}} · ${{sigs.length}} 筆${{epAvgHtml}}</span>
       </td>
     </tr>`;
 
@@ -413,7 +459,7 @@ function renderDetailTab() {{
       html += `<tr class="ep-row ep-${{ep}}" data-ep="${{ep}}" data-epnum="${{epNum}}" data-tag="${{s.tag}}" data-mkt="${{s.mkt}}"
           data-spct="${{sPctVal}}" data-bpct="${{bPctVal}}" data-beat="${{beatVal}}" data-days="${{s.days || -1}}"
           data-name="${{s.name}}" data-code="${{s.code}}" data-kw="${{kw}}" style="border-bottom:none;">
-        <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">${{ep}}</td>
+        <td class="hm" style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">${{ep}}</td>
         <td class="hm" style="padding:9px 12px 4px;color:#888;font-size:14px;">${{s.tag}}</td>
         <td style="padding:9px 12px 4px;font-weight:bold;">${{s.name}}${{mktBadge}}<br>
           <span style="color:#aaa;font-size:13px;">${{s.code}}</span></td>
@@ -434,7 +480,7 @@ function renderDetailTab() {{
         html += `<tr class="ep-row ep-${{ep}} reason-row" data-ep="${{ep}}" data-epnum="${{epNum}}" data-tag="${{s.tag}}" data-mkt="${{s.mkt}}"
             data-spct="${{sPctVal}}" data-bpct="${{bPctVal}}" data-beat="${{beatVal}}"
             data-name="${{s.name}}" data-code="${{s.code}}" data-kw="${{kw}}" style="background:#f8f9fa;">
-          <td colspan="8" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;">
+          <td colspan="9" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;">
             <span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span>
             <span style="font-size:14px;color:#555;margin-left:6px;">${{s.raw_reason}}</span>
             ${{quoteHtml}}</td></tr>`;
@@ -443,6 +489,21 @@ function renderDetailTab() {{
   }});
 
   document.getElementById('tbody').innerHTML = html;
+  collapseOldEps();
+}}
+
+// ── 預設只展開最新 3 集（搜尋/篩選中不收合，避免結果被藏）──
+function collapseOldEps() {{
+  const filtering = searchFilter || tagFilter !== 'all' || mktFilter !== 'all'
+    || beatFilter !== 'all' || daysFilter !== 0;
+  if (filtering) return;
+  document.querySelectorAll('.ep-header').forEach((hdr, i) => {{
+    if (i < 3) return;
+    const ep = hdr.dataset.ep;
+    document.querySelectorAll('.ep-' + CSS.escape(ep)).forEach(r => r.classList.add('hidden'));
+    const td = hdr.querySelector('td');
+    if (td) td.innerHTML = td.innerHTML.replace('▾', '▸');
+  }});
 }}
 
 // ── 搜尋 ──────────────────────────────────────────────────
