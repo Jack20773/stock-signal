@@ -53,6 +53,11 @@ jobs:
         # 平常：--last 5（只跑最新 5 集）
         # 補跑：手動填 from_ep=400 即可回補歷史
 
+      - name: 分割哨兵（清除近期分割標的的價格快取）
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -X utf8 split_sentinel.py
+
       - name: 生成完整報告並寄信
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

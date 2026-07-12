@@ -4,6 +4,7 @@
 """
 import sys
 import json
+import logging
 import urllib.request
 from datetime import date
 from pathlib import Path
@@ -205,6 +206,14 @@ def calc_performance() -> list[dict]:
         r["current_price"]        = current_p
         r["days_held"]            = days
         r["live_entry_price"]     = live_entry
+
+        # 保險絲：短持倉卻出現極端報酬，多半是分割/錯價等資料問題（2026-07-12 CRWD -73% 事件），
+        # 只告警不改顯示，避免誤殺真的暴漲暴跌
+        if stock_pct is not None and days is not None and days <= 45 and abs(stock_pct) >= 60:
+            logging.warning(
+                f"⚠ 報酬異常待驗證：{r.get('episode_id')} {code} 持倉 {days} 天報酬 {stock_pct}%"
+                f"（進場 {live_entry} → 現價 {current_p}），請檢查是否分割/錯價"
+            )
         results.append(r)
 
     save_perf_results(results)
