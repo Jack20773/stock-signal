@@ -221,6 +221,11 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
       <div style="font-size:10px;color:#ccc;margin-top:2px;">排除極端值</div>
     </div>
   </div>
+  <!-- 計算說明（常駐——使用者要靠它看懂報酬數字，不收進進階統計） -->
+  <div style="padding:6px 20px 10px;background:#fafcff;font-size:11px;color:#aaa;border-bottom:1px solid #eee;">
+    個股報酬＝播出日收盤價至今漲跌幅；對標大盤＝同期 0050（台股）或 SPY（美股）漲跌幅；未扣除手續費
+  </div>
+
   <!-- 進階統計（預設收合，上色讓人知道可以點） -->
   <div onclick="toggleAdv()"
        style="padding:10px 20px;border-bottom:1px solid #dce9f7;background:#eef4fb;cursor:pointer;font-size:13px;color:#2b6cb0;font-weight:bold;">
@@ -229,10 +234,6 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     <span style="float:right;color:#8fb3dc;font-size:12px;font-weight:normal;">點擊展開</span>
   </div>
   <div id="adv-stats" style="display:none;">
-  <!-- 計算說明 -->
-  <div style="padding:6px 20px 10px;background:#fafcff;font-size:11px;color:#bbb;border-bottom:1px solid #eee;">
-    個股報酬＝播出日收盤價至今漲跌幅；對標大盤＝同期 0050（台股）或 SPY（美股）漲跌幅；未扣除手續費
-  </div>
 
   <!-- 信心等級 + 持倉時間分組勝率 -->
   <div style="display:flex;border-bottom:1px solid #eee;">
