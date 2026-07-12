@@ -155,7 +155,13 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
 <style>
   body{{margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#333;}}
   .wrap{{max-width:920px;margin:20px auto;background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.07);overflow-x:clip;}}
-  @media(max-width:600px){{.wrap{{margin:0;border-radius:0;}}}}
+  @media(max-width:600px){{
+    .wrap{{margin:0;border-radius:0;}}
+    /* 手機版：拿掉表格最小寬度並藏次要欄位，讓內容塞進一屏、不用左右滑 */
+    #main-table{{min-width:0!important;}}
+    .hm{{display:none!important;}}
+    .wrap th,.wrap td{{padding-left:6px!important;padding-right:6px!important;}}
+  }}
   th{{cursor:pointer;user-select:none;}}
   th:hover{{background:#e2e6ea;}}
   .btn-active{{background:#1a252f!important;color:#fff!important;border-color:#1a252f!important;}}
@@ -295,13 +301,13 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
       <thead>
         <tr style="background:#f1f3f5;color:#495057;font-size:13px;">
           <th onclick="sortBy('epnum')" style="padding:10px 12px;text-align:left;">集數 ↕</th>
-          <th onclick="sortBy('tag')"   style="padding:10px 12px;text-align:left;">分類 ↕</th>
+          <th onclick="sortBy('tag')"   class="hm" style="padding:10px 12px;text-align:left;">分類 ↕</th>
           <th style="padding:10px 12px;text-align:left;">標的</th>
           <th style="padding:10px 12px;text-align:left;">動作</th>
-          <th onclick="sortBy('date')"  style="padding:10px 12px;text-align:left;">進場日 ↕</th>
+          <th onclick="sortBy('date')"  class="hm" style="padding:10px 12px;text-align:left;">進場日 ↕</th>
           <th onclick="sortBy('spct')"  style="padding:10px 12px;text-align:left;">個股報酬 ↕</th>
-          <th onclick="sortBy('bpct')"  style="padding:10px 12px;text-align:left;">同期大盤 ↕</th>
-          <th onclick="sortBy('days')"  style="padding:10px 12px;text-align:center;">天數 ↕</th>
+          <th onclick="sortBy('bpct')"  class="hm" style="padding:10px 12px;text-align:left;">同期大盤 ↕</th>
+          <th onclick="sortBy('days')"  class="hm" style="padding:10px 12px;text-align:center;">天數 ↕</th>
           <th onclick="sortBy('beat')"  style="padding:10px 12px;text-align:left;">勝負 ↕</th>
         </tr>
       </thead>
@@ -408,16 +414,16 @@ function renderDetailTab() {{
           data-spct="${{sPctVal}}" data-bpct="${{bPctVal}}" data-beat="${{beatVal}}" data-days="${{s.days || -1}}"
           data-name="${{s.name}}" data-code="${{s.code}}" data-kw="${{kw}}" style="border-bottom:none;">
         <td style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">${{ep}}</td>
-        <td style="padding:9px 12px 4px;color:#888;font-size:14px;">${{s.tag}}</td>
+        <td class="hm" style="padding:9px 12px 4px;color:#888;font-size:14px;">${{s.tag}}</td>
         <td style="padding:9px 12px 4px;font-weight:bold;">${{s.name}}${{mktBadge}}<br>
           <span style="color:#aaa;font-size:13px;">${{s.code}}</span></td>
         <td style="padding:9px 12px 4px;color:#666;font-size:14px;">${{actionFull(s.action, s.conf)}}${{shortBadge}}</td>
-        <td style="padding:9px 12px 4px;">${{s.entry_date || 'N/A'}}<br>
+        <td class="hm" style="padding:9px 12px 4px;">${{s.entry_date || 'N/A'}}<br>
           <span style="color:#aaa;font-size:13px;">${{entryP}} → ${{currP}}</span></td>
         <td style="padding:9px 12px 4px;font-weight:bold;color:${{pctColor(s.s_pct)}};">${{fmtPct(s.s_pct)}}</td>
-        <td style="padding:9px 12px 4px;color:#666;">${{fmtPct(s.b_pct)}}<br>
+        <td class="hm" style="padding:9px 12px 4px;color:#666;">${{fmtPct(s.b_pct)}}<br>
           <span style="color:#bbb;font-size:12px;">${{s.bm}}</span></td>
-        <td style="padding:9px 12px 4px;text-align:center;color:#888;font-size:13px;">${{daysDisp}}</td>
+        <td class="hm" style="padding:9px 12px 4px;text-align:center;color:#888;font-size:13px;">${{daysDisp}}</td>
         <td style="padding:9px 12px 4px;">${{beatFull(s.beat)}}</td>
       </tr>`;
 
@@ -615,12 +621,12 @@ function renderStockTab() {{
     return `<tr style="border-bottom:1px solid #f0f0f0;cursor:pointer;" onclick="toggleSD(${{idx}}, this)">
       <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">
         <span class="sd-arrow-${{idx}}">▸</span> ${{g.name}}<br><span style="color:#aaa;font-size:13px;">${{g.code}}</span></td>
-      <td style="padding:10px 8px;color:#888;font-size:13px;">${{g.mkt}}</td>
+      <td class="hm" style="padding:10px 8px;color:#888;font-size:13px;">${{g.mkt}}</td>
       <td style="padding:10px 8px;text-align:center;font-weight:bold;">${{g.total}}</td>
-      <td style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">${{bb}}</td>
+      <td class="hm" style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">${{bb}}</td>
       <td style="padding:10px 8px;text-align:center;font-weight:bold;color:${{wrC}};">${{wrT}}</td>
       <td style="padding:10px 8px;text-align:center;font-weight:bold;color:${{fc(g.avg_ret)}};">${{fp(g.avg_ret)}}</td>
-      <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP${{g.latest}}</td>
+      <td class="hm" style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP${{g.latest}}</td>
     </tr>${{detailHtml}}`;
   }}).join('');
 
@@ -628,9 +634,9 @@ function renderStockTab() {{
   <table width="100%" style="border-collapse:collapse;font-size:15px;">
     <thead><tr style="background:#f1f3f5;color:#495057;font-size:13px;">
       <th onclick="sortStock('name')"     style="padding:10px 12px;text-align:left;cursor:pointer;">標的${{arr('name')}}</th>
-      <th style="padding:10px 8px;text-align:left;">市場</th>
+      <th class="hm" style="padding:10px 8px;text-align:left;">市場</th>
       <th onclick="sortStock('total')"    style="padding:10px 8px;text-align:center;cursor:pointer;">次數${{arr('total')}}</th>
-      <th style="padding:10px 8px;text-align:center;">多/空</th>
+      <th class="hm" style="padding:10px 8px;text-align:center;">多/空</th>
       <th onclick="sortStock('win_rate')" style="padding:10px 8px;text-align:center;cursor:pointer;">勝率${{arr('win_rate')}}</th>
       <th onclick="sortStock('avg_ret')"  style="padding:10px 8px;text-align:center;cursor:pointer;">均報酬${{arr('avg_ret')}}</th>
       <th onclick="sortStock('latest')"   style="padding:10px 8px;text-align:left;cursor:pointer;">最近集${{arr('latest')}}</th>
@@ -849,8 +855,8 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
 <table width="100%" cellpadding="0" cellspacing="0" border="0">
   <tr>
     <td align="center" style="padding:24px 10px;">
-      <table width="620" cellpadding="0" cellspacing="0" border="0"
-             style="background:#fff;border-radius:10px;overflow:hidden;
+      <table width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="max-width:620px;background:#fff;border-radius:10px;overflow:hidden;
                     box-shadow:0 2px 12px rgba(0,0,0,.1);">
 
         <!-- Header -->

@@ -26,3 +26,9 @@ episodes.json
 # 本地開發工具
 .vscode/
 .idea/
+
+# 資料庫備份（含訂閱者 email 等個資，stock-signal 是 public repo，絕不可進這裡）
+backups/
+
+# 所有 .env 變體（.env.neon、.env.bak_* 等，一律不進 public repo）
+.env*

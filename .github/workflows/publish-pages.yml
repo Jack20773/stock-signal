@@ -1,0 +1,48 @@
+name: 只更新報告頁（不寄信）
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - name: 生成報告頁（--no-send 不寄信）
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -X utf8 notifier.py --no-fill --no-send
+
+      - name: 準備 Pages 站台目錄
+        run: |
+          mkdir -p _site
+          cp report_detail.html _site/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
