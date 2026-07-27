@@ -37,12 +37,30 @@ from database import list_active_subscribers, save_latest_report
 
 # ── 寄信 ────────────────────────────────────────────────────────────────────
 
+EXTRA_RECIPIENTS_FILE = os.path.join(os.path.dirname(__file__), "extra_recipients.txt")
+
+
+def _extra_recipients() -> list[str]:
+    """額外收件人清單，獨立於 REPORT_TO（GitHub Secret，寫入後讀不回）與訂閱者資料庫（Railway Postgres）。
+    一行一個 email，`#` 開頭當註解；直接進版控，方便之後查誰、何時被加進來。"""
+    if not os.path.exists(EXTRA_RECIPIENTS_FILE):
+        return []
+    with open(EXTRA_RECIPIENTS_FILE, encoding="utf-8") as f:
+        return [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
+
+
 def send_email(subject: str, html_content: str, override_to: str = "") -> bool:
     user     = os.getenv("GMAIL_USER")
     password = os.getenv("GMAIL_APP_PASSWORD")
-    # override_to 有值時（手動指定收件人）優先於 REPORT_TO；都支援多個收件人，用逗號分隔
-    to_raw   = override_to or os.getenv("REPORT_TO") or user or ""
-    to_list  = [a.strip() for a in to_raw.split(",") if a.strip()]
+    # override_to 有值時（手動指定收件人）優先於 REPORT_TO 與額外名單；都支援多個收件人，用逗號分隔
+    if override_to:
+        to_list = [a.strip() for a in override_to.split(",") if a.strip()]
+    else:
+        to_raw  = os.getenv("REPORT_TO") or user or ""
+        to_list = [a.strip() for a in to_raw.split(",") if a.strip()]
+        for email in _extra_recipients():
+            if email not in to_list:
+                to_list.append(email)
 
     if not user or not password or not to_list:
         logging.error("未設定 GMAIL_USER / GMAIL_APP_PASSWORD / REPORT_TO，跳過寄信")

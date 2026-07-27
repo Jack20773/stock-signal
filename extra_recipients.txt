@@ -1,0 +1,6 @@
+# 額外收件人清單——跟 REPORT_TO（GitHub Secret）分開管理，AI 助手可直接維護這份。
+# 一行一個 email，# 開頭當註解。新增時請附上日期方便追蹤。
+
+# 2026-07-27 同事，rijian-studio 訂閱表單故障期間手動加入
+chenghuei1205@gmail.com
+
