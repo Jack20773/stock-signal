@@ -4,9 +4,25 @@ HTML 報告生成模組（詳細版＋Email 版）。
 """
 import json
 import re
+import statistics
 from datetime import date
 
 # ── 小工具 ──────────────────────────────────────────────────────────────────
+
+def _json_for_script(data, **kw) -> str:
+    """給要塞進 <script> 標籤內的 JSON 字串用，把 '<' 轉成 \\u003c。
+
+    signals_json 裡的 raw_reason/exact_quote 來自 Gemini 分析結果，內容源頭是
+    Podcast 逐字稿——理論上不是使用者直接輸入，但這份 HTML 最終會被
+    workflow push 到 GitHub Pages 公開頁面（見 notifier.py 的呼叫端），任何
+    分析文字若剛好含有字面上的 "</script>"（例如逐字稿裡真的講到這個詞、
+    或未來換一顆更容易被誘導輸出奇怪內容的模型），沒有跳脫就會提前結束
+    script 區塊、後面的內容被當成 HTML 解析，等於一個儲存型 XSS 缺口。
+    跳脫 '<' 不影響 JSON 語義（合法的 JSON 跳脫），瀏覽器解析出來的值
+    跟原本完全一樣，純粹是防禦，不改變任何功能行為。
+    2026-08-01 Codex 審查發現，索羅門本地修正。"""
+    return json.dumps(data, **kw).replace("<", "\\u003c")
+
 
 def _ep_num(ep: str) -> int:
     m = re.search(r"\d+", ep)
@@ -57,7 +73,9 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     all_rets    = sorted([r["stock_return_pct"] for r in results
                           if r.get("stock_return_pct") is not None and r.get("action") != "0"])
     avg_ret  = round(sum(all_rets) / len(all_rets), 2) if all_rets else None
-    med_ret  = round(all_rets[len(all_rets) // 2], 2) if all_rets else None
+    # 偶數筆數時原本只取「中間偏右」那一筆，不是統計學定義的中位數（該取中間兩筆
+    # 平均）——2026-08-01 Codex 審查發現，改用 statistics.median 直接對齊定義。
+    med_ret  = round(statistics.median(all_rets), 2) if all_rets else None
     latest_ep = max((r.get("episode_id", "") for r in results if r.get("episode_id")), key=_ep_num, default="N/A")
 
     # 信心等級準確率
@@ -94,17 +112,25 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
 
     # ── 趨勢圖資料（累計勝率按集數） ──────────────────────────
     eps_sorted = sorted({r.get("episode_id", "") for r in results if r.get("episode_id")}, key=_ep_num)
+    # 先分組一次再逐集查表：原本每個集數都重新掃過整個 results（O(集數 × 總筆數)），
+    # 集數與訊號數會隨時間持續成長，這裡改成先分組一次 O(N)，逐集查表變 O(1)
+    # （2026-08-01 索羅門診斷發現，純本地邏輯變更，輸出不變，見驗證紀錄）。
+    decided_by_ep: dict[str, list] = {}
+    for r in results:
+        ep = r.get("episode_id")
+        if ep and r.get("beat_benchmark") is not None:
+            decided_by_ep.setdefault(ep, []).append(r)
     trend_labels, trend_values = [], []
     cum_dec = cum_wins = 0
     for ep in eps_sorted:
-        ep_dec    = [r for r in results if r.get("episode_id") == ep and r.get("beat_benchmark") is not None]
+        ep_dec    = decided_by_ep.get(ep, [])
         cum_dec  += len(ep_dec)
         cum_wins += sum(1 for r in ep_dec if r["beat_benchmark"])
         if cum_dec > 0:
             trend_labels.append(ep)
             trend_values.append(round(cum_wins / cum_dec * 100, 1))
-    trend_labels_json = json.dumps(trend_labels, ensure_ascii=False)
-    trend_values_json = json.dumps(trend_values)
+    trend_labels_json = _json_for_script(trend_labels, ensure_ascii=False)
+    trend_values_json = _json_for_script(trend_values)
 
     # ── Signals JSON：兩個 tab（以集數／以標的）共用同一份，前端 JS render ──
     _sigs = []
@@ -131,7 +157,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
             "raw_reason": (r.get("raw_reason") or "").strip(),
             "quote":      (r.get("exact_quote") or "").strip(),
         })
-    signals_json = json.dumps(_sigs, ensure_ascii=False)
+    signals_json = _json_for_script(_sigs, ensure_ascii=False)
 
     all_tags = sorted({r.get("primary_tag", "") for r in results if r.get("primary_tag")})
 
@@ -453,7 +479,9 @@ function renderDetailTab() {{
         : '';
       const entryP   = s.entry_p ? s.entry_p.toFixed(2) : 'N/A';
       const currP    = s.curr_p  ? s.curr_p.toFixed(2)  : 'N/A';
-      const daysDisp = s.days ? s.days + '天' : 'N/A';
+      // s.days ? ... 對 days=0（今天才進場）會誤判成沒有值顯示 N/A（0 是 falsy）——
+      // 2026-08-01 Codex 審查發現，改用 != null 明確判斷有沒有值。
+      const daysDisp = s.days != null ? s.days + '天' : 'N/A';
       const sPctVal  = s.s_pct ?? -9999, bPctVal = s.b_pct ?? -9999;
       const beatVal  = s.beat === true ? 1 : (s.beat === false ? 0 : -1);
       const kw = [ep, String(epNum), s.name, s.code, s.code.split('.')[0], s.raw_reason, s.quote]

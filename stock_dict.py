@@ -102,17 +102,38 @@ _US: dict[str, str] = {
 }
 
 _ALL = {**_TW, **_US}
+# 只補「前後空白」這種確定安全的正規化，不做同義詞/別名猜測（那需要業務知識判斷，
+# 猜錯會把 A 公司誤配到 B 的代號，比查不到更糟）。原字典 key 不動，另建一份
+# 「去空白後的 key → 原代號」的查表當 fallback：Gemini 回傳的公司名稱偶爾夾帶
+# 前後空白（例如 "台積電 "），完全比對會直接跳過字典、退回不可靠的 Gemini 猜測
+# 代號——2026-08-01 Codex 審查發現，索羅門本地修正。
+_ALL_STRIPPED = {name.strip(): code for name, code in _ALL.items() if name.strip() != name}
+
+
+def _lookup(name: str) -> str | None:
+    # 舊版 _ALL.get(name, fallback) 對非字串 hashable 值（例如 Gemini 萬一吐出數字
+    # 而不是字串）只會查不到、回傳 fallback，不會拋例外；新版多了 .strip()，
+    # 沒有這道防護會對非字串輸入直接 AttributeError——2026-08-01 Codex 審查發現，
+    # 索羅門本地修正，確保新寫法至少不比舊寫法更容易炸掉。
+    if not isinstance(name, str) or not name:
+        return None
+    if name in _ALL:
+        return _ALL[name]
+    stripped = name.strip()
+    if stripped in _ALL:
+        return _ALL[stripped]
+    return _ALL_STRIPPED.get(stripped)
 
 
 def resolve(name: str, fallback: str = "Unknown") -> str:
     """用公司名稱查代號；查不到回傳 fallback。"""
-    return _ALL.get(name, fallback)
+    return _lookup(name) or fallback
 
 
 def resolve_code(stock_name: str, current_code: str) -> str:
     """字典有紀錄的公司一律信字典（蓋掉 Gemini 猜測的代號，常見上市/上櫃尾綴搞混）；
     字典沒有才在 current_code 是 Unknown 時嘗試用名稱補齊。"""
-    known = _ALL.get(stock_name)
+    known = _lookup(stock_name)
     if known:
         return known
     if current_code and current_code != "Unknown":

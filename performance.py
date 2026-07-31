@@ -19,12 +19,19 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 _EPISODES_URL  = "https://whatmkreallysaid.com/episodes.json"
 _episodes_cache: dict[str, str] = {}
+# 「已經試過載入」跟「快取有內容」是兩件事——原本只用 _episodes_cache 是否為空
+# dict 判斷「要不要載入」，本地檔跟網路都失敗時 _episodes_cache 會維持空 dict，
+# 之後每呼叫一次 _episode_date()（在 _fill_entry_prices() 的迴圈裡對每一筆訊號都會
+# 呼叫）就會重新試一次本地檔+網路，網路連不上時等於每筆訊號都多等一次 15 秒逾時。
+# 2026-08-01 索羅門診斷 + Codex 審查一起發現，純本地邏輯修正，不改變成功時的行為。
+_episodes_load_attempted = False
 
 
 def _load_episodes() -> dict[str, str]:
-    global _episodes_cache
-    if _episodes_cache:
+    global _episodes_cache, _episodes_load_attempted
+    if _episodes_cache or _episodes_load_attempted:
         return _episodes_cache
+    _episodes_load_attempted = True
 
     def _parse(data):
         return {f"EP{e['number']}": e["date"] for e in data if e.get("date") and e.get("number")}
@@ -44,7 +51,7 @@ def _load_episodes() -> dict[str, str]:
         data = json.loads(urllib.request.urlopen(req, timeout=15).read().decode("utf-8"))
         _episodes_cache = _parse(data)
     except Exception as ex:
-        print(f"[warn] episodes.json 載入失敗：{ex}")
+        print(f"[warn] episodes.json 載入失敗，本次執行不再重試：{ex}")
     return _episodes_cache
 
 
@@ -86,6 +93,13 @@ def _fill_entry_prices():
         requests.append((code, entry_d))
         meta.append({"id": r["id"], "code": code, "date": entry_d})
 
+    # meta 保留一筆對一筆（後面要用各自的 id 寫回），但送進批次查價的 requests
+    # 去重——同一檔股票同一個進場日期，可能被好幾筆訊號同時引用（例如多次提到
+    # 同一檔且剛好同一集），去重前會對同一個 key 重複查快取/重複打 yfinance。
+    # 2026-08-01 索羅門診斷 + Codex 審查一起發現，純本地邏輯修正，dict.fromkeys
+    # 保留原本出現順序，回傳值仍是 dict 查表，去不去重不影響最終結果正確性。
+    requests = list(dict.fromkeys(requests))
+
     prices = batch_get_close_on_or_before(requests)
 
     # 查不到價格時，自動改用另一種台股上市/上櫃尾綴重試
@@ -95,6 +109,7 @@ def _fill_entry_prices():
             alt = _swap_tw_suffix(m["code"])
             if alt:
                 retry_requests.append((alt, m["date"]))
+    retry_requests = list(dict.fromkeys(retry_requests))
     if retry_requests:
         alt_prices = batch_get_close_on_or_before(retry_requests)
         for m in meta:

@@ -42,7 +42,15 @@ def run(args):
     files = load_transcripts(from_ep=from_ep, last_n=0 if from_ep else args.last)
     if files:
         logging.info(f"待處理 {len(files)} 集")
-        run_batch(files, dry_run=args.dry_run)
+        _done, _skipped, failed = run_batch(files, dry_run=args.dry_run)
+        if failed:
+            # 原本回傳值完全沒被讀，失敗集數會被靜默吞掉：後續報告仍照跑、
+            # 「更新完成」照樣印出，使用者不會知道有集數分析失敗——2026-08-01
+            # 索羅門診斷 + Codex 審查一起發現。這裡先只加明顯警告，不改變
+            # 後續是否寄信/報告是否照跑（那是更大的行為變更，這次不做，
+            # 只確保「有失敗」這件事不會被靜默吞掉）。
+            logging.warning(f"⚠ 有 {failed} 集分析失敗，後續報告仍會照跑——"
+                             f"上面日誌裡有各集的失敗原因，建議手動確認")
     else:
         logging.info("無新集數需要分析")
 
@@ -84,6 +92,10 @@ def main():
     parser.add_argument("--report-last", type=int, default=50, help="email 只顯示最新 N 集（預設 50）")
     parser.add_argument("--detail-url", default="",           help="詳細版 URL（加在 email 按鈕）")
     args = parser.parse_args()
+    if args.last < 0 or args.from_ep < 0 or args.report_last < 0:
+        # 負數不報錯，但下游全靠 list[-N:] 切片，語意跟使用者想少跑幾集的直覺
+        # 相反——2026-08-01 索羅門診斷 + Codex 審查一起發現，三個數量型參數一起擋。
+        parser.error("--last / --from-ep / --report-last 不可為負數")
     run(args)
 
 

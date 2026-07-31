@@ -116,6 +116,11 @@ def main():
     parser.add_argument("--from", dest="from_ep", type=str, default="", help="從 EP{n} 開始，例如 --from EP100")
     parser.add_argument("--dry-run", action="store_true", help="只列清單，不呼叫 API")
     args = parser.parse_args()
+    if args.last < 0:
+        # 負數不會報錯，Python list[-N:] 語意是「除了前 N-1 筆外幾乎全部」，跟使用者
+        # 直覺（想少跑幾集）完全相反——2026-08-01 索羅門診斷 + Codex 審查一起發現，
+        # 早點擋掉比讓它悄悄跑出不符預期的範圍好。
+        parser.error("--last 不可為負數")
 
     from_ep_num = 0
     if args.from_ep:

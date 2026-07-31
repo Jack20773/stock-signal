@@ -206,6 +206,10 @@ def main():
     parser.add_argument("--detail-url", default="",  help="詳細版 URL（加在 email 按鈕）")
     parser.add_argument("--to",         default="",  help="手動指定收件人（逗號分隔），會取代 REPORT_TO 且不寄給訂閱者清單")
     args = parser.parse_args()
+    if args.last < 0:
+        # 負數不報錯，但 run_report() 內部靠 eps[-last_n:] 取集數清單，Python 切片
+        # 語意是「除了前 N-1 筆外幾乎全部」，跟使用者想少看幾集的直覺相反。
+        parser.error("--last 不可為負數")
 
     run_report(
         ep_filter   = args.ep or None,
