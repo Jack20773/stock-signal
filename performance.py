@@ -170,6 +170,7 @@ def calc_performance() -> list[dict]:
     latest_cache = batch_get_latest_close(list(live_tickers))
 
     results = []
+    changed = []  # 2026-08-02 索羅門新增（任務第3項）：只有真的變動的列才送進 UPDATE
 
     for r in rows:
         code    = r.get("stock_code", "")
@@ -177,11 +178,22 @@ def calc_performance() -> list[dict]:
         entry_d = r.get("entry_date") or r.get("analysis_date")
         bm      = r.get("benchmark_ticker") or benchmark_for(code)
 
+        # 寫入前先記下這筆訊號目前存的值（SELECT * 已經帶出來了），跟這輪重新算出
+        # 的值比較，只有真的不同才放進 save_perf_results() 的 UPDATE 清單——原本
+        # 不論值變不變全部送進 execute_batch，等於每次全量跑一次 UPDATE 全部訊號。
+        # beat_benchmark 存的是 INTEGER(1/0/NULL)，這裡先正規化成同一種型別再比較。
+        old_snapshot = (
+            r.get("stock_return_pct"), r.get("benchmark_return_pct"),
+            r.get("beat_benchmark"), r.get("days_held"),
+        )
+
         if not entry_p or not entry_d or not code or code == "Unknown":
             r.update(dict.fromkeys(
                 ["stock_return_pct", "benchmark_return_pct", "beat_benchmark", "current_price", "days_held"]
             ))
             results.append(r)
+            if old_snapshot != (None, None, None, None):
+                changed.append(r)
             continue
 
         live_entry = hist_cache.get((code, entry_d)) or entry_p
@@ -231,7 +243,16 @@ def calc_performance() -> list[dict]:
             )
         results.append(r)
 
-    save_perf_results(results)
+        beat_repr = 1 if beat is True else (0 if beat is False else None)
+        new_snapshot = (stock_pct, bm_pct, beat_repr, days)
+        if new_snapshot != old_snapshot:
+            changed.append(r)
+
+    save_perf_results(changed)
+    logging.info(
+        f"績效比對：{len(rows)} 筆訊號，{len(changed)} 筆數值有變動送出 UPDATE"
+        f"（{len(rows) - len(changed)} 筆跟上次相同，跳過寫入）"
+    )
     return results
 
 
