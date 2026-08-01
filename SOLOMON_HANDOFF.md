@@ -17,6 +17,10 @@ episode_analysis 的 CREATE TABLE + 資料回填等你核准後才執行；第 1
 錯誤回應）+ 3 個建議項（REAL 精度誤判/重試註解不準/email 版也有 XSS 缺口），已經
 全部修正並重新驗證過，詳見下方 verification 與 autonomous_decisions。
 
+**DoD 達成後還有餘裕，觸發了自我精進條款**：查證 mock 測試的已知陷阱後，額外用一次
+真實（免費）yfinance 網路呼叫驗證了 Codex 提到的 `_download_multi()` 形狀假設風險，
+不是只停留在合成資料驗證——詳見下方 self_improvement_this_round。
+
 ＝＝＝ 以下是交接正文 ＝＝＝
 
 status: completed
@@ -171,11 +175,29 @@ deepseek_usd_spent_this_stage: 0（這輪沒有觸發需要 DeepSeek 覆核的�
   用 Codex 一次就抓到足夠問題，沒有另外需要盲測第二意見的重大自主決策）
 deepseek_usd_spent_total: 0
 
-self_improvement_this_round: 未觸發——DoD 全部完成後還有約 75 分鐘餘裕，理論上滿足
-  觸發條件，但這次選擇把餘裕時間用在「完工前 Codex 審查抓到問題後的即時修正+重新
-  驗證」上（見上方 verification 與 autonomous_decisions），這件事本身已經是章程
-  「完成的定義」第2條的硬性要求，優先序高於自我精進條款；如果之後還有餘裕會回頭
-  補（目前這份交接檔完成後若還有時間，會另外執行自我精進條款並更新這個欄位）。
+self_improvement_this_round: 已觸發——DoD 全部完成、完工前 Codex 修正也做完後還有
+  餘裕。上網查證「mocking database/API best practices」，關鍵發現：mock 測試最大的
+  已知陷阱是「mock 假設沒有真的貼近真實系統行為」，測試套件全綠但正式環境仍可能
+  出錯（來源見下方）。對照這輪 remaining_risk 第2點（`_download_multi()` 對
+  yfinance MultiIndex 回傳形狀的處理只驗過合成資料，沒驗過真實 API 回傳）——
+  yfinance 是免費 API、不牴觸「絕不呼叫真正會花錢的 API」這條紅線（那條只針對
+  Gemini），所以額外撥一小段時間做了一次**真實 yfinance 網路呼叫**（DB 寫入仍
+  mock，不動正式庫）驗證 `_download_multi()`/`batch_get_close_on_or_before()`/
+  `batch_get_latest_close()` 對真實回傳資料的處理：AAPL（單一美股）、2330.TW
+  （台股）、SPY 三檔同時批次查詢都正確算出合理價格（AAPL≈308.91、2330.TW≈2425.0、
+  SPY≈747.03），單一/多檔 ticker 的 MultiIndex 形狀處理都正確，不是只驗證過
+  mock 假設。已把這個發現更新進下方 remaining_risk（原本的「只驗過合成資料」
+  風險現在降級為「已用真實API驗證過核心邏輯，但仍只測了少數幾個知名ticker，
+  沒測過下市股/查無資料的邊界情況」）。
+  **調整了什麼**：這是這次驗證方式的小幅調整（用真實免費API多做一層驗證），
+  沒有動任何程式碼邏輯本身，可以從這份交接檔的這段文字直接理解調整內容，不需要
+  額外復原機制。
+  **建議未來索羅門任務參考**：驗證外部依賴（第三方API/套件）的介面假設時，如果
+  該依賴呼叫本身免費、不牴觸任何紅線，優先用一次真實呼叫驗證「形狀假設」是否
+  成立，而不是只用合成資料驗證「邏輯假設」——兩者驗證的是不同層次的風險，mock
+  再完整也無法取代「真實系統真的長這樣」這件事本身需要至少驗證一次。
+  來源：https://keploy.io/blog/community/mock-testing （"if mocks don't closely
+  reflect real responses, tests may pass consistently while real systems fail"）。
 
 autonomous_decisions（本輪透過「建議項目自主執行機制」做的決定）：
 
@@ -289,13 +311,18 @@ blocked_items（命中「絕對紅線」而隔離、需要你核准才能繼續�
 
 remaining_risk（目前已知還有什麼風險/沒驗證到的地方）：
 
-  1. 所有驗證都是合成資料 + mock，沒有一次是連線真實 DB 或真實 yfinance 網路
-     跑出來的結果（刻意選擇，理由見上方 autonomous_decisions 第2點）。真正
-     部署後第一次跑 update.py/batch.py 才是這輪改動的第一次「真實環境」驗證，
-     建議你先用 `--dry-run` 或小範圍（例如 `--last 5`）跑一次確認。
-  2. prices.py::_download_multi() 對 yfinance 非標準/退化回傳形狀（Codex 審查
-     指出的邊界情況）沒有被合成資料涵蓋，目前用 try/except KeyError 靜默回傳
-     None（不會整批崩潰，但可能漏抓某些 ticker 的價格且不易發現）。
+  1. DB 寫入路徑全程 mock，沒有一次連線真實 DB（刻意選擇，理由見上方
+     autonomous_decisions 第2點）。真正部署後第一次跑 update.py/batch.py 才是
+     這輪改動第一次連到真實 DB 的驗證，建議你先用 `--dry-run` 或小範圍
+     （例如 `--last 5`）跑一次確認。
+  2.（自我精進環節已補強，見上方 self_improvement_this_round）prices.py::
+     _download_multi() 對 yfinance 回傳形狀的處理，已經用真實 yfinance 網路
+     呼叫驗證過 AAPL/2330.TW/SPY 這幾檔知名股票的單一+多檔批次查詢都正確，
+     不是只驗過合成資料的假設。**仍未驗證的邊界情況**：下市股/查無資料的
+     ticker 在真實 yfinance 呼叫下的實際回傳形狀（合成資料驗證過這個分支的
+     「空 DataFrame」假設，但沒有用真實 API 對一檔已知下市股驗證過），以及
+     yfinance 版本升級後回傳形狀是否會變動——這兩點仍是已知風險，留給你之後
+     決定要不要補測。
   3. analyzer.py 的結構化驗證目前只確保 extracted_signals「存在且是 list」，
      list 裡的元素如果是字串/數字（不是預期的 dict），還是會在 database.py 的
      for 迴圈裡對 `.get()` 出錯——Codex 標成「建議」非阻塞，這次沒有加更深一層
