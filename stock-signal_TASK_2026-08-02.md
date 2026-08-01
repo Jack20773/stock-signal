@@ -1,5 +1,6 @@
 # stock-signal 索羅門任務檔 — 2026-08-02
 
+> **本輪（2026-08-01 19:47 派工，2 小時窗口）版本錨點 commit：`55a463e`**——判斷是否偏離已定案技術設計時拿這個當客觀對照。
 > 讀完本檔前，先讀通用章程 `D:\All claude\000_Agent\006_institution\pm_agent_solomon.md`。
 > 本輪背景：上一輪（2026-08-01，commit `bc1b63a`）Codex 審查抓到 21 項，A 類 9 項已修完，B 類 1 項已唯讀驗證乾淨，**C 類 14 項這次要正式排入實作**（完整原文列在 `SOLOMON_HANDOFF.md` 舊版——已被本檔覆寫前的內容，git log 可查 `bc1b63a` 當時版本）。
 
