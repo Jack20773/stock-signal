@@ -440,6 +440,20 @@ function toggleEp(ep) {{
   if (hdr) hdr.innerHTML = hdr.innerHTML.replace(/[▾▸]/, collapsed ? '▾' : '▸');
 }}
 
+// ── HTML escape（2026-08-02 索羅門新增，任務第10項）──────────────────────
+// SIGNALS_DATA 裡的 name/code/tag/raw_reason/quote 來自 Gemini 分析逐字稿的
+// 自由文字輸出，不是這個網頁的使用者直接輸入，但這份 HTML 最終會 push 到
+// GitHub Pages 公開頁面（同一份風險見上面 _json_for_script() 的說明）——
+// renderDetailTab()/renderStockTab() 用樣板字串組 innerHTML 時，這幾個欄位
+// 原本沒有跳脫直接塞進 HTML，如果分析文字剛好含有 <script>/<img onerror=...>
+// 這類字面內容，會被瀏覽器當成真的標籤解析，等於儲存型 XSS。
+function escapeHtml(str) {{
+  if (str == null) return '';
+  return String(str).replace(/[&<>"']/g, c => ({{
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }})[c]);
+}}
+
 // ── 以集數 Table：純前端從 SIGNALS_DATA render（與全集 HTML 分開存放會浪費一倍空間）──
 function renderDetailTab() {{
   const pctColor  = v => v == null ? '#888' : (v >= 0 ? '#d9534f' : '#2b8a3e');
@@ -487,33 +501,33 @@ function renderDetailTab() {{
       const kw = [ep, String(epNum), s.name, s.code, s.code.split('.')[0], s.raw_reason, s.quote]
         .filter(Boolean).join(' ').replace(/"/g, ' ').replace(/\\n/g, ' ');
 
-      html += `<tr class="ep-row ep-${{ep}}" data-ep="${{ep}}" data-epnum="${{epNum}}" data-tag="${{s.tag}}" data-mkt="${{s.mkt}}"
+      html += `<tr class="ep-row ep-${{ep}}" data-ep="${{ep}}" data-epnum="${{epNum}}" data-tag="${{escapeHtml(s.tag)}}" data-mkt="${{s.mkt}}"
           data-spct="${{sPctVal}}" data-bpct="${{bPctVal}}" data-beat="${{beatVal}}" data-days="${{s.days || -1}}"
-          data-name="${{s.name}}" data-code="${{s.code}}" data-kw="${{kw}}" style="border-bottom:none;">
+          data-name="${{escapeHtml(s.name)}}" data-code="${{escapeHtml(s.code)}}" data-kw="${{escapeHtml(kw)}}" style="border-bottom:none;">
         <td class="hm" style="padding:9px 12px 4px;font-weight:bold;color:#1a252f;white-space:nowrap;padding-left:24px;">${{ep}}</td>
-        <td class="hm" style="padding:9px 12px 4px;color:#888;font-size:14px;">${{s.tag}}</td>
-        <td style="padding:9px 12px 4px;font-weight:bold;">${{s.name}}${{mktBadge}}<br>
-          <span style="color:#aaa;font-size:13px;">${{s.code}}</span></td>
+        <td class="hm" style="padding:9px 12px 4px;color:#888;font-size:14px;">${{escapeHtml(s.tag)}}</td>
+        <td style="padding:9px 12px 4px;font-weight:bold;">${{escapeHtml(s.name)}}${{mktBadge}}<br>
+          <span style="color:#aaa;font-size:13px;">${{escapeHtml(s.code)}}</span></td>
         <td style="padding:9px 12px 4px;color:#666;font-size:14px;">${{actionFull(s.action, s.conf)}}${{shortBadge}}</td>
         <td class="hm" style="padding:9px 12px 4px;">${{s.entry_date || 'N/A'}}<br>
           <span style="color:#aaa;font-size:13px;">${{entryP}} → ${{currP}}</span></td>
         <td style="padding:9px 12px 4px;font-weight:bold;color:${{pctColor(s.s_pct)}};">${{fmtPct(s.s_pct)}}</td>
         <td class="hm" style="padding:9px 12px 4px;color:#666;">${{fmtPct(s.b_pct)}}<br>
-          <span style="color:#bbb;font-size:12px;">${{s.bm}}</span></td>
+          <span style="color:#bbb;font-size:12px;">${{escapeHtml(s.bm)}}</span></td>
         <td class="hm" style="padding:9px 12px 4px;text-align:center;color:#888;font-size:13px;">${{daysDisp}}</td>
         <td style="padding:9px 12px 4px;">${{beatFull(s.beat)}}</td>
       </tr>`;
 
       if (s.raw_reason || s.quote) {{
         const quoteHtml = s.quote
-          ? `<div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「${{s.quote}}」</div>`
+          ? `<div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:14px;">「${{escapeHtml(s.quote)}}」</div>`
           : '';
-        html += `<tr class="ep-row ep-${{ep}} reason-row" data-ep="${{ep}}" data-epnum="${{epNum}}" data-tag="${{s.tag}}" data-mkt="${{s.mkt}}"
+        html += `<tr class="ep-row ep-${{ep}} reason-row" data-ep="${{ep}}" data-epnum="${{epNum}}" data-tag="${{escapeHtml(s.tag)}}" data-mkt="${{s.mkt}}"
             data-spct="${{sPctVal}}" data-bpct="${{bPctVal}}" data-beat="${{beatVal}}"
-            data-name="${{s.name}}" data-code="${{s.code}}" data-kw="${{kw}}" style="background:#f8f9fa;">
+            data-name="${{escapeHtml(s.name)}}" data-code="${{escapeHtml(s.code)}}" data-kw="${{escapeHtml(kw)}}" style="background:#f8f9fa;">
           <td colspan="9" style="padding:7px 12px 10px 32px;border-bottom:1px solid #eee;">
             <span style="font-size:14px;font-weight:bold;color:#3b6ea5;">主委觀點</span>
-            <span style="font-size:14px;color:#555;margin-left:6px;">${{s.raw_reason}}</span>
+            <span style="font-size:14px;color:#555;margin-left:6px;">${{escapeHtml(s.raw_reason)}}</span>
             ${{quoteHtml}}</td></tr>`;
       }}
     }});
@@ -523,15 +537,30 @@ function renderDetailTab() {{
   collapseOldEps();
 }}
 
+// ── ep → rows[] 索引（2026-08-02 索羅門新增，任務第4項）：原本每個集數各自
+// document.querySelectorAll('.ep-' + ep) 掃一次全部列，集數(E)×列數(L) 規模一大
+// 就是 O(E×L)；改成一次 O(L) 掃過 .ep-row 依 dataset.ep 分組建成 Map，後面
+// collapseOldEps()/syncEpHeaders()/sortBy() 都改查這個索引，不再各自重新掃描。
+function _buildEpRowIndex() {{
+  const map = new Map();
+  document.querySelectorAll('.ep-row').forEach(r => {{
+    const ep = r.dataset.ep;
+    if (!map.has(ep)) map.set(ep, []);
+    map.get(ep).push(r);
+  }});
+  return map;
+}}
+
 // ── 預設只展開最新 3 集（搜尋/篩選中不收合，避免結果被藏）──
 function collapseOldEps() {{
   const filtering = searchFilter || tagFilter !== 'all' || mktFilter !== 'all'
     || beatFilter !== 'all' || daysFilter !== 0;
   if (filtering) return;
+  const epRowIndex = _buildEpRowIndex();
   document.querySelectorAll('.ep-header').forEach((hdr, i) => {{
     if (i < 3) return;
     const ep = hdr.dataset.ep;
-    document.querySelectorAll('.ep-' + CSS.escape(ep)).forEach(r => r.classList.add('hidden'));
+    (epRowIndex.get(ep) || []).forEach(r => r.classList.add('hidden'));
     const td = hdr.querySelector('td');
     if (td) td.innerHTML = td.innerHTML.replace('▾', '▸');
   }});
@@ -587,9 +616,10 @@ function applyAllFilters() {{
   syncEpHeaders();
 }}
 function syncEpHeaders() {{
+  const epRowIndex = _buildEpRowIndex();
   document.querySelectorAll('.ep-header').forEach(hdr => {{
     const ep      = hdr.dataset.ep;
-    const visible = document.querySelectorAll('.ep-' + ep + ':not(.hidden)').length;
+    const visible = (epRowIndex.get(ep) || []).filter(r => !r.classList.contains('hidden')).length;
     hdr.style.display = visible === 0 ? 'none' : '';
   }});
 }}
@@ -610,25 +640,32 @@ function sortBy(col) {{
     if (col === 'tag')   return r.dataset.tag || '';
     return 0;
   }};
+  // 2026-08-02 索羅門修正（任務第4項）：原本每個集數各自 querySelectorAll('.ep-' + ep)
+  // 掃一次全部列，集數×列數規模一大就是 O(E×L)；改成一次 _buildEpRowIndex() 建好
+  // ep→rows[] 索引，且最後改用 DocumentFragment 一次性掛回 DOM（取代逐一
+  // tbody.appendChild 造成的多次重排）。
+  const epRowIndex = _buildEpRowIndex();
+  const frag = document.createDocumentFragment();
   if (col === 'epnum') {{
     const headers = [...tbody.querySelectorAll('.ep-header')];
     const groups  = headers.map(h => {{
       const ep = h.dataset.ep;
-      return {{ header: h, rows: [...tbody.querySelectorAll('.ep-' + CSS.escape(ep))], epnum: parseInt(ep.replace(/[^0-9]/g,'')) }};
+      return {{ header: h, rows: epRowIndex.get(ep) || [], epnum: parseInt(ep.replace(/[^0-9]/g,'')) }};
     }});
     groups.sort((a,b) => (a.epnum - b.epnum) * dir);
-    groups.forEach(g => {{ tbody.appendChild(g.header); g.rows.forEach(r => tbody.appendChild(r)); }});
+    groups.forEach(g => {{ frag.appendChild(g.header); g.rows.forEach(r => frag.appendChild(r)); }});
   }} else {{
     const headers = [...tbody.querySelectorAll('.ep-header')];
     headers.map(h => {{
       const ep = h.dataset.ep;
-      return {{ header: h, rows: [...tbody.querySelectorAll('.ep-' + CSS.escape(ep))] }};
+      return {{ header: h, rows: epRowIndex.get(ep) || [] }};
     }}).forEach(g => {{
       g.rows.sort((a,b) => (rowVal(a) > rowVal(b) ? dir : rowVal(a) < rowVal(b) ? -dir : 0));
-      tbody.appendChild(g.header);
-      g.rows.forEach(r => tbody.appendChild(r));
+      frag.appendChild(g.header);
+      g.rows.forEach(r => frag.appendChild(r));
     }});
   }}
+  tbody.appendChild(frag);
 }}
 
 // ── 以標的 JS 動態渲染 ────────────────────────────────────
@@ -695,7 +732,7 @@ function renderStockTab() {{
     const beatLbl = s => s.beat===true ? '✅' : s.beat===false ? '❌' : '⏳';
     const detailHtml = g.sigs.map(s => {{
       const quoteHtml = s.quote
-        ? `<div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「${{s.quote}}」</div>`
+        ? `<div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「${{escapeHtml(s.quote)}}」</div>`
         : '';
       return `
       <tr class="sd-${{idx}}" style="display:none;background:#f8f9fa;">
@@ -705,14 +742,14 @@ function renderStockTab() {{
           <span style="margin:0 6px;color:#ccc;">|</span>
           <span style="color:${{fc(s.s_pct)}};">${{fp(s.s_pct)}}</span>
           <span style="margin-left:6px;">${{beatLbl(s)}}</span>
-          ${{s.raw_reason ? `<div style="margin-top:5px;color:#555;">${{s.raw_reason}}</div>` : ''}}
+          ${{s.raw_reason ? `<div style="margin-top:5px;color:#555;">${{escapeHtml(s.raw_reason)}}</div>` : ''}}
           ${{quoteHtml}}
         </td>
       </tr>`;
     }}).join('');
     return `<tr style="border-bottom:1px solid #f0f0f0;cursor:pointer;" onclick="toggleSD(${{idx}}, this)">
       <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">
-        <span class="sd-arrow-${{idx}}">▸</span> ${{g.name}}<br><span style="color:#aaa;font-size:13px;">${{g.code}}</span></td>
+        <span class="sd-arrow-${{idx}}">▸</span> ${{escapeHtml(g.name)}}<br><span style="color:#aaa;font-size:13px;">${{escapeHtml(g.code)}}</span></td>
       <td style="padding:10px 8px;color:#888;font-size:13px;">${{g.mkt}}</td>
       <td style="padding:10px 8px;text-align:center;font-weight:bold;">${{g.total}}</td>
       <td class="hm" style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">${{bb}}</td>
