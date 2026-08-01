@@ -53,16 +53,21 @@ def analyze(transcript: str) -> dict:
     except json.JSONDecodeError as e:
         raise GeminiFormatError(f"Gemini 回傳內容不是合法 JSON：{e}") from e
 
-    # 最小結構化驗證：至少要是 dict，且 extracted_signals（如果有）要是 list，
-    # 不然後面 save_result() 對 result.get("extracted_signals", []) 做 for 迴圈
-    # 時，如果這個欄位是字串或數字，會是更難懂的 TypeError，不如在這裡先攔下來、
-    # 講清楚是 Gemini 輸出格式不對。不驗證欄位內容細節（那是 save_result() 自己
-    # 已有的逐筆驗證，這裡只確保最外層形狀正確）。
+    # 最小結構化驗證：至少要是 dict，且 extracted_signals 一定要存在且是 list
+    # （SYSTEM_PROMPT 本身就規定這是必填欄位，即使 0 個訊號也要回傳空陣列，
+    # 見 prompt.py）。2026-08-02 完工前 Codex 覆核抓到：原本只在這個欄位「存在
+    # 時」驗證型別，如果 Gemini 回傳缺少這個欄位的錯誤格式（例如 {"error":"..."}），
+    # 會被當成合法輸出放行，save_result() 再用 result.get("extracted_signals", [])
+    # 補一個空陣列預設值，等於把「Gemini 這次根本沒分析成功」誤判成「這集真的
+    # 是 0 訊號」——搭配 episode_analysis 新增的「永久記錄」語意，這集會被永遠
+    # 跳過、再也不會重跑，比舊版影響更嚴重，所以改成欄位缺席也要當格式錯誤處理，
+    # 不只是型別不對才擋。
     if not isinstance(parsed, dict):
         raise GeminiFormatError(f"Gemini 回傳的 JSON 最外層不是物件（dict），而是 {type(parsed).__name__}")
-    if "extracted_signals" in parsed and not isinstance(parsed["extracted_signals"], list):
+    if not isinstance(parsed.get("extracted_signals"), list):
         raise GeminiFormatError(
-            f"Gemini 回傳的 extracted_signals 不是陣列，而是 {type(parsed['extracted_signals']).__name__}"
+            "Gemini 回傳缺少 extracted_signals 欄位，或型別不是陣列"
+            f"（實際回傳的最外層欄位：{sorted(parsed.keys())}）"
         )
 
     return parsed

@@ -182,8 +182,15 @@ def calc_performance() -> list[dict]:
         # 的值比較，只有真的不同才放進 save_perf_results() 的 UPDATE 清單——原本
         # 不論值變不變全部送進 execute_batch，等於每次全量跑一次 UPDATE 全部訊號。
         # beat_benchmark 存的是 INTEGER(1/0/NULL)，這裡先正規化成同一種型別再比較。
+        # 2026-08-02 完工前 Codex 覆核指出：DB 裡 stock_return_pct/benchmark_return_pct
+        # 是 PostgreSQL REAL（單精度 float4），讀回 Python 後可能是 5.170000076...
+        # 這種精度漂移值，跟這輪新算出、用 round(x,2) 產生的雙精度 float 直接比較
+        # 幾乎必然「看起來不同」，讓這次優化在浮點欄位上大打折扣（正確性不受影響，
+        # 只是變動判斷過於保守）——比較前先把舊值也 round(2) 校正到跟新值同一個
+        # 精度基準再比。
         old_snapshot = (
-            r.get("stock_return_pct"), r.get("benchmark_return_pct"),
+            round(r["stock_return_pct"], 2) if r.get("stock_return_pct") is not None else None,
+            round(r["benchmark_return_pct"], 2) if r.get("benchmark_return_pct") is not None else None,
             r.get("beat_benchmark"), r.get("days_held"),
         )
 

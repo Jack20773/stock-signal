@@ -2,12 +2,22 @@
 HTML 報告生成模組（詳細版＋Email 版）。
 由 notifier.py 呼叫；不直接執行。
 """
+import html
 import json
 import re
 import statistics
 from datetime import date
 
 # ── 小工具 ──────────────────────────────────────────────────────────────────
+
+
+def _esc(s) -> str:
+    """2026-08-02 完工前 Codex 覆核指出：generate_html_email() 把 Gemini 分析結果
+    的 stock_name/stock_code/raw_reason/exact_quote 直接用 f-string 塞進 email
+    HTML，完全沒有跳脫——詳細版（JS 端 escapeHtml()，見 renderDetailTab()/
+    renderStockTab()）已經修過同一類問題，這裡是 Python 端另一條輸出路徑，
+    同樣風險、需要同樣的防護。用 Python 內建 html.escape() 跳脫 & < > " '。"""
+    return html.escape(str(s or ""))
 
 def _json_for_script(data, **kw) -> str:
     """給要塞進 <script> 標籤內的 JSON 字串用，把 '<' 轉成 \\u003c。
@@ -872,16 +882,18 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
     for r in latest_signals:
         action  = r.get("action", "0")
         conf    = r.get("confidence_level", "")
-        name    = r.get("stock_name", "")
-        code    = r.get("stock_code", "")
-        ep      = r.get("episode_id", "")
+        name    = _esc(r.get("stock_name", ""))
+        code    = _esc(r.get("stock_code", ""))
+        ep      = _esc(r.get("episode_id", ""))
         reason  = (r.get("raw_reason") or "").strip()[:90]
         if reason and len(r.get("raw_reason", "")) > 90:
             reason += "..."
+        reason  = _esc(reason)
         quote   = (r.get("exact_quote") or "").strip()[:120]
         if quote and len(r.get("exact_quote", "")) > 120:
             quote += "..."
-        entry_d = r.get("entry_date") or ""
+        quote   = _esc(quote)
+        entry_d = _esc(r.get("entry_date") or "")
 
         if action == "+1" and conf == "High":
             badge_txt = "超級看好"

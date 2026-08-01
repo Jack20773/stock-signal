@@ -50,7 +50,13 @@ def _analyze_with_retry(transcript: str) -> dict:
             # 逾時/429/5xx 等 API/網路錯誤：用指數退避給伺服器時間恢復，跟格式
             # 錯誤分開處理，不能用同一套等待策略。
             if attempt < MAX_RETRIES - 1:
-                wait = 5 * (2 ** attempt)  # 5 → 10 → 20 秒
+                # 2026-08-02 完工前 Codex 覆核指出：這裡的舊註解寫「5 → 10 → 20 秒」，
+                # 但 MAX_RETRIES=3 搭配 range(3) 只會重試 2 次（第 3 次已經是最後一次
+                # 嘗試，attempt < MAX_RETRIES-1 為 False 會直接 raise，不會再等待），
+                # 實際等待序列是 5s → 10s，20 秒從來不會真的發生——修正註解跟實際行為
+                # 一致，不改變等待邏輯本身（想要真的等到 20 秒需要調大 MAX_RETRIES，
+                # 那是另一個要不要改的決定，這次先只修正說明文字）。
+                wait = 5 * (2 ** attempt)  # 5 → 10 秒（MAX_RETRIES=3 下只會用到這兩個值）
                 logging.warning(f"分析失敗（API/網路錯誤，第 {attempt+1}/{MAX_RETRIES} 次），{wait}s 後重試：{e}")
                 time.sleep(wait)
             else:
