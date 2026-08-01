@@ -33,14 +33,25 @@ MAX_RETRIES    = 3   # 單集最多重試次數
 
 
 def _analyze_with_retry(transcript: str) -> dict:
-    from analyzer import analyze  # lazy import，dry-run 時不需要 google.genai
+    from analyzer import analyze, GeminiFormatError  # lazy import，dry-run 時不需要 google.genai
     for attempt in range(MAX_RETRIES):
         try:
             return analyze(transcript)
+        except GeminiFormatError as e:
+            # 2026-08-02 索羅門新增（任務第9項）：格式錯誤（JSON 解析失敗/欄位形狀
+            # 不對）不是流量/逾時問題，指數退避等待對它沒有意義——用短固定等待，
+            # 主要目的只是給模型一次「換句話說」的機會（同樣輸入不保證每次輸出一致）。
+            if attempt < MAX_RETRIES - 1:
+                logging.warning(f"分析失敗（Gemini 輸出格式錯誤，第 {attempt+1}/{MAX_RETRIES} 次），2s 後重試：{e}")
+                time.sleep(2)
+            else:
+                raise
         except Exception as e:
+            # 逾時/429/5xx 等 API/網路錯誤：用指數退避給伺服器時間恢復，跟格式
+            # 錯誤分開處理，不能用同一套等待策略。
             if attempt < MAX_RETRIES - 1:
                 wait = 5 * (2 ** attempt)  # 5 → 10 → 20 秒
-                logging.warning(f"分析失敗（第 {attempt+1}/{MAX_RETRIES} 次），{wait}s 後重試：{e}")
+                logging.warning(f"分析失敗（API/網路錯誤，第 {attempt+1}/{MAX_RETRIES} 次），{wait}s 後重試：{e}")
                 time.sleep(wait)
             else:
                 raise
