@@ -61,10 +61,14 @@ def load_transcripts(from_ep: int = 0, last_n: int = 0) -> list[Path]:
 
 
 def load_analyzed_set() -> set[str]:
-    """一次載入所有已分析的 episode_id，避免每集開一次 DB。"""
+    """一次載入所有已分析的 episode_id，避免每集開一次 DB。
+
+    2026-08-02 索羅門改用 episode_analysis 表（而非 signals 表），這樣 0 訊號
+    的集數也會被記錄成「已分析」，不會被每次批次重新掃過、重打一次 Gemini。
+    """
     with _conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT DISTINCT episode_id FROM signals")
+            cur.execute("SELECT episode_id FROM episode_analysis")
             return {r["episode_id"] for r in cur.fetchall()}
 
 

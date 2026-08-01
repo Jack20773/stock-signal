@@ -125,6 +125,17 @@ def init_db():
                     CHECK (id = 1)
                 )
             """)
+            # 2026-08-02 索羅門新增：取代原本用 signals 表判斷「已分析」的邏輯。
+            # PRIMARY KEY 天生防併發重複插入（見 save_result() 的 INSERT ON CONFLICT
+            # DO NOTHING RETURNING 用法），且 0 訊號的集數也會有一筆紀錄，不會被
+            # batch.py 誤判成「還沒跑過」而每次重跑。
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS episode_analysis (
+                    episode_id   TEXT PRIMARY KEY,
+                    signal_count INTEGER NOT NULL,
+                    analyzed_at  TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
     _initialized = True
 
 
@@ -150,7 +161,13 @@ def list_active_subscribers() -> list[dict]:
 
 
 def save_result(result: dict) -> int:
-    """儲存分析結果；若該集數已有訊號則跳過並回傳 -1。"""
+    """儲存分析結果；若該集數已分析過（不論當初萃取到 0 個還是多個訊號）則跳過並回傳 -1。
+
+    用 episode_analysis 的 INSERT ... ON CONFLICT DO NOTHING RETURNING 判斷是否
+    「第一個拿到這集」——PRIMARY KEY 讓這個判斷本身具備並發安全性（兩個進程同時
+    處理同一集時，只有一個會拿到 RETURNING 的列，另一個直接跳過），不像舊版
+    「SELECT COUNT 再 INSERT」中間有 race window。
+    """
     episode_id    = result.get("episode_id", "Unknown")
     analysis_date = result.get("analysis_date", "")
     signals       = result.get("extracted_signals", [])
@@ -158,9 +175,15 @@ def save_result(result: dict) -> int:
     with _conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT COUNT(*) FROM signals WHERE episode_id=%s", (episode_id,)
+                """
+                INSERT INTO episode_analysis (episode_id, signal_count)
+                VALUES (%s, 0)
+                ON CONFLICT (episode_id) DO NOTHING
+                RETURNING episode_id
+                """,
+                (episode_id,),
             )
-            if cur.fetchone()["count"] > 0:
+            if cur.fetchone() is None:
                 return -1
 
             saved = 0
@@ -206,6 +229,11 @@ def save_result(result: dict) -> int:
                     json.dumps(s.get("secondary_tags", []), ensure_ascii=False),
                 ))
                 saved += 1
+
+            cur.execute(
+                "UPDATE episode_analysis SET signal_count=%s WHERE episode_id=%s",
+                (saved, episode_id),
+            )
 
     return saved
 
