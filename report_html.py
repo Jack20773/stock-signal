@@ -43,6 +43,39 @@ def _ep_num(ep: str) -> int:
     return int(m.group()) if m else 0
 
 
+# 三個獨立靜態頁面（報告/關注度/逐字稿）共用的導覽 tab 列（2026-08-02 索羅門
+# 新增，任務1e）。三頁各自獨立生成（無SPA路由、無共用JS bundle），「分頁籤」
+# 用「視覺上像tab、實際是三個獨立超連結」實作，href 對應 GitHub Pages 部署後
+# 的實際檔名（見 .github/workflows/*.yml：report_detail.html→index.html、
+# report_attention.html→attention.html、report_transcripts.html→
+# transcripts.html）。用同一個函式產生，避免三處各寫一份風格漂移。
+# Email版（generate_html_email()）不加這個——Email是獨立情境，比照1e任務檔
+# 明確排除慣例。
+_NAV_TABS = (
+    ("report",      "index.html",       "📊 訊號報告"),
+    ("attention",   "attention.html",   "🔥 目前關注度"),
+    ("transcripts", "transcripts.html", "📄 逐字稿"),
+)
+
+
+def _render_nav_tabs(active: str) -> str:
+    items = "".join(
+        f'<a href="{href}" class="nav-tab{" nav-tab-active" if key == active else ""}">{label}</a>'
+        for key, href, label in _NAV_TABS
+    )
+    return f'<div class="nav-tabs">{items}</div>'
+
+
+_NAV_TABS_CSS = """
+  .nav-tabs{display:flex;gap:6px;padding:8px 12px;background:#14202b;}
+  .nav-tab{flex:1;text-align:center;padding:8px 4px;border-radius:6px;font-size:13px;
+    color:#b3c1cd;text-decoration:none;background:rgba(255,255,255,.06);white-space:nowrap;}
+  .nav-tab:hover{background:rgba(255,255,255,.12);}
+  .nav-tab-active{background:#2b6cb0;color:#fff;font-weight:bold;}
+  @media(max-width:600px){.nav-tab{font-size:11px;padding:7px 2px;}}
+"""
+
+
 def _mini_bar(pct: float, color: str, label: str, n: int) -> str:
     w = min(max(round(pct), 0), 100)
     c = color if pct >= 50 else "#2b8a3e"
@@ -283,6 +316,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     .card-grid{{grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:8px;padding:10px 10px;}}
     .sc-ret{{font-size:19px;}}
   }}
+{_NAV_TABS_CSS}
 </style>
 <style id="dyn-font"></style>
 </head>
@@ -293,15 +327,11 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   <div style="background:#1a252f;padding:20px;text-align:center;color:#fff;border-radius:8px 8px 0 0;">
     <div style="font-size:22px;font-weight:bold;">股癌訊號勝率追蹤</div>
     <div style="color:#b3c1cd;font-size:13px;margin-top:4px;">{title} · {today} · 最新分析至 {latest_ep}</div>
-    <!-- 2026-08-02 索羅門新增：連到第8節新頁面的入口，否則使用者永遠不會知道
-         這個頁面存在（完工前 Codex 審查指出 attention.html 沒有任何頁面連過去，
-         等於功能做了但沒人找得到）。 -->
-    <div style="margin-top:8px;">
-      <a href="attention.html" style="display:inline-block;font-size:12px;color:#b3c1cd;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:4px 12px;text-decoration:none;">
-        查看目前節目關注度排行 →
-      </a>
-    </div>
   </div>
+  <!-- 2026-08-02 索羅門新增（任務1e）：三頁並列tab導覽，取代原本只有一行
+       小字連結到attention.html的做法（完工前Codex審查曾指出小字連結太不
+       顯眼），三個頁面共用 _render_nav_tabs()，避免風格漂移。 -->
+  {_render_nav_tabs('report')}
 
   <!-- Stats 第一列 -->
   <div style="display:flex;text-align:center;border-bottom:1px solid #eee;">
@@ -1257,6 +1287,7 @@ def generate_html_attention(rows: list[dict], title: str = "目前節目關注�
   .att-card.hidden{{display:none;}}
   .filter-btn{{margin:2px 3px;padding:5px 12px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:13px;}}
   .btn-active{{background:#1a252f!important;color:#fff!important;border-color:#1a252f!important;}}
+{_NAV_TABS_CSS}
 </style>
 </head>
 <body>
@@ -1265,6 +1296,7 @@ def generate_html_attention(rows: list[dict], title: str = "目前節目關注�
     <div style="font-size:20px;font-weight:bold;">{_esc(title)}</div>
     <div style="color:#b3c1cd;font-size:13px;margin-top:4px;">{today}</div>
   </div>
+  {_render_nav_tabs('attention')}
 
   <!-- 首屏警語（任務檔8b明確要求，定位差異必須在介面上明確標示） -->
   <div style="margin:16px;padding:12px 16px;background:#fff8e1;border:1px solid #ffe082;border-radius:8px;font-size:13px;color:#8a6d1f;line-height:1.6;">
