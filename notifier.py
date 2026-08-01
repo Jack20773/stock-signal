@@ -32,7 +32,10 @@ load_dotenv(override=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
                     handlers=[logging.StreamHandler(sys.stdout)])
 
-from report_html import generate_html_detail, generate_html_email, generate_html_attention, _ep_num
+from report_html import (
+    generate_html_detail, generate_html_email, generate_html_attention,
+    generate_html_transcripts, export_transcripts_data, _ep_num,
+)
 from database import list_active_subscribers, save_latest_report, list_signals
 from attention import compute_attention
 
@@ -210,6 +213,20 @@ def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
             logging.info(f"目前關注度頁面已更新：{len(attention_rows)} 檔標的")
         except Exception as e:
             logging.error(f"生成 report_attention.html 失敗（不影響主報告）：{e}")
+
+        # 逐字稿詳細頁（2026-08-02 索羅門新增，任務1d）——同樣最小連帶修改，
+        # 失敗只記警告不影響主報告，比照 report_attention.html 的錯誤處理模式。
+        try:
+            episodes_path = os.path.join(os.path.dirname(__file__), "episodes.json")
+            with open(episodes_path, encoding="utf-8") as f:
+                episodes = json.load(f)
+            n_copied = export_transcripts_data()
+            html_transcripts = generate_html_transcripts(episodes)
+            with open("report_transcripts.html", "w", encoding="utf-8") as f:
+                f.write(html_transcripts)
+            logging.info(f"逐字稿頁面已更新：{len(episodes)} 集清單，transcripts_data/ 本次新複製 {n_copied} 個檔案")
+        except Exception as e:
+            logging.error(f"生成 report_transcripts.html 失敗（不影響主報告）：{e}")
 
         if not no_send:
             # 寄送簡要版 email

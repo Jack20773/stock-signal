@@ -5,7 +5,9 @@ HTML 報告生成模組（詳細版＋Email 版）。
 import html
 import json
 import logging
+import os
 import re
+import shutil
 import statistics
 from datetime import date, timedelta
 
@@ -1346,6 +1348,210 @@ function attFilter() {{
   document.getElementById('att-empty').style.display = visible === 0 ? '' : 'none';
 }}
 document.addEventListener('DOMContentLoaded', attFilter);
+</script>
+</body>
+</html>"""
+
+
+# ── 逐字稿詳細頁（2026-08-02 索羅門新增，任務1d）───────────────────────────
+# 目標：純瀏覽方便，不是訊號查核工具（不用對應到某筆訊號跳轉）。
+#
+# 679份逐字稿（episodes.json列680集，但transcripts/目錄實測只有679份.md檔，
+# EP677缺檔——這是既有資料缺口，不是本工具的bug，見crosscheck.py同一輪的
+# 發現與下方 export_transcripts_data() 的處理）共約35MB，遠超過任務檔提示的
+# 5MB量級門檻，不可能全部塞進單一HTML的JSON blob。設計：
+#   - 頁面只內嵌集數清單的中繼資料（集數/標題/日期），JSON payload維持KB等級。
+#   - 每集預設收合，首次展開才用 fetch('transcripts_data/EP<n>.txt') 動態抓
+#     該集全文（transcripts_data/ 由 export_transcripts_data() 從
+#     transcripts/*.md 複製成純文字檔，部署時原樣複製進 _site/）。
+#   - 全文搜尋：輸入關鍵字時才並行 fetch 全部集數全文做一次性搜尋（使用者
+#     主動觸發才付出這個網路成本，不影響首屏載入），抓過的集數會快取，
+#     不會同一集重複下載。
+#   - 逐字稿內容一律用 textContent 賦值渲染（瀏覽器自動跳脫，等同於
+#     escapeHtml() 的防護效果，比手動escape更不容易漏放）。
+
+TRANSCRIPTS_DIR_NAME = "transcripts"
+TRANSCRIPTS_DATA_DIR_NAME = "transcripts_data"
+
+
+def export_transcripts_data(transcripts_dir: str = TRANSCRIPTS_DIR_NAME,
+                             out_dir: str = TRANSCRIPTS_DATA_DIR_NAME) -> int:
+    """把 transcripts/EP<n>_標題.md 逐一複製成 out_dir/EP<n>.txt（純文字，
+    檔名正規化成不含中文/空白，前端 JS 用集數直接組 fetch 路徑，不用處理
+    URL encoding）。只在來源檔比目的檔新，或目的檔不存在時才複製，避免
+    每次跑報告都重複寫入679個檔案。回傳實際複製的檔案數。"""
+    os.makedirs(out_dir, exist_ok=True)
+    copied = 0
+    for fname in os.listdir(transcripts_dir):
+        m = re.match(r"EP(\d+)_", fname)
+        if not m:
+            continue
+        src = os.path.join(transcripts_dir, fname)
+        dst = os.path.join(out_dir, f"EP{m.group(1)}.txt")
+        if not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst):
+            shutil.copyfile(src, dst)
+            copied += 1
+    return copied
+
+
+def generate_html_transcripts(episodes: list[dict], title: str = "逐字稿") -> str:
+    """episodes：episodes.json 內容（number/title/display_title/date...）。
+    只用來組『集數清單』中繼資料，不讀逐字稿內容本身（內容由前端 lazy fetch）。
+    找不到對應 transcripts_data/EP<n>.txt 的集數（目前已知 EP677）一樣列出來，
+    展開時 fetch 404 會顯示清楚的「這集逐字稿檔案缺失」提示，不是靜默失敗。"""
+    today = date.today().isoformat()
+    eps_sorted = sorted(episodes, key=lambda e: e.get("number", 0), reverse=True)
+    meta = [{
+        "num":   e.get("number"),
+        "title": e.get("display_title") or e.get("title") or "",
+        "date":  e.get("date", ""),
+    } for e in eps_sorted if e.get("number")]
+    meta_json = _json_for_script(meta, ensure_ascii=False)
+
+    def _item(m: dict) -> str:
+        num = m["num"]
+        return f'''
+        <div class="tr-item" data-num="{num}" data-title="{_esc(m["title"]).lower()}">
+          <div class="tr-head" onclick="trToggle({num})">
+            <span class="tr-num">EP{num}</span>
+            <span class="tr-title">{_esc(m["title"])}</span>
+            <span class="tr-date">{_esc(m["date"])}</span>
+            <span class="tr-arrow" id="tr-arrow-{num}">&#9656;</span>
+          </div>
+          <div class="tr-body" id="tr-body-{num}" style="display:none;"></div>
+        </div>'''
+
+    items_html = "".join(_item(m) for m in meta)
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{_esc(title)}</title>
+<style>
+  body{{margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#333;}}
+  .wrap{{max-width:820px;margin:20px auto;background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.07);overflow:hidden;}}
+  @media(max-width:600px){{.wrap{{margin:0;border-radius:0;}}}}
+  .tr-item{{border-bottom:1px solid #eee;}}
+  .tr-head{{display:flex;align-items:center;gap:8px;padding:10px 16px;cursor:pointer;flex-wrap:wrap;}}
+  .tr-head:hover{{background:#fafbfc;}}
+  .tr-num{{font-size:12px;color:#fff;background:#2b6cb0;border-radius:4px;padding:2px 6px;font-weight:bold;white-space:nowrap;}}
+  .tr-title{{font-size:14px;color:#1a252f;flex:1;min-width:120px;}}
+  .tr-date{{font-size:11px;color:#aaa;white-space:nowrap;}}
+  .tr-arrow{{color:#bbb;font-size:12px;}}
+  .tr-body{{padding:4px 16px 16px;white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.7;color:#444;background:#fafcff;}}
+  .tr-item.hidden{{display:none;}}
+{_NAV_TABS_CSS}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="background:#1a252f;padding:20px;text-align:center;color:#fff;border-radius:8px 8px 0 0;">
+    <div style="font-size:20px;font-weight:bold;">{_esc(title)}</div>
+    <div style="color:#b3c1cd;font-size:13px;margin-top:4px;">{today} · 純瀏覽用，不是訊號查核工具</div>
+  </div>
+  {_render_nav_tabs('transcripts')}
+
+  <div style="padding:0 16px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;">
+    <input id="tr-search" type="text" placeholder="全文搜尋（首次搜尋需下載全部逐字稿，請稍候）..."
+      oninput="trOnSearchInput(this.value)"
+      style="flex:1;max-width:320px;padding:6px 12px;border:1px solid #ddd;border-radius:12px;font-size:13px;outline:none;">
+    <span id="tr-status" style="font-size:12px;color:#bbb;">共 {len(meta)} 集</span>
+  </div>
+
+  <div id="tr-list">{items_html}</div>
+  <div id="tr-empty" style="display:none;padding:30px;text-align:center;color:#888;font-size:13px;">沒有符合搜尋條件的集數</div>
+
+  <div style="padding:14px;text-align:center;font-size:11px;color:#bbb;border-top:1px solid #f0f0f0;">
+    共 {len(meta)} 集逐字稿 · 純瀏覽用，不代表節目立場
+  </div>
+</div>
+<script>
+const TR_META = {meta_json};
+const _trTextCache = {{}};   // num -> 全文（已載入過的集數快取，不重複下載）
+let _trFullLoaded = false;
+
+async function trFetchOne(num) {{
+  if (_trTextCache[num] !== undefined) return _trTextCache[num];
+  try {{
+    const resp = await fetch('{TRANSCRIPTS_DATA_DIR_NAME}/EP' + num + '.txt');
+    if (!resp.ok) {{
+      _trTextCache[num] = null;
+      return null;
+    }}
+    const text = await resp.text();
+    _trTextCache[num] = text;
+    return text;
+  }} catch (e) {{
+    _trTextCache[num] = null;
+    return null;
+  }}
+}}
+
+async function trToggle(num) {{
+  const body  = document.getElementById('tr-body-' + num);
+  const arrow = document.getElementById('tr-arrow-' + num);
+  const isOpen = body.style.display !== 'none';
+  if (isOpen) {{
+    body.style.display = 'none';
+    arrow.innerHTML = '&#9656;';
+    return;
+  }}
+  if (!body.dataset.loaded) {{
+    body.textContent = '載入中...';
+    const text = await trFetchOne(num);
+    if (text === null) {{
+      body.textContent = '這集逐字稿檔案缺失（transcripts/ 目錄裡找不到對應檔案，可能需要重新下載這一集），不是網頁的錯誤。';
+    }} else {{
+      body.textContent = text;
+    }}
+    body.dataset.loaded = '1';
+  }}
+  body.style.display = '';
+  arrow.innerHTML = '&#9662;';
+}}
+
+async function trEnsureAllLoaded() {{
+  if (_trFullLoaded) return;
+  const status = document.getElementById('tr-status');
+  status.textContent = '首次搜尋下載全部逐字稿中...';
+  await Promise.all(TR_META.map(m => trFetchOne(m.num)));
+  _trFullLoaded = true;
+}}
+
+let _trSearchTimer = null;
+function trOnSearchInput(v) {{
+  clearTimeout(_trSearchTimer);
+  _trSearchTimer = setTimeout(() => trDoSearch(v), 300);
+}}
+
+async function trDoSearch(q) {{
+  q = q.trim();
+  const status = document.getElementById('tr-status');
+  const items = document.querySelectorAll('.tr-item');
+  if (!q) {{
+    items.forEach(el => el.classList.remove('hidden'));
+    document.getElementById('tr-empty').style.display = 'none';
+    status.textContent = '共 ' + TR_META.length + ' 集';
+    return;
+  }}
+  const t0 = performance.now();
+  await trEnsureAllLoaded();
+  const ql = q.toLowerCase();
+  let matched = 0;
+  items.forEach(el => {{
+    const num = el.dataset.num;
+    const text = (_trTextCache[num] || '').toLowerCase();
+    const titleHit = (el.dataset.title || '').includes(ql);
+    const hit = titleHit || text.includes(ql);
+    el.classList.toggle('hidden', !hit);
+    if (hit) matched++;
+  }});
+  document.getElementById('tr-empty').style.display = matched === 0 ? '' : 'none';
+  const dt = Math.round(performance.now() - t0);
+  status.textContent = matched + ' / ' + TR_META.length + ' 集符合「' + q + '」（' + dt + 'ms）';
+}}
 </script>
 </body>
 </html>"""

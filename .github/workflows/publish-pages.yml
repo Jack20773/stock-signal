@@ -18,6 +18,21 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: Cache transcripts
+        uses: actions/cache@v4
+        with:
+          path: transcripts/
+          key: transcripts-${{ github.run_id }}
+          restore-keys: |
+            transcripts-
+
+      - name: 補下載逐字稿+集數列表（2026-08-02 索羅門新增，任務1d）
+        # 這個 workflow 原本不下載逐字稿/episodes.json（只重算報告頁），
+        # 但1d逐字稿頁需要這兩樣才能生成。download_transcripts.py 預設模式
+        # 會跳過已存在的檔案（見該檔 main() 的 SKIP 分支），靠上面還原的
+        # cache，正常情況下幾乎全部SKIP、只補抓新集數，不是每次重下680集。
+        run: python -X utf8 download_transcripts.py
+
       - name: 分割哨兵（清除近期分割標的的價格快取）
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -35,6 +50,13 @@ jobs:
           # 2026-08-02 索羅門新增：同 update.yml 的修正，見該檔註解
           if [ -f report_attention.html ]; then
             cp report_attention.html _site/attention.html
+          fi
+          # 2026-08-02 索羅門新增（任務1d），比照 update.yml 同一段註解
+          if [ -f report_transcripts.html ]; then
+            cp report_transcripts.html _site/transcripts.html
+          fi
+          if [ -d transcripts_data ]; then
+            cp -r transcripts_data _site/transcripts_data
           fi
 
       - name: Upload Pages artifact

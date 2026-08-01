@@ -12,6 +12,11 @@ __pycache__/
 # 逐字稿（從 whatmkreallysaid.com 動態下載，不進 repo）
 transcripts/
 
+# 2026-08-02 索羅門新增（任務1d）：transcripts_data/ 是 export_transcripts_data()
+# 從 transcripts/*.md 複製出的純文字版本（供逐字稿頁前端 fetch 用），純衍生產物、
+# 可隨時重新產生，不需要進 repo（比照 transcripts/ 本身也不進 repo 的既有慣例）。
+transcripts_data/
+
 # 資料庫（本機用，不進 repo）
 *.db
 *.db-wal

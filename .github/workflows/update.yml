@@ -78,6 +78,16 @@ jobs:
           if [ -f report_attention.html ]; then
             cp report_attention.html _site/attention.html
           fi
+          # 2026-08-02 索羅門新增（任務1d）：逐字稿詳細頁，比照上面attention.html
+          # 同一套「檔案若因故沒生成就跳過，不讓部署失敗」容錯模式。
+          # transcripts_data/ 是逐字稿全文（純瀏覽用），前端用相對路徑
+          # fetch('transcripts_data/EP<n>.txt')，兩個目錄要放在同一層才會通。
+          if [ -f report_transcripts.html ]; then
+            cp report_transcripts.html _site/transcripts.html
+          fi
+          if [ -d transcripts_data ]; then
+            cp -r transcripts_data _site/transcripts_data
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
