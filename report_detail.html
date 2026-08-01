@@ -55,6 +55,20 @@
   .nav-tab-active{background:#2b6cb0;color:#fff;font-weight:bold;}
   @media(max-width:600px){.nav-tab{font-size:11px;padding:7px 2px;}}
 
+
+  .onboard-wrap{border-bottom:1px solid #eee;background:#f7fbff;}
+  .onboard-head{display:flex;align-items:center;gap:8px;padding:10px 16px;font-size:13px;
+    color:#2b6cb0;font-weight:bold;}
+  .onboard-body{padding:0 16px 14px;font-size:13px;color:#555;line-height:1.8;}
+  .onboard-body ul{margin:4px 0 0;padding-left:18px;}
+  .onboard-dismiss{margin-left:auto;font-weight:normal;color:#8fb3dc;font-size:12px;
+    cursor:pointer;white-space:nowrap;}
+  .onboard-dismiss:hover{color:#2b6cb0;}
+  .onboard-fab{position:fixed;right:16px;bottom:16px;width:34px;height:34px;border-radius:50%;
+    background:#2b6cb0;color:#fff;align-items:center;justify-content:center;
+    font-size:16px;font-weight:bold;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);
+    z-index:50;display:none;}
+
 </style>
 <style id="dyn-font"></style>
 </head>
@@ -70,6 +84,15 @@
        小字連結到attention.html的做法（完工前Codex審查曾指出小字連結太不
        顯眼），三個頁面共用 _render_nav_tabs()，避免風格漂移。 -->
   <div class="nav-tabs"><a href="index.html" class="nav-tab nav-tab-active">📊 訊號報告</a><a href="attention.html" class="nav-tab">🔥 目前關注度</a><a href="transcripts.html" class="nav-tab">📄 逐字稿</a></div>
+  
+    <div class="onboard-wrap" id="onboard-wrap" style="display:none;">
+      <div class="onboard-head">
+        <span>💡 怎麼看這份報告</span>
+        <span class="onboard-dismiss" onclick="onboardDismiss()">知道了，不用每次都顯示 ✕</span>
+      </div>
+      <div class="onboard-body"><ul><li>每張卡片是一檔標的：chip顯示看多／看空，數字是最近被提到的次數</li><li>報酬率＝播出日收盤價到今天的漲跌幅，不是已經入袋的獲利</li><li>Sparkline是這檔股票近期股價走勢的縮圖，不是精確報價</li><li>勝率＝有沒有打贏對應大盤（台股比0050、美股比SPY），不是絕對賺賠</li><li>點卡片可以展開看歷次被提到的完整脈絡與原話</li></ul></div>
+    </div>
+    <div class="onboard-fab" id="onboard-fab" onclick="onboardReopen()" title="重新打開新手導覽">？</div>
 
   <!-- Stats 第一列 -->
   <div style="display:flex;text-align:center;border-bottom:1px solid #eee;">
@@ -267,6 +290,24 @@
 </div>
 
 <script>
+
+const ONBOARD_KEY = "sig_onboard_dismissed_report";
+function onboardInit() {
+  const dismissed = localStorage.getItem(ONBOARD_KEY) === '1';
+  document.getElementById('onboard-wrap').style.display = dismissed ? 'none' : '';
+  document.getElementById('onboard-fab').style.display = dismissed ? 'flex' : 'none';
+}
+function onboardDismiss() {
+  localStorage.setItem(ONBOARD_KEY, '1');
+  document.getElementById('onboard-wrap').style.display = 'none';
+  document.getElementById('onboard-fab').style.display = 'flex';
+}
+function onboardReopen() {
+  document.getElementById('onboard-wrap').style.display = '';
+  document.getElementById('onboard-fab').style.display = 'none';
+}
+document.addEventListener('DOMContentLoaded', onboardInit);
+
 // ── 字體大小 ──────────────────────────────────────────────
 const FS = [12, 14, 16, 18];
 let fsIdx = parseInt(localStorage.getItem('fs-idx') || '1');

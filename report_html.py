@@ -78,6 +78,62 @@ _NAV_TABS_CSS = """
 """
 
 
+# 三頁共用的「怎麼看這份報告」新手導覽（2026-08-02 索羅門新增，任務1f）。
+# 純前端 localStorage 判斷（key 三頁各自獨立，不共用，見下方 storage_key
+# 參數），不需要後端/DB配合。首次造訪（key 不存在）預設展開；使用者按過
+# 「關閉」後記住不再自動展開，但保留一個常駐右下角「？」按鈕可隨時重新
+# 叫出（不會反過來清掉 localStorage，重新整理後仍維持收合，符合任務檔
+# 完成的定義第2點的兩個獨立驗證點）。
+_ONBOARD_CSS = """
+  .onboard-wrap{border-bottom:1px solid #eee;background:#f7fbff;}
+  .onboard-head{display:flex;align-items:center;gap:8px;padding:10px 16px;font-size:13px;
+    color:#2b6cb0;font-weight:bold;}
+  .onboard-body{padding:0 16px 14px;font-size:13px;color:#555;line-height:1.8;}
+  .onboard-body ul{margin:4px 0 0;padding-left:18px;}
+  .onboard-dismiss{margin-left:auto;font-weight:normal;color:#8fb3dc;font-size:12px;
+    cursor:pointer;white-space:nowrap;}
+  .onboard-dismiss:hover{color:#2b6cb0;}
+  .onboard-fab{position:fixed;right:16px;bottom:16px;width:34px;height:34px;border-radius:50%;
+    background:#2b6cb0;color:#fff;align-items:center;justify-content:center;
+    font-size:16px;font-weight:bold;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);
+    z-index:50;display:none;}
+"""
+
+
+def _render_onboarding(storage_key: str, heading: str, bullets: list[str]) -> str:
+    items = "".join(f"<li>{_esc(b)}</li>" for b in bullets)
+    return f'''
+    <div class="onboard-wrap" id="onboard-wrap" style="display:none;">
+      <div class="onboard-head">
+        <span>💡 {_esc(heading)}</span>
+        <span class="onboard-dismiss" onclick="onboardDismiss()">知道了，不用每次都顯示 ✕</span>
+      </div>
+      <div class="onboard-body"><ul>{items}</ul></div>
+    </div>
+    <div class="onboard-fab" id="onboard-fab" onclick="onboardReopen()" title="重新打開新手導覽">？</div>'''
+
+
+def _onboard_js(storage_key: str) -> str:
+    return f"""
+const ONBOARD_KEY = {json.dumps(storage_key)};
+function onboardInit() {{
+  const dismissed = localStorage.getItem(ONBOARD_KEY) === '1';
+  document.getElementById('onboard-wrap').style.display = dismissed ? 'none' : '';
+  document.getElementById('onboard-fab').style.display = dismissed ? 'flex' : 'none';
+}}
+function onboardDismiss() {{
+  localStorage.setItem(ONBOARD_KEY, '1');
+  document.getElementById('onboard-wrap').style.display = 'none';
+  document.getElementById('onboard-fab').style.display = 'flex';
+}}
+function onboardReopen() {{
+  document.getElementById('onboard-wrap').style.display = '';
+  document.getElementById('onboard-fab').style.display = 'none';
+}}
+document.addEventListener('DOMContentLoaded', onboardInit);
+"""
+
+
 def _mini_bar(pct: float, color: str, label: str, n: int) -> str:
     w = min(max(round(pct), 0), 100)
     c = color if pct >= 50 else "#2b8a3e"
@@ -319,6 +375,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     .sc-ret{{font-size:19px;}}
   }}
 {_NAV_TABS_CSS}
+{_ONBOARD_CSS}
 </style>
 <style id="dyn-font"></style>
 </head>
@@ -334,6 +391,13 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
        小字連結到attention.html的做法（完工前Codex審查曾指出小字連結太不
        顯眼），三個頁面共用 _render_nav_tabs()，避免風格漂移。 -->
   {_render_nav_tabs('report')}
+  {_render_onboarding('sig_onboard_dismissed_report', '怎麼看這份報告', [
+      "每張卡片是一檔標的：chip顯示看多／看空，數字是最近被提到的次數",
+      "報酬率＝播出日收盤價到今天的漲跌幅，不是已經入袋的獲利",
+      "Sparkline是這檔股票近期股價走勢的縮圖，不是精確報價",
+      "勝率＝有沒有打贏對應大盤（台股比0050、美股比SPY），不是絕對賺賠",
+      "點卡片可以展開看歷次被提到的完整脈絡與原話",
+  ])}
 
   <!-- Stats 第一列 -->
   <div style="display:flex;text-align:center;border-bottom:1px solid #eee;">
@@ -531,6 +595,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
 </div>
 
 <script>
+{_onboard_js('sig_onboard_dismissed_report')}
 // ── 字體大小 ──────────────────────────────────────────────
 const FS = [12, 14, 16, 18];
 let fsIdx = parseInt(localStorage.getItem('fs-idx') || '1');
@@ -1290,6 +1355,7 @@ def generate_html_attention(rows: list[dict], title: str = "目前節目關注�
   .filter-btn{{margin:2px 3px;padding:5px 12px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:13px;}}
   .btn-active{{background:#1a252f!important;color:#fff!important;border-color:#1a252f!important;}}
 {_NAV_TABS_CSS}
+{_ONBOARD_CSS}
 </style>
 </head>
 <body>
@@ -1299,6 +1365,13 @@ def generate_html_attention(rows: list[dict], title: str = "目前節目關注�
     <div style="color:#b3c1cd;font-size:13px;margin-top:4px;">{today}</div>
   </div>
   {_render_nav_tabs('attention')}
+  {_render_onboarding('sig_onboard_dismissed_attention', '怎麼看這個分數', [
+      "這個分數量化「股癌最近反覆在講什麼」，跟這檔過去準不準是兩件事",
+      "分數越高代表最近越常被提到、信心等級也越高",
+      "「偏多共識／偏空共識」看的是最近多空次數比例",
+      "「高度關注但分歧」代表多空次數接近，講者立場不明確，不是無訊號",
+      "超過60天沒被提到會自動從這個榜單下架，但歷史紀錄還在主報告",
+  ])}
 
   <!-- 首屏警語（任務檔8b明確要求，定位差異必須在介面上明確標示） -->
   <div style="margin:16px;padding:12px 16px;background:#fff8e1;border:1px solid #ffe082;border-radius:8px;font-size:13px;color:#8a6d1f;line-height:1.6;">
@@ -1325,6 +1398,7 @@ def generate_html_attention(rows: list[dict], title: str = "目前節目關注�
   </div>
 </div>
 <script>
+{_onboard_js('sig_onboard_dismissed_attention')}
 let _amkt = 'all';
 function attSetMkt(m) {{
   _amkt = m;
@@ -1443,6 +1517,7 @@ def generate_html_transcripts(episodes: list[dict], title: str = "逐字稿") ->
   .tr-body{{padding:4px 16px 16px;white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.7;color:#444;background:#fafcff;}}
   .tr-item.hidden{{display:none;}}
 {_NAV_TABS_CSS}
+{_ONBOARD_CSS}
 </style>
 </head>
 <body>
@@ -1452,6 +1527,12 @@ def generate_html_transcripts(episodes: list[dict], title: str = "逐字稿") ->
     <div style="color:#b3c1cd;font-size:13px;margin-top:4px;">{today} · 純瀏覽用，不是訊號查核工具</div>
   </div>
   {_render_nav_tabs('transcripts')}
+  {_render_onboarding('sig_onboard_dismissed_transcripts', '這頁在做什麼', [
+      "這裡是逐字稿原文，純瀏覽用，不是訊號查核工具",
+      "點集數標題可以展開／收合看全文",
+      "搜尋框可以全文檢索關鍵字，第一次搜尋要下載全部逐字稿，請稍候",
+      "部分較舊集數逐字稿檔案可能缺失，會顯示明確提示，不是網頁壞了",
+  ])}
 
   <div style="padding:0 16px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;">
     <input id="tr-search" type="text" placeholder="全文搜尋（首次搜尋需下載全部逐字稿，請稍候）..."
@@ -1468,6 +1549,7 @@ def generate_html_transcripts(episodes: list[dict], title: str = "逐字稿") ->
   </div>
 </div>
 <script>
+{_onboard_js('sig_onboard_dismissed_transcripts')}
 const TR_META = {meta_json};
 const _trTextCache = {{}};   // num -> 全文（已載入過的集數快取，不重複下載）
 let _trFullLoaded = false;
