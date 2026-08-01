@@ -206,6 +206,56 @@ def batch_get_close_on_or_before(
     return result
 
 
+def batch_get_price_series(
+    requests: list[tuple[str, str, str]]
+) -> dict[str, list[tuple[str, float]]]:
+    """批次抓多檔股票的「歷史價格序列」（不是單點快照）——2026-08-02 索羅門新增
+    （任務1b，個股卡片 sparkline 用）。requests 是 (ticker, start_date, end_date)
+    清單，每檔股票一筆請求（呼叫端已去重，這裡假設 ticker 不重複）。
+
+    設計沿用既有批次下載模式（_download_multi 一次 yf.download() 涵蓋所有
+    ticker，取所有請求日期範圍的聯集，不逐檔呼叫）——跟 batch_get_close_on_or_before
+    同一個模式，差別是這裡要整段序列而不是單點最近收盤價。
+
+    這份序列**不寫入 price_cache**（該表是單點快照設計，2026-08-02 已裁決維持
+    現狀不加序列支援，見任務檔第1b節），呼叫端自行決定要不要在同一次執行內
+    快取於記憶體——目前呼叫端（report_html.py）只在生成一次報告的單次執行內
+    呼叫一次，不需要額外快取。
+
+    回傳 {ticker: [(date_str, close_price), ...]}，日期升序排列，只含有實際
+    收盤價的交易日（無 NaN、不補值）；查無資料或該 ticker 抓取失敗時回傳空
+    list（呼叫端據此判斷「這檔沒有 sparkline 資料」，不是報錯）。
+    """
+    if not requests:
+        return {}
+
+    tickers = sorted({t for t, _, _ in requests})
+    window  = {t: (s, e) for t, s, e in requests}  # 假設 ticker 不重複；重複時後者覆蓋前者
+    starts  = [date.fromisoformat(s) for _, s, _ in requests]
+    ends    = [date.fromisoformat(e) for _, _, e in requests]
+    dl_start = str(min(starts))
+    dl_end   = str(max(ends) + timedelta(days=1))  # yf.download end 為排除區間，+1 天涵蓋當天
+
+    hist_by_ticker = _download_multi(tickers, start=dl_start, end=dl_end)
+
+    result: dict[str, list[tuple[str, float]]] = {}
+    for t in tickers:
+        sub = hist_by_ticker.get(t)
+        if sub is None or sub.empty:
+            result[t] = []
+            continue
+        s_date, e_date = date.fromisoformat(window[t][0]), date.fromisoformat(window[t][1])
+        sub2 = sub.dropna(subset=["Close"])
+        sub2 = sub2[(sub2.index.date >= s_date) & (sub2.index.date <= e_date)]
+        series = []
+        for idx, close in zip(sub2.index, sub2["Close"]):
+            p = _safe_float(close)
+            if p is not None:
+                series.append((idx.strftime("%Y-%m-%d"), p))
+        result[t] = series
+    return result
+
+
 def batch_get_latest_close(tickers: list[str]) -> dict[str, float | None]:
     """批次查詢多個 ticker 的最新收盤價；命中 cache 時單一 SQL 搞定，未命中的部分
     改成一次 yf.download() 抓完，最後一次 execute_batch bulk upsert。"""

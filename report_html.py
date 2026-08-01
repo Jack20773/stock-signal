@@ -4,9 +4,12 @@ HTML 報告生成模組（詳細版＋Email 版）。
 """
 import html
 import json
+import logging
 import re
 import statistics
-from datetime import date
+from datetime import date, timedelta
+
+import prices
 
 # ── 小工具 ──────────────────────────────────────────────────────────────────
 
@@ -169,6 +172,54 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
         })
     signals_json = _json_for_script(_sigs, ensure_ascii=False)
 
+    # ── Sparkline 用歷史價格序列（2026-08-02 索羅門新增，任務1b）─────────────
+    # 視窗定義（任務檔1b節，AI暫定+已核對渲染效果）：進場日→今日；持倉超過60個
+    # 交易日只取最近60個交易日。每檔股票可能被多筆訊號（不同集數、不同進場日）
+    # 提到，用「最早進場日」當序列起點——這是索羅門的聚合判斷（任務檔沒指定
+    # 多筆訊號時用哪個進場日），跟卡片上「持倉天數」欄位（JS 端取最長天數）
+    # 互相對應，兩者都反映「這檔從最早被提到到現在」的完整持有期間。
+    # 下載時先把起點限制在「今日往前 100 個日曆天」內（涵蓋60個交易日的安全
+    # 餘裕），避免對很久以前進場、早就超過視窗的標的下載整年份用不到的資料；
+    # 下載完後不論這個 range 抓到幾筆，一律再 trim 到最近60筆，兩層保險確保
+    # 序列長度符合定案規則。
+    _SPARK_MAX_POINTS = 60
+    _SPARK_LOOKBACK_CAP_DAYS = 100
+
+    today_d = date.today()
+    entry_by_code: dict[str, str] = {}
+    for r in results:
+        code    = r.get("stock_code") or ""
+        entry_d = r.get("entry_date")
+        if not code or not entry_d:
+            continue
+        if code not in entry_by_code or entry_d < entry_by_code[code]:
+            entry_by_code[code] = entry_d
+
+    price_series_reqs = []
+    for code, entry_d in entry_by_code.items():
+        try:
+            entry_date_obj = date.fromisoformat(entry_d)
+        except ValueError:
+            continue
+        cap_start = today_d - timedelta(days=_SPARK_LOOKBACK_CAP_DAYS)
+        eff_start = max(entry_date_obj, cap_start)
+        price_series_reqs.append((code, str(eff_start), str(today_d)))
+
+    price_series: dict[str, list] = {}
+    if price_series_reqs:
+        try:
+            raw_series = prices.batch_get_price_series(price_series_reqs)
+            for code, pts in raw_series.items():
+                price_series[code] = pts[-_SPARK_MAX_POINTS:] if len(pts) > _SPARK_MAX_POINTS else pts
+        except Exception as ex:
+            # sparkline 是加值資訊，不是報告能不能生成的關鍵路徑——yfinance 抓歷史
+            # 序列失敗（網路/API限流等）不該讓整份報告生成失敗，只記警告、卡片
+            # 改顯示「無足夠資料」（見前端 renderSparkline() 的 fallback）。
+            logging.warning(f"[sparkline] 批次抓歷史價格序列失敗，本次報告卡片將無 sparkline：{ex}")
+            price_series = {}
+
+    price_series_json = _json_for_script(price_series, ensure_ascii=False)
+
     all_tags = sorted({r.get("primary_tag", "") for r in results if r.get("primary_tag")})
 
     win_pct   = stats.get("win_rate", 0)
@@ -192,8 +243,6 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   body{{margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#333;}}
   .wrap{{max-width:920px;margin:20px auto;background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.07);overflow-x:clip;}}
   #main-table thead th{{position:sticky;top:0;background:#f1f3f5;z-index:2;}}
-  /* 個股排行：標的欄保底寬度，不被數字欄擠壓 */
-  #stock-table-container td:first-child{{min-width:96px;}}
   @media(max-width:600px){{
     .wrap{{margin:0;border-radius:0;}}
     /* 手機版：拿掉表格最小寬度並藏次要欄位，讓內容塞進一屏、不用左右滑 */
@@ -210,6 +259,29 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   .tab-btn{{margin:0 4px;padding:6px 16px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:14px;font-weight:bold;}}
   .fs-btn{{margin:0 2px;padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-weight:bold;}}
   .filter-btn{{margin:2px 3px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:13px;}}
+  /* 個股排行卡片網格（2026-08-02 索羅門新增，任務1a：表格→卡片） */
+  .card-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px;padding:12px 16px;}}
+  .stock-card{{border:1px solid #eee;border-radius:8px;padding:12px;background:#fff;cursor:pointer;transition:box-shadow .15s;}}
+  .stock-card:hover{{box-shadow:0 3px 10px rgba(0,0,0,.08);}}
+  .sc-row1{{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:2px;}}
+  .sc-name{{font-size:14px;font-weight:bold;color:#1a252f;}}
+  .sc-mkt-chip{{font-size:9.5px;font-weight:bold;padding:1px 5px;border-radius:4px;background:#f1f3f5;color:#888;margin-left:5px;white-space:nowrap;}}
+  .sc-dir-chip{{font-size:10.5px;font-weight:bold;padding:2px 7px;border-radius:10px;border:1px solid #ddd;color:#666;white-space:nowrap;}}
+  .sc-dir-chip.bull{{color:#d9534f;border-color:#f3c9c8;background:#fdecea;}}
+  .sc-dir-chip.bear{{color:#1a6b9a;border-color:#c7e0f0;background:#e8f4fd;}}
+  .sc-code{{font-size:11px;color:#aaa;}}
+  .sc-ret{{font-size:22px;font-weight:800;margin:8px 0 2px;letter-spacing:-.02em;}}
+  .sc-ret.win{{color:#d9534f;}} .sc-ret.lose{{color:#2b8a3e;}}
+  .sc-spark{{margin:6px 0 8px;}}
+  .sc-meta{{display:flex;justify-content:space-between;font-size:11px;color:#999;}}
+  .sc-detail{{display:none;grid-column:1/-1;background:#f8f9fa;border-radius:8px;padding:8px 14px;margin-top:-2px;border:1px solid #eee;font-size:13px;color:#555;}}
+  .sc-detail-row{{padding:6px 0;border-bottom:1px solid #eee;}}
+  .sc-detail-row:last-child{{border-bottom:none;}}
+  .empty-state{{grid-column:1/-1;text-align:center;padding:30px 10px;color:#888;font-size:13px;}}
+  @media(max-width:600px){{
+    .card-grid{{grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:8px;padding:10px 10px;}}
+    .sc-ret{{font-size:19px;}}
+  }}
 </style>
 <style id="dyn-font"></style>
 </head>
@@ -299,10 +371,11 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   </div>
   </div><!-- /adv-stats -->
 
-  <!-- Tab 切換 + 字體控制 -->
+  <!-- 字體控制（2026-08-02 索羅門移除 Tab 切換：任務1a/1d 定案卡片網格是唯一
+       主視圖，不再需要「每集訊號 / 個股排行」二選一的分頁按鈕） -->
   <div style="padding:10px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-    <button id="tab-ep" class="tab-btn btn-active" onclick="switchTab('ep')">每集訊號</button>
-    <button id="tab-stock" class="tab-btn" onclick="switchTab('stock')">個股排行</button>
+    <span style="font-size:13px;font-weight:bold;color:#1a252f;">個股排行</span>
+    <span style="font-size:12px;color:#999;">依標的彙總：每檔被提到幾次、看多看空比例、勝率與平均報酬，點卡片可展開歷次紀錄</span>
     <div style="margin-left:auto;display:flex;align-items:center;gap:4px;">
       <span style="font-size:12px;color:#999;">字體</span>
       <button class="fs-btn" id="fs0" onclick="setFontSize(0)" style="font-size:11px;">小</button>
@@ -312,10 +385,45 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     </div>
   </div>
 
-  <!-- 目前頁籤說明 -->
-  <div id="tab-hint" style="padding:6px 16px;font-size:12px;color:#999;background:#fafafa;border-bottom:1px solid #eee;">
-    依節目集數列出每一筆選股訊號：講了哪檔、看多還看空、至今績效如何
+  <!-- 個股排行卡片網格：現在是主視圖，永遠顯示（取代原本 display:none 靠 Tab 切換的邏輯） -->
+  <div id="view-stock" style="padding:0 0 8px;">
+    <!-- 簡化篩選列（任務1c 定案：只留搜尋+市場，不做勝負/持倉天數篩選） -->
+    <div style="padding:10px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span style="font-size:13px;color:#888;white-space:nowrap;">搜尋：</span>
+      <input id="stock-search" type="text" placeholder="標的名稱、代號..."
+        oninput="filterStock(this.value)"
+        style="flex:1;max-width:260px;padding:5px 12px;border:1px solid #ddd;border-radius:12px;font-size:13px;outline:none;">
+      <button id="smkt-all" class="filter-btn stock-mkt-btn btn-active" onclick="setStockMkt('all')">全部</button>
+      <button id="smkt-tw"  class="filter-btn stock-mkt-btn" onclick="setStockMkt('tw')">台股</button>
+      <button id="smkt-us"  class="filter-btn stock-mkt-btn" onclick="setStockMkt('us')">美股</button>
+      <span id="stock-count" style="font-size:12px;color:#bbb;margin-left:auto;"></span>
+    </div>
+    <div style="padding:8px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <span style="font-size:12px;color:#aaa;">範圍：</span>
+      <button id="sr-0"   class="filter-btn sr-btn btn-active" onclick="setStockRange(0)">全部</button>
+      <button id="sr-100" class="filter-btn sr-btn" onclick="setStockRange(100)">最新 100 集</button>
+      <button id="sr-50"  class="filter-btn sr-btn" onclick="setStockRange(50)">最新 50 集</button>
+      <button id="sr-20"  class="filter-btn sr-btn" onclick="setStockRange(20)">最新 20 集</button>
+      <span style="font-size:12px;color:#aaa;margin-left:10px;">排序：</span>
+      <button id="ss-total"    class="filter-btn ss-btn btn-active" onclick="sortStock('total')">次數</button>
+      <button id="ss-win_rate" class="filter-btn ss-btn" onclick="sortStock('win_rate')">勝率</button>
+      <button id="ss-avg_ret"  class="filter-btn ss-btn" onclick="sortStock('avg_ret')">均報酬</button>
+      <button id="ss-latest"   class="filter-btn ss-btn" onclick="sortStock('latest')">最近集</button>
+      <span style="font-size:12px;color:#bbb;margin-left:10px;">點卡片可展開該標的歷次訊號</span>
+    </div>
+    <div id="stock-card-grid" class="card-grid"></div>
   </div>
+
+  <!-- 依集數列表：降級為次要區塊，預設收合（任務1d 定案，比照 demo 的
+       ep-toggle/ep-compact 收合行為——原本「每集訊號」的完整功能全部保留，
+       只是從主要 Tab 改成點頭列展開的次要區塊） -->
+  <div id="ep-section-toggle" onclick="toggleEpSection()"
+       style="padding:10px 20px;border-top:1px solid #eee;border-bottom:1px solid #eee;background:#f7f8fa;cursor:pointer;font-size:13px;color:#555;font-weight:bold;">
+    <span id="ep-section-arrow">▸</span> 依集數列表
+    <span style="color:#aaa;font-size:12px;margin-left:6px;font-weight:normal;">依節目集數列出每一筆選股訊號：講了哪檔、看多還看空、至今績效如何</span>
+    <span style="float:right;color:#aaa;font-size:12px;font-weight:normal;">已降級為次要區塊，點擊展開</span>
+  </div>
+  <div id="ep-section-body" style="display:none;">
 
   <!-- 集數篩選工具列 -->
   <div id="view-filters" style="padding:10px 16px 6px;border-bottom:1px solid #eee;background:#fafafa;">
@@ -373,19 +481,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
       <tbody id="tbody"></tbody>
     </table>
   </div>
-
-  <!-- 以標的 Table (JS driven) -->
-  <div id="view-stock" style="display:none;padding:0 0 12px;">
-    <div style="padding:10px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-      <span style="font-size:13px;color:#888;">範圍：</span>
-      <button id="sr-0"   class="filter-btn sr-btn btn-active" onclick="setStockRange(0)">全部</button>
-      <button id="sr-100" class="filter-btn sr-btn" onclick="setStockRange(100)">最新 100 集</button>
-      <button id="sr-50"  class="filter-btn sr-btn" onclick="setStockRange(50)">最新 50 集</button>
-      <button id="sr-20"  class="filter-btn sr-btn" onclick="setStockRange(20)">最新 20 集</button>
-      <span style="font-size:12px;color:#bbb;margin-left:6px;">點標的名稱可展開詳情</span>
-    </div>
-    <div id="stock-table-container" style="overflow-x:auto;-webkit-overflow-scrolling:touch;"></div>
-  </div>
+  </div><!-- /ep-section-body -->
 
   <!-- Footer -->
   <div style="padding:10px;text-align:center;font-size:12px;color:#bbb;border-top:1px solid #f0f0f0;">
@@ -406,7 +502,10 @@ function applyFontSize() {{
   localStorage.setItem('fs-idx', fsIdx);
 }}
 function setFontSize(i) {{ fsIdx = i; applyFontSize(); }}
-document.addEventListener('DOMContentLoaded', () => {{ applyFontSize(); renderDetailTab(); }});
+// 2026-08-02 索羅門改寫（任務1a/1d）：卡片網格現在是唯一主視圖，DOMContentLoaded
+// 直接 renderStockTab()；原本的每集訊號表格（renderDetailTab）改成收合區塊
+// 第一次展開時才 render（見下方 toggleEpSection()），沒展開過就不用付這筆算力。
+document.addEventListener('DOMContentLoaded', () => {{ applyFontSize(); renderStockTab(); }});
 
 // ── 進階統計收合（趨勢圖等首次展開才初始化，收合狀態下 canvas 量不到尺寸）──
 let _chartInited = false;
@@ -426,19 +525,16 @@ function toggleFilterAdv() {{
   document.getElementById('filter-adv-btn').textContent = open ? '篩選 ▾' : '篩選 ▸';
 }}
 
-// ── Tab 切換 ─────────────────────────────────────────────
-function switchTab(tab) {{
-  const isEp = tab === 'ep';
-  document.getElementById('view-ep').style.display = isEp ? '' : 'none';
-  document.getElementById('view-filters').style.display = isEp ? '' : 'none';
-  document.getElementById('view-stock').style.display = isEp ? 'none' : '';
-  document.getElementById('tab-ep').classList.toggle('btn-active', isEp);
-  document.getElementById('tab-stock').classList.toggle('btn-active', !isEp);
-  document.getElementById('tab-hint').textContent = isEp
-    ? '依節目集數列出每一筆選股訊號：講了哪檔、看多還看空、至今績效如何'
-    : '依股票彙總：每檔被提到幾次、看多看空比例、勝率與平均報酬，點標的可展開歷次紀錄';
-  if (!isEp) renderStockTab();
-  if (isEp) renderDetailTab();
+// ── 依集數列表收合（任務1d：從主要 Tab 降級成次要區塊，預設收合，
+// 比照 demo 的 ep-toggle/ep-compact 行為；沿用「進階統計」同一套
+// 「首次展開才 render」模式，避免收合狀態下也要付渲染成本）───────
+let _epSectionInited = false;
+function toggleEpSection() {{
+  const box = document.getElementById('ep-section-body');
+  const open = box.style.display === 'none';
+  box.style.display = open ? '' : 'none';
+  document.getElementById('ep-section-arrow').textContent = open ? '▾' : '▸';
+  if (open && !_epSectionInited) {{ _epSectionInited = true; renderDetailTab(); }}
 }}
 
 // ── 集數展開/收合 ─────────────────────────────────────────
@@ -680,7 +776,8 @@ function sortBy(col) {{
 
 // ── 以標的 JS 動態渲染 ────────────────────────────────────
 const SIGNALS_DATA = {signals_json};
-let _sr = 0, _sCol = 'total', _sDir = -1;
+const PRICE_SERIES = {price_series_json};
+let _sr = 0, _sCol = 'total', _sDir = -1, _stockSearch = '', _stockMkt = 'all';
 
 function setStockRange(n) {{
   _sr = n;
@@ -691,9 +788,46 @@ function setStockRange(n) {{
 function sortStock(col) {{
   _sDir = (_sCol === col) ? -_sDir : -1;
   _sCol = col;
+  document.querySelectorAll('.ss-btn').forEach(b => b.classList.remove('btn-active'));
+  const btn = document.getElementById('ss-' + col);
+  if (btn) btn.classList.add('btn-active');
+  renderStockTab();
+}}
+function filterStock(val) {{ _stockSearch = val.trim().toLowerCase(); renderStockTab(); }}
+function setStockMkt(m) {{
+  _stockMkt = m;
+  document.querySelectorAll('.stock-mkt-btn').forEach(b => b.classList.remove('btn-active'));
+  document.getElementById('smkt-' + m).classList.add('btn-active');
   renderStockTab();
 }}
 
+// ── sparkline：SVG 折線圖，資料來自 PRICE_SERIES（2026-08-02 索羅門新增，任務1b）
+// points 是 [[dateStr, price], ...] 升序排列；資料不足（<2點）時顯示「無足夠資料」
+// 佔位，不畫假圖騙使用者。顏色依這段序列自己的漲跌（首尾比較），跟卡片上方
+// 報酬率大字（依 avg_ret 正負）是兩個獨立判斷，各自反映各自的意義。
+function renderSparkline(points) {{
+  if (!points || points.length < 2) {{
+    return '<div style="height:32px;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:11px;">無足夠資料</div>';
+  }}
+  const W = 160, H = 32, pad = 3;
+  const vals = points.map(p => p[1]);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const x = i => pad + (i / (vals.length - 1)) * (W - pad * 2);
+  const y = v => pad + (1 - (v - min) / ((max - min) || 1)) * (H - pad * 2);
+  let d = `M ${{x(0)}} ${{y(vals[0])}} `;
+  vals.forEach((v, i) => {{ if (i > 0) d += `L ${{x(i)}} ${{y(v)}} `; }});
+  const areaD = d + `L ${{x(vals.length - 1)}} ${{H - pad}} L ${{x(0)}} ${{H - pad}} Z`;
+  const up    = vals[vals.length - 1] >= vals[0];
+  const color = up ? '#d9534f' : '#2b8a3e';
+  const last  = vals.length - 1;
+  return `<svg viewBox="0 0 ${{W}} ${{H}}" width="100%" height="${{H}}" preserveAspectRatio="none" style="display:block;">
+    <path d="${{areaD}}" fill="${{color}}" opacity="0.12"></path>
+    <path d="${{d}}" fill="none" stroke="${{color}}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+    <circle cx="${{x(last)}}" cy="${{y(vals[last])}}" r="2.4" fill="${{color}}"></circle>
+  </svg>`;
+}}
+
+// ── 個股排行：卡片網格（2026-08-02 索羅門改寫，任務1a：表格→卡片，取代舊版 <table>）
 function renderStockTab() {{
   const allNums = [...new Set(SIGNALS_DATA.map(s => s.ep_num))].sort((a,b)=>a-b);
   const keep    = _sr === 0 ? new Set(allNums) : new Set(allNums.slice(-_sr));
@@ -702,94 +836,100 @@ function renderStockTab() {{
   const gmap = {{}};
   filt.forEach(s => {{
     if (!s.code) return;
-    if (!gmap[s.code]) gmap[s.code] = {{ code: s.code, name: s.name, mkt: s.mkt === 'tw' ? '台股' : '美股', sigs: [] }};
+    if (!gmap[s.code]) gmap[s.code] = {{ code: s.code, name: s.name, mkt: s.mkt, sigs: [] }};
     gmap[s.code].sigs.push(s);
   }});
+  const totalCount = Object.keys(gmap).length;
 
-  const groups = Object.values(gmap).map(g => {{
+  let groups = Object.values(gmap).map(g => {{
     const dec  = g.sigs.filter(s => s.beat !== null && s.beat !== undefined);
     const wins = dec.filter(s => s.beat === true).length;
     const rets = g.sigs.filter(s => s.s_pct !== null && s.s_pct !== undefined).map(s => s.s_pct);
+    const bull = g.sigs.filter(s=>s.action==='+1').length;
+    const bear = g.sigs.filter(s=>s.action==='-1').length;
+    // 卡片方向 chip：多空次數較多者當代表方向；平手看最新一筆訊號的方向
+    // （多筆訊號跨集數，卡片只有一個 chip 位置，需要一個代表值——索羅門判斷）
+    const latestSig = g.sigs.reduce((a,b) => b.ep_num > a.ep_num ? b : a);
+    const dir  = bull === bear ? latestSig.action : (bull > bear ? '+1' : '-1');
+    const daysVals = g.sigs.map(s=>s.days).filter(v => v != null);
     return {{
-      ...g, total: g.sigs.length,
-      bull: g.sigs.filter(s=>s.action==='+1').length,
-      bear: g.sigs.filter(s=>s.action==='-1').length,
+      ...g, total: g.sigs.length, bull, bear, dir,
       wins, dec: dec.length,
       win_rate: dec.length ? Math.round(wins/dec.length*1000)/10 : null,
       avg_ret:  rets.length ? Math.round(rets.reduce((a,b)=>a+b,0)/rets.length*100)/100 : null,
       latest:   Math.max(...g.sigs.map(s=>s.ep_num)),
+      days:     daysVals.length ? Math.max(...daysVals) : null,
+      spark:    PRICE_SERIES[g.code] || [],
     }};
-  }}).sort((a,b) => {{
+  }});
+
+  // 簡化篩選列（任務1c）：搜尋（標的名稱/代號）+ 市場切換
+  groups = groups.filter(g => {{
+    const mktOk    = _stockMkt === 'all' || g.mkt === _stockMkt;
+    const kw       = (g.name + g.code).toLowerCase();
+    const searchOk = !_stockSearch || kw.includes(_stockSearch);
+    return mktOk && searchOk;
+  }});
+
+  groups.sort((a,b) => {{
     const va = a[_sCol] ?? -9999, vb = b[_sCol] ?? -9999;
     return (va > vb ? 1 : va < vb ? -1 : 0) * _sDir;
   }});
 
+  document.getElementById('stock-count').textContent = `${{groups.length}} / ${{totalCount}} 檔`;
+
   if (!groups.length) {{
-    document.getElementById('stock-table-container').innerHTML =
-      "<div style='padding:20px;color:#888;text-align:center;'>此範圍內無標的資料</div>";
+    document.getElementById('stock-card-grid').innerHTML =
+      "<div class='empty-state'>沒有符合篩選條件的標的</div>";
     return;
   }}
 
-  const fp  = v => v == null ? 'N/A' : (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
-  const fc  = v => v == null ? '#888' : v >= 0 ? '#d9534f' : '#2b8a3e';
-  const arr = c => c === _sCol ? (_sDir === -1 ? ' ↓' : ' ↑') : ' ↕';
+  const fp = v => v == null ? 'N/A' : (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+  const fc = v => v == null ? '#888' : v >= 0 ? '#d9534f' : '#2b8a3e';
 
-  const rows = groups.map((g, idx) => {{
-    const wrC   = g.win_rate !== null && g.win_rate >= 50 ? '#d9534f' : '#2b8a3e';
-    const wrT   = g.win_rate !== null ? g.win_rate + '%' : '待定';
-    const bb    = [g.bull ? '+'+g.bull : '', g.bear ? '-'+g.bear : ''].filter(Boolean).join(' / ');
-    const actLbl = s => s.action==='+1' ? '看好' : s.action==='-1' ? '看壞' : '中性';
-    const beatLbl = s => s.beat===true ? '✅' : s.beat===false ? '❌' : '⏳';
-    const detailHtml = g.sigs.map(s => {{
+  const html = groups.map((g, idx) => {{
+    const isWin    = g.avg_ret != null && g.avg_ret >= 0;
+    const dirCls   = g.dir === '-1' ? 'bear' : 'bull';
+    const dirLabel = g.dir === '-1' ? '看空' : '看多';
+    const mktLabel = g.mkt === 'tw' ? '台股' : '美股';
+    const daysDisp = g.days != null ? g.days + ' 天' : 'N/A';
+
+    const detailRows = g.sigs.slice().sort((a,b) => b.ep_num - a.ep_num).map(s => {{
+      const actLbl  = s.action === '+1' ? '看多' : s.action === '-1' ? '看空' : '中性';
+      const beatLbl = s.beat === true ? '✅獲勝' : s.beat === false ? '❌落後' : '⏳待定';
       const quoteHtml = s.quote
-        ? `<div style="margin-top:5px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「${{escapeHtml(s.quote)}}」</div>`
+        ? `<div style="margin-top:4px;padding-left:8px;border-left:2px solid #ccc;color:#888;font-style:italic;">「${{escapeHtml(s.quote)}}」</div>`
         : '';
-      return `
-      <tr class="sd-${{idx}}" style="display:none;background:#f8f9fa;">
-        <td colspan="7" style="padding:8px 12px 10px 28px;border-bottom:1px solid #f0f0f0;font-size:13px;color:#555;">
-          <span style="color:#888;margin-right:6px;">EP${{s.ep_num}}</span>
-          ${{actLbl(s)}}
-          <span style="margin:0 6px;color:#ccc;">|</span>
-          <span style="color:${{fc(s.s_pct)}};">${{fp(s.s_pct)}}</span>
-          <span style="margin-left:6px;">${{beatLbl(s)}}</span>
-          ${{s.raw_reason ? `<div style="margin-top:5px;color:#555;">${{escapeHtml(s.raw_reason)}}</div>` : ''}}
-          ${{quoteHtml}}
-        </td>
-      </tr>`;
+      return `<div class="sc-detail-row">
+        <span style="color:#888;">${{escapeHtml(s.ep)}}</span>
+        <span style="margin-left:6px;">${{actLbl}}</span>
+        <span style="margin-left:6px;color:${{fc(s.s_pct)}};font-weight:bold;">${{fp(s.s_pct)}}</span>
+        <span style="margin-left:6px;">${{beatLbl}}</span>
+        ${{s.raw_reason ? `<div style="margin-top:3px;color:#555;">${{escapeHtml(s.raw_reason)}}</div>` : ''}}
+        ${{quoteHtml}}
+      </div>`;
     }}).join('');
-    return `<tr style="border-bottom:1px solid #f0f0f0;cursor:pointer;" onclick="toggleSD(${{idx}}, this)">
-      <td style="padding:10px 12px;font-weight:bold;white-space:nowrap;">
-        <span class="sd-arrow-${{idx}}">▸</span> ${{escapeHtml(g.name)}}<br><span style="color:#aaa;font-size:13px;">${{escapeHtml(g.code)}}</span></td>
-      <td style="padding:10px 8px;color:#888;font-size:13px;">${{g.mkt}}</td>
-      <td style="padding:10px 8px;text-align:center;font-weight:bold;">${{g.total}}</td>
-      <td class="hm" style="padding:10px 8px;text-align:center;color:#555;font-size:13px;">${{bb}}</td>
-      <td style="padding:10px 8px;text-align:center;font-weight:bold;color:${{wrC}};">${{wrT}}</td>
-      <td style="padding:10px 8px;text-align:center;font-weight:bold;color:${{fc(g.avg_ret)}};">${{fp(g.avg_ret)}}</td>
-      <td style="padding:10px 8px;color:#888;font-size:13px;white-space:nowrap;">EP${{g.latest}}</td>
-    </tr>${{detailHtml}}`;
+
+    return `<div class="stock-card" onclick="toggleCardDetail(${{idx}})">
+        <div class="sc-row1">
+          <span class="sc-name">${{escapeHtml(g.name)}}<span class="sc-mkt-chip">${{mktLabel}}</span></span>
+          <span class="sc-dir-chip ${{dirCls}}">${{dirLabel}}</span>
+        </div>
+        <div class="sc-code">${{escapeHtml(g.code)}}</div>
+        <div class="sc-ret ${{isWin ? 'win' : 'lose'}}">${{fp(g.avg_ret)}}</div>
+        <div class="sc-spark">${{renderSparkline(g.spark)}}</div>
+        <div class="sc-meta"><span>持倉 ${{daysDisp}}</span><span>提及 ${{g.total}} 次</span></div>
+      </div>
+      <div class="sc-detail" id="scd-${{idx}}">${{detailRows}}</div>`;
   }}).join('');
 
-  document.getElementById('stock-table-container').innerHTML = `
-  <table width="100%" style="border-collapse:collapse;font-size:15px;">
-    <thead><tr style="background:#f1f3f5;color:#495057;font-size:13px;">
-      <th onclick="sortStock('name')"     style="padding:10px 12px;text-align:left;cursor:pointer;">標的${{arr('name')}}</th>
-      <th style="padding:10px 8px;text-align:left;">市場</th>
-      <th onclick="sortStock('total')"    style="padding:10px 8px;text-align:center;cursor:pointer;">次數${{arr('total')}}</th>
-      <th class="hm" style="padding:10px 8px;text-align:center;">多/空</th>
-      <th onclick="sortStock('win_rate')" style="padding:10px 8px;text-align:center;cursor:pointer;">勝率${{arr('win_rate')}}</th>
-      <th onclick="sortStock('avg_ret')"  style="padding:10px 8px;text-align:center;cursor:pointer;">均報酬${{arr('avg_ret')}}</th>
-      <th onclick="sortStock('latest')"   style="padding:10px 8px;text-align:left;cursor:pointer;">最近集${{arr('latest')}}</th>
-    </tr></thead>
-    <tbody>${{rows}}</tbody>
-  </table>`;
+  document.getElementById('stock-card-grid').innerHTML = html;
 }}
 
-function toggleSD(idx, clickedRow) {{
-  const rows  = document.querySelectorAll('.sd-' + idx);
-  const arrow = document.querySelector('.sd-arrow-' + idx);
-  const open  = rows.length > 0 && rows[0].style.display === 'table-row';
-  rows.forEach(r => r.style.display = open ? 'none' : 'table-row');
-  if (arrow) arrow.textContent = open ? '▸' : '▾';
+function toggleCardDetail(idx) {{
+  const el = document.getElementById('scd-' + idx);
+  if (!el) return;
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
 }}
 
 // ── 趨勢圖 ────────────────────────────────────────────────
