@@ -60,10 +60,11 @@ def run(args):
 
     # ── Step 3：補進場價 + 計算勝率快照 ─────────────────────────────
     step(3, "補進場價 + 更新績效快照")
-    from performance import _fill_entry_prices, calc_performance
+    from performance import _fill_entry_prices, calc_performance, win_rate
     n = _fill_entry_prices()
     logging.info(f"已補 {n} 筆進場價")
     results = calc_performance()
+    stats = win_rate(results)  # 跟 notifier.run_report() 內部原本重算的口徑一致（全集計算）
     logging.info(f"績效快照已更新（{len(results)} 筆）")
 
     # ── Step 4：生成報告 ─────────────────────────────────────────────
@@ -75,6 +76,8 @@ def run(args):
         preview    = not args.send,
         no_send    = not args.send,
         detail_url = args.detail_url,
+        results    = results,   # 2026-08-02：Step3 已經算過，直接傳給 Step4，不重算一次
+        stats      = stats,     # calc_performance()/win_rate()（任務第2項）
     )
 
     logging.info(f"\n{'='*50}")

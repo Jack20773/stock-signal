@@ -138,14 +138,25 @@ def send_subscriber_emails(subject: str, html_content: str) -> None:
 
 def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
                preview: bool = False, detail_url: str = "", no_send: bool = False,
-               override_to: str = ""):
-    if fill:
-        logging.info("補抓進場價中...")
-        n = _fill_entry_prices()
-        logging.info(f"已更新 {n} 筆進場價")
+               override_to: str = "", results: list[dict] | None = None,
+               stats: dict | None = None):
+    """results/stats：2026-08-02 索羅門新增可選參數（任務第2項）。update.py 的
+    Step3 已經呼叫過 _fill_entry_prices()/calc_performance() 算出當次結果，
+    Step4 生報告時直接把算好的傳進來，不用再重算一次（同一批訊號重複打
+    calc_performance() 等於重複掃整張 signals 表+批次查價+一次 UPDATE）。
+    預設 None 時維持原本「自己重算」的行為，notifier.py 被獨立呼叫（CLI／
+    line_query.py 之類）時完全不受影響。"""
+    if results is not None:
+        all_results = results
+        stats = stats if stats is not None else win_rate(all_results)
+    else:
+        if fill:
+            logging.info("補抓進場價中...")
+            n = _fill_entry_prices()
+            logging.info(f"已更新 {n} 筆進場價")
 
-    all_results = calc_performance()
-    stats = win_rate(all_results)  # 勝率永遠用全集計算，email/詳細版才不會對不上
+        all_results = calc_performance()
+        stats = win_rate(all_results)  # 勝率永遠用全集計算，email/詳細版才不會對不上
 
     results = all_results
     if ep_filter:
