@@ -11,6 +11,7 @@
 （見 report_html.py::generate_html_attention() 的首屏警語）。
 """
 import json
+import logging
 import math
 import re
 from datetime import date
@@ -64,20 +65,34 @@ _ep_date_cache: dict[str, str] | None = None
 def _load_episode_dates() -> dict[str, str]:
     """沿用 performance.py::_load_episodes() 的模式：讀本地 episodes.json，
     episode_id (EPxxx) -> 上架日 (YYYY-MM-DD)。不用 signals.analysis_date
-    （已查證是AI處理當天，不是真實上架日，見計畫檔定案補充第2點）。"""
+    （已查證是AI處理當天，不是真實上架日，見計畫檔定案補充第2點）——這條規則
+    是任務檔明確拍板的核心設計，讀取失敗時**不能悄悄退回 analysis_date**，
+    寧可讓呼叫端拿不到日期而跳過該筆訊號（見 compute_attention() 的
+    ep_date is None 分支），也不要用錯誤時間基準算出一個看起來正常、實際
+    不可信的分數（2026-08-02 完工前 Codex 覆核抓到：原本的 fallback 設計會
+    讓這條核心規則在 episodes.json 讀取失敗或某集查無資料時被悄悄違反且無
+    警告，這裡修正）。"""
     global _ep_date_cache
     if _ep_date_cache is not None:
         return _ep_date_cache
     _ep_date_cache = {}
-    if _EPISODES_PATH.exists():
-        try:
-            data = json.loads(_EPISODES_PATH.read_text(encoding="utf-8"))
-            _ep_date_cache = {
-                f"EP{e['number']}": e["date"]
-                for e in data if e.get("date") and e.get("number")
-            }
-        except Exception:
-            pass
+    if not _EPISODES_PATH.exists():
+        logging.warning(
+            f"[attention] 找不到 {_EPISODES_PATH}，所有訊號都無法計算真實上架日，"
+            f"這次「目前關注度」榜單會是空的（不會用 analysis_date 頂替）"
+        )
+        return _ep_date_cache
+    try:
+        data = json.loads(_EPISODES_PATH.read_text(encoding="utf-8"))
+        _ep_date_cache = {
+            f"EP{e['number']}": e["date"]
+            for e in data if e.get("date") and e.get("number")
+        }
+    except Exception as ex:
+        logging.warning(
+            f"[attention] episodes.json 讀取/解析失敗，所有訊號都無法計算真實上架日："
+            f"{ex}（不會用 analysis_date 頂替）"
+        )
     return _ep_date_cache
 
 
@@ -87,8 +102,15 @@ def _ep_num(ep: str) -> int:
     return int(m.group()) if m else 0
 
 
-def _episode_date(episode_id: str, fallback: str) -> str:
-    return _load_episode_dates().get(episode_id, fallback)
+def _episode_date(episode_id: str) -> str | None:
+    """回傳 episode_id 對應的真實上架日；episodes.json 裡找不到就回傳 None
+    ——**不 fallback 到 analysis_date**，那是任務檔明確禁止的時間基準（見
+    上方 _load_episode_dates() 說明）。呼叫端（compute_attention()）據此
+    跳過這筆訊號，不用錯誤日期硬湊出一個分數。已知代價：極少數 episode_id
+    在 episodes.json 查無資料時（本輪查證是680集裡有679集有完整date+number，
+    覆蓋率高但非100%），那幾筆訊號會被排除在關注度計算外，不會讓整檔標的
+    消失（除非該標的全部訊號都剛好卡在這極少數集數）。"""
+    return _load_episode_dates().get(episode_id)
 
 
 def _conf_weight(level) -> float:
@@ -122,7 +144,7 @@ def compute_attention(signals: list[dict], today: date | None = None) -> list[di
         if key in dedup:
             continue
 
-        ep_date_str = _episode_date(ep_id, s.get("analysis_date", ""))
+        ep_date_str = _episode_date(ep_id)
         try:
             ep_date = date.fromisoformat(ep_date_str) if ep_date_str else None
         except ValueError:

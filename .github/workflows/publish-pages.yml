@@ -32,6 +32,10 @@ jobs:
         run: |
           mkdir -p _site
           cp report_detail.html _site/index.html
+          # 2026-08-02 索羅門新增：同 update.yml 的修正，見該檔註解
+          if [ -f report_attention.html ]; then
+            cp report_attention.html _site/attention.html
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

@@ -257,7 +257,6 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   th:hover{{background:#e2e6ea;}}
   .btn-active{{background:#1a252f!important;color:#fff!important;border-color:#1a252f!important;}}
   tr.ep-row.hidden{{display:none;}}
-  .tab-btn{{margin:0 4px;padding:6px 16px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:14px;font-weight:bold;}}
   .fs-btn{{margin:0 2px;padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-weight:bold;}}
   .filter-btn{{margin:2px 3px;padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:13px;}}
   /* 個股排行卡片網格（2026-08-02 索羅門新增，任務1a：表格→卡片） */
@@ -270,6 +269,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   .sc-dir-chip{{font-size:10.5px;font-weight:bold;padding:2px 7px;border-radius:10px;border:1px solid #ddd;color:#666;white-space:nowrap;}}
   .sc-dir-chip.bull{{color:#d9534f;border-color:#f3c9c8;background:#fdecea;}}
   .sc-dir-chip.bear{{color:#1a6b9a;border-color:#c7e0f0;background:#e8f4fd;}}
+  .sc-dir-chip.neutral{{color:#888;border-color:#ddd;background:#f5f5f5;}}
   .sc-code{{font-size:11px;color:#aaa;}}
   .sc-ret{{font-size:22px;font-weight:800;margin:8px 0 2px;letter-spacing:-.02em;}}
   .sc-ret.win{{color:#d9534f;}} .sc-ret.lose{{color:#2b8a3e;}}
@@ -293,6 +293,14 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   <div style="background:#1a252f;padding:20px;text-align:center;color:#fff;border-radius:8px 8px 0 0;">
     <div style="font-size:22px;font-weight:bold;">股癌訊號勝率追蹤</div>
     <div style="color:#b3c1cd;font-size:13px;margin-top:4px;">{title} · {today} · 最新分析至 {latest_ep}</div>
+    <!-- 2026-08-02 索羅門新增：連到第8節新頁面的入口，否則使用者永遠不會知道
+         這個頁面存在（完工前 Codex 審查指出 attention.html 沒有任何頁面連過去，
+         等於功能做了但沒人找得到）。 -->
+    <div style="margin-top:8px;">
+      <a href="attention.html" style="display:inline-block;font-size:12px;color:#b3c1cd;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:4px 12px;text-decoration:none;">
+        查看目前節目關注度排行 →
+      </a>
+    </div>
   </div>
 
   <!-- Stats 第一列 -->
@@ -890,8 +898,12 @@ function renderStockTab() {{
 
   const html = groups.map((g, idx) => {{
     const isWin    = g.avg_ret != null && g.avg_ret >= 0;
-    const dirCls   = g.dir === '-1' ? 'bear' : 'bull';
-    const dirLabel = g.dir === '-1' ? '看空' : '看多';
+    // 2026-08-02 完工前 Codex 覆核抓到：g.dir 除了 '+1'/'-1' 還可能是 '0'
+    // （該標的全部訊號都是中性、或多空平手且最新一筆剛好是中性），原本只
+    // 特判 '-1'，其餘（含 '0'）一律被畫成「看多」bull 樣式，是卡片化後
+    // 新增的呈現錯誤——這裡補上中性樣式，不讓中性訊號被誤標成看多。
+    const dirCls   = g.dir === '-1' ? 'bear' : g.dir === '0' ? 'neutral' : 'bull';
+    const dirLabel = g.dir === '-1' ? '看空' : g.dir === '0' ? '中性' : '看多';
     const mktLabel = g.mkt === 'tw' ? '台股' : '美股';
     const daysDisp = g.days != null ? g.days + ' 天' : 'N/A';
 
@@ -1258,7 +1270,7 @@ def generate_html_attention(rows: list[dict], title: str = "目前節目關注�
   <div style="margin:16px;padding:12px 16px;background:#fff8e1;border:1px solid #ffe082;border-radius:8px;font-size:13px;color:#8a6d1f;line-height:1.6;">
     ⚠ 反映節目近期討論熱度，不是買賣建議。這個分數只量化「股癌最近反覆在講什麼」，
     跟這檔標的過去準不準（歷史勝率）是兩件不同的事——想看歷史勝率請回
-    <a href="report_detail.html" style="color:#8a6d1f;">主報告</a>，兩者分開看，不要混為一談。
+    <a href="index.html" style="color:#8a6d1f;">主報告</a>，兩者分開看，不要混為一談。
   </div>
 
   <div style="padding:0 16px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">

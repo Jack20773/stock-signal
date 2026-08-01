@@ -71,6 +71,13 @@ jobs:
         run: |
           mkdir -p _site
           cp report_detail.html _site/index.html
+          # 2026-08-02 索羅門新增：目前關注度頁面（任務檔第8節）原本只生成在
+          # 本地檔案系統，沒有被複製進 _site，等於這個功能永遠不會真的上線
+          # 到 GitHub Pages（完工前 Codex 審查抓到的阻塞問題）。report_attention.html
+          # 若因故沒生成（見 notifier.py 的 try/except 容錯）就跳過，不讓部署失敗。
+          if [ -f report_attention.html ]; then
+            cp report_attention.html _site/attention.html
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
