@@ -69,5 +69,17 @@ def analyze(transcript: str) -> dict:
             "Gemini 回傳缺少 extracted_signals 欄位，或型別不是陣列"
             f"（實際回傳的最外層欄位：{sorted(parsed.keys())}）"
         )
+    # 2026-08-02 索羅門補強（殘餘風險清單第3項，Codex先前標非阻塞建議）：只驗證
+    # extracted_signals 本身是 list 還不夠——database.py::save_result() 的迴圈對
+    # 每個元素直接呼叫 s.get(...)，如果 Gemini 回傳的陣列裡混入非 dict 元素
+    # （例如把某個訊號寫成字串），會在 save_result() 內部丟出未預期的
+    # AttributeError，等於同一個「格式錯誤」問題只是從這裡延後到更難追查的
+    # 下游位置才爆炸。這裡跟上面同一個模式：格式不對就當 GeminiFormatError
+    # 擋在源頭，不讓不完整的資料混進 DB 寫入路徑。
+    for i, s in enumerate(parsed["extracted_signals"]):
+        if not isinstance(s, dict):
+            raise GeminiFormatError(
+                f"Gemini 回傳的 extracted_signals[{i}] 不是物件（dict），而是 {type(s).__name__}"
+            )
 
     return parsed
