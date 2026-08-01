@@ -9,6 +9,16 @@ sys.stdout.reconfigure(encoding="utf-8")
 BENCHMARK_TW = "0050.TW"
 BENCHMARK_US = "SPY"
 
+# 2026-08-02 索羅門修正（任務第7項）：原本只回溯 10 個「日曆日」找最近交易日，
+# 農曆年連假（台股+陸股+部分亞股常見連休 9-10 天，加上前後週末可能到 10-12 天）
+# 遇到訊號進場日剛好卡在長假期間時，10 天視窗可能完全抓不到假期前最後一個交易日
+# 的收盤價。正解是用真正的休市日曆（例如 pandas_market_calendars），但這個套件
+# 目前不在專案依賴裡，且對台股（.TW/.TWO）的日曆支援不確定夠不夠準，貿然加新
+# 套件+沒把握的日曆準確性風險更高；改成「先求有再求精」的版本：回溯天數從 10
+# 天加大到 20 天，涵蓋目前已知最長的連假情境，之後真的需要更精準再換成
+# pandas_market_calendars（AI 暫定，已在 SOLOMON_HANDOFF.md 標注給使用者核對）。
+_LOOKBACK_DAYS = 20
+
 
 def benchmark_for(stock_code: str) -> str:
     return BENCHMARK_TW if (stock_code.endswith(".TW") or stock_code.endswith(".TWO")) else BENCHMARK_US
@@ -115,7 +125,7 @@ def get_close_on_or_before(ticker: str, target_date: str) -> float | None:
         return cached[(ticker, target_date)]
 
     d     = date.fromisoformat(target_date)
-    start = str(d - timedelta(days=10))
+    start = str(d - timedelta(days=_LOOKBACK_DAYS))
     end   = str(d + timedelta(days=1))
     hist  = _fetch_history(ticker, start, end)
     price = None
@@ -173,7 +183,7 @@ def batch_get_close_on_or_before(
 
     tickers   = [t for t, _ in uncached]
     all_dates = [date.fromisoformat(d) for _, d in uncached]
-    start = str(min(all_dates) - timedelta(days=10))
+    start = str(min(all_dates) - timedelta(days=_LOOKBACK_DAYS))
     end   = str(max(all_dates) + timedelta(days=1))
 
     hist_by_ticker = _download_multi(tickers, start=start, end=end)
