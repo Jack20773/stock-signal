@@ -9,6 +9,7 @@ import re
 import statistics
 from datetime import date, timedelta
 
+import attention
 import prices
 
 # ── 小工具 ──────────────────────────────────────────────────────────────────
@@ -1169,6 +1170,139 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
     </td>
   </tr>
 </table>
+</body>
+</html>"""
+
+
+# ── 目前關注度頁面（2026-08-02 索羅門新增，任務檔第8節）────────────────────
+# 獨立頁面，不跟第一頁績效報告混在一起／不加 tab（任務檔8b：使用者已明確選
+# 獨立頁面，避免「關注度」跟「歷史勝率」兩種不同性質的排序被誤讀成同一種
+# 證據）。排名資料來自 attention.compute_attention()，這裡只負責渲染。
+# 這裡走 Python 端字串直接渲染（不像主報告用 JS 從 JSON re-render）：排行榜
+# 資料量遠小於主報告的全部訊號，不需要 client-side 大量互動式篩選，只留搜尋
+# +市場兩個輕量 JS 篩選（跟1c簡化篩選列同一個產品判斷：夠用就好，不過度設計）。
+
+def generate_html_attention(rows: list[dict], title: str = "目前節目關注度") -> str:
+    """rows：attention.compute_attention() 的回傳值（已依 Attention 降冪排列、
+    已排除60天下架的標的）。文字欄位一律套用 _esc()（比照1a的escapeHtml防護
+    要求，這裡是純 Python 端渲染所以用 html.escape 版本的 _esc()，跟
+    generate_html_email() 同一套防護）。"""
+    today = date.today().isoformat()
+
+    def _card(rank: int, r: dict) -> str:
+        label, color = attention.consensus_label(r)
+        name      = _esc(r["name"])
+        code      = _esc(r["code"])
+        mkt_label = "台股" if r["mkt"] == "tw" else "美股"
+        last_ep   = _esc(r["last_episode"])
+        recent_eps = "、".join(_esc(e) for e in r["recent_30d_eps"][:8]) or "無"
+
+        quote_html = ""
+        if r["quote"]:
+            quote_html = (
+                f'<div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;'
+                f'color:#888;font-style:italic;font-size:13px;">「{_esc(r["quote"])}」'
+                f'<span style="color:#bbb;font-size:11px;margin-left:6px;">— {_esc(r["quote_ep"])}</span></div>'
+            )
+
+        return f'''
+        <div class="att-card" data-name="{(name + code).lower()}" data-mkt="{r["mkt"]}">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">{rank}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <span style="font-size:16px;font-weight:bold;color:#1a252f;">{name}</span>
+                <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">{mkt_label}</span>
+                <span style="font-size:12px;color:#aaa;">{code}</span>
+              </div>
+              <div style="font-size:12px;margin-top:3px;color:{color};font-weight:bold;">{label}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">{r["attention"]}</div>
+              <div style="font-size:10px;color:#bbb;">關注度</div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
+            <span>最後提及 {r["last_date"]}（{last_ep}）</span>
+            <span>近30天提及：{recent_eps}</span>
+          </div>
+          {quote_html}
+        </div>'''
+
+    cards_html = "".join(_card(i + 1, r) for i, r in enumerate(rows))
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{_esc(title)}</title>
+<style>
+  body{{margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#333;}}
+  .wrap{{max-width:760px;margin:20px auto;background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.07);overflow:hidden;}}
+  @media(max-width:600px){{.wrap{{margin:0;border-radius:0;}}}}
+  .att-card{{border:1px solid #eee;border-radius:8px;padding:14px 16px;margin:0 16px 10px;background:#fff;}}
+  .att-card.hidden{{display:none;}}
+  .filter-btn{{margin:2px 3px;padding:5px 12px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;font-size:13px;}}
+  .btn-active{{background:#1a252f!important;color:#fff!important;border-color:#1a252f!important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="background:#1a252f;padding:20px;text-align:center;color:#fff;border-radius:8px 8px 0 0;">
+    <div style="font-size:20px;font-weight:bold;">{_esc(title)}</div>
+    <div style="color:#b3c1cd;font-size:13px;margin-top:4px;">{today}</div>
+  </div>
+
+  <!-- 首屏警語（任務檔8b明確要求，定位差異必須在介面上明確標示） -->
+  <div style="margin:16px;padding:12px 16px;background:#fff8e1;border:1px solid #ffe082;border-radius:8px;font-size:13px;color:#8a6d1f;line-height:1.6;">
+    ⚠ 反映節目近期討論熱度，不是買賣建議。這個分數只量化「股癌最近反覆在講什麼」，
+    跟這檔標的過去準不準（歷史勝率）是兩件不同的事——想看歷史勝率請回
+    <a href="report_detail.html" style="color:#8a6d1f;">主報告</a>，兩者分開看，不要混為一談。
+  </div>
+
+  <div style="padding:0 16px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <input id="att-search" type="text" placeholder="搜尋標的名稱、代號..."
+      oninput="attFilter()"
+      style="flex:1;max-width:240px;padding:6px 12px;border:1px solid #ddd;border-radius:12px;font-size:13px;outline:none;">
+    <button id="amkt-all" class="filter-btn btn-active" onclick="attSetMkt('all')">全部</button>
+    <button id="amkt-tw"  class="filter-btn" onclick="attSetMkt('tw')">台股</button>
+    <button id="amkt-us"  class="filter-btn" onclick="attSetMkt('us')">美股</button>
+    <span id="att-count" style="font-size:12px;color:#bbb;margin-left:auto;"></span>
+  </div>
+
+  <div id="att-list">{cards_html}</div>
+  <div id="att-empty" style="display:none;padding:30px;text-align:center;color:#888;font-size:13px;">沒有符合篩選條件的標的</div>
+
+  <div style="padding:14px;text-align:center;font-size:11px;color:#bbb;border-top:1px solid #f0f0f0;">
+    共 {len(rows)} 檔標的目前列入關注（超過 {attention.DELIST_DAYS} 天沒被提到自動下架，只留歷史頁）· 僅供參考，非投資建議
+  </div>
+</div>
+<script>
+let _amkt = 'all';
+function attSetMkt(m) {{
+  _amkt = m;
+  document.querySelectorAll('.filter-btn').forEach(b => {{
+    if (b.id.startsWith('amkt-')) b.classList.toggle('btn-active', b.id === 'amkt-' + m);
+  }});
+  attFilter();
+}}
+function attFilter() {{
+  const q = document.getElementById('att-search').value.trim().toLowerCase();
+  const cards = document.querySelectorAll('.att-card');
+  let visible = 0;
+  cards.forEach(c => {{
+    const nameOk = !q || (c.dataset.name || '').includes(q);
+    const mktOk  = _amkt === 'all' || c.dataset.mkt === _amkt;
+    const ok = nameOk && mktOk;
+    c.classList.toggle('hidden', !ok);
+    if (ok) visible++;
+  }});
+  document.getElementById('att-count').textContent = visible + ' / ' + cards.length + ' 檔';
+  document.getElementById('att-empty').style.display = visible === 0 ? '' : 'none';
+}}
+document.addEventListener('DOMContentLoaded', attFilter);
+</script>
 </body>
 </html>"""
 

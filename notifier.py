@@ -32,8 +32,9 @@ load_dotenv(override=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
                     handlers=[logging.StreamHandler(sys.stdout)])
 
-from report_html import generate_html_detail, generate_html_email, _ep_num
-from database import list_active_subscribers, save_latest_report
+from report_html import generate_html_detail, generate_html_email, generate_html_attention, _ep_num
+from database import list_active_subscribers, save_latest_report, list_signals
+from attention import compute_attention
 
 # ── 寄信 ────────────────────────────────────────────────────────────────────
 
@@ -194,6 +195,22 @@ def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
                 f.write(html_detail)
         except OSError as e:
             logging.error(f"寫入 report_detail.html 失敗：{e}")
+
+        # 目前關注度頁面（2026-08-02 索羅門新增，任務檔第8節）——獨立頁面，
+        # 用全部歷史訊號重算（不受這次 report_detail 的 ep_filter/last_n 篩選
+        # 影響，榜單本身有自己的60天下架規則，見 attention.compute_attention()）。
+        # 這是為了讓這輪新增的功能真的會被產生出來的最小連帶修改（任務檔第8節
+        # 沒有明講怎麼接進pipeline，索羅門判斷比照 report_detail.html 同一個
+        # 產生時機最合理）；失敗只記警告，不影響主報告已經寫成功這件事。
+        try:
+            attention_rows = compute_attention(list_signals())
+            html_attention = generate_html_attention(attention_rows)
+            with open("report_attention.html", "w", encoding="utf-8") as f:
+                f.write(html_attention)
+            logging.info(f"目前關注度頁面已更新：{len(attention_rows)} 檔標的")
+        except Exception as e:
+            logging.error(f"生成 report_attention.html 失敗（不影響主報告）：{e}")
+
         if not no_send:
             # 寄送簡要版 email
             html_email = generate_html_email(results, title, stats, detail_url)
