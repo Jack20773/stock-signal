@@ -409,10 +409,10 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     </div>
     <div style="padding:8px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
       <span style="font-size:12px;color:#aaa;">範圍：</span>
-      <button id="sr-0"   class="filter-btn sr-btn btn-active" onclick="setStockRange(0)">全部</button>
+      <button id="sr-0"   class="filter-btn sr-btn" onclick="setStockRange(0)">全部</button>
       <button id="sr-100" class="filter-btn sr-btn" onclick="setStockRange(100)">最新 100 集</button>
       <button id="sr-50"  class="filter-btn sr-btn" onclick="setStockRange(50)">最新 50 集</button>
-      <button id="sr-20"  class="filter-btn sr-btn" onclick="setStockRange(20)">最新 20 集</button>
+      <button id="sr-20"  class="filter-btn sr-btn btn-active" onclick="setStockRange(20)">最新 20 集</button>
       <span style="font-size:12px;color:#aaa;margin-left:10px;">排序：</span>
       <button id="ss-total"    class="filter-btn ss-btn btn-active" onclick="sortStock('total')">次數</button>
       <button id="ss-win_rate" class="filter-btn ss-btn" onclick="sortStock('win_rate')">勝率</button>
@@ -786,7 +786,7 @@ function sortBy(col) {{
 // ── 以標的 JS 動態渲染 ────────────────────────────────────
 const SIGNALS_DATA = {signals_json};
 const PRICE_SERIES = {price_series_json};
-let _sr = 0, _sCol = 'total', _sDir = -1, _stockSearch = '', _stockMkt = 'all';
+let _sr = 20, _sCol = 'total', _sDir = -1, _stockSearch = '', _stockMkt = 'all';
 
 function setStockRange(n) {{
   _sr = n;
