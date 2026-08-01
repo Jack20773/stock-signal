@@ -12,8 +12,11 @@
        約略等距分佈在680集歷史裡，捕捉長期存在的口頭禪/黑話)，共23集抽樣
        目標，其中 EP677 逐字稿檔案缺失（見 crosscheck.py 同一輪的發現），
        實際跑 22 集。
-    2. 分批萃取：每批3集丟給 DeepSeek，請它找「隱性指涉／反諷句型／口頭禪」
-       三類、每條要附原文引用，不要空泛描述。
+    2. 逐集萃取：每次1集丟給 DeepSeek，請它找「隱性指涉／反諷句型／口頭禪」
+       三類、每條要附原文引用，不要空泛描述（原本設計是每批3集，實測發現
+       候選數量多的批次會撞到completion輸出上限被截斷、JSON解析失敗、整批
+       候選歸零，改成逐集呼叫規避這個風險，見BATCH_SIZE註解與_call_deepseek()
+       的finish_reason檢查）。
     3. 二次彙整：把全部批次的候選結果（不是原始逐字稿，只是萃取出的候選
        清單，體積小很多）餵給另一次 DeepSeek 呼叫做去重＋挑出證據最充分的
        條目，輸出最終詞典。
@@ -102,6 +105,10 @@ def _call_deepseek(system_prompt: str, user_content: str, max_tokens: int = 8192
 
 
 def _parse_json_array(raw: str) -> list:
+    """2026-08-02完工前Codex最終審查指出：原本沒驗證陣列元素本身是不是dict，
+    模型若回傳像 ["foo"] 這種「合法JSON但元素不是物件」的格式，會在下游
+    _fallback_group()/render_markdown() 呼叫 .get() 時整個腳本崩潰——這裡
+    在源頭就把非dict元素過濾掉並警告，不讓格式不對的東西混進候選清單。"""
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
     try:
@@ -111,11 +118,18 @@ def _parse_json_array(raw: str) -> list:
         return []
     if isinstance(parsed, dict):
         # 有些回應可能包成 {"patterns": [...]}，容錯抓第一個 list 欄位
+        found = None
         for v in parsed.values():
             if isinstance(v, list):
-                return v
-        return []
-    return parsed if isinstance(parsed, list) else []
+                found = v
+                break
+        parsed = found or []
+    elif not isinstance(parsed, list):
+        parsed = []
+    non_dict = [x for x in parsed if not isinstance(x, dict)]
+    if non_dict:
+        logging.warning(f"  萃取結果混入 {len(non_dict)} 個非物件元素，已過濾：{non_dict[:3]}")
+    return [x for x in parsed if isinstance(x, dict)]
 
 
 _EXTRACT_SYSTEM = """你是研究台灣財經Podcast《股癌》主持人謝孟恭語言習慣的分析師。
@@ -169,8 +183,12 @@ def run_batch(nums: list[int]) -> list[dict]:
     user_content = "\n\n".join(parts)
     try:
         raw = _call_deepseek(_EXTRACT_SYSTEM, user_content)
-    except RuntimeError as e:
-        logging.error(f"  批次 {nums} 呼叫失敗（{e}），這批候選會是空的，不是這幾集真的沒有模式")
+    except (RuntimeError, requests.RequestException, KeyError) as e:
+        # 2026-08-02完工前Codex最終審查指出：原本只接RuntimeError（自訂的
+        # 截斷偵測），網路逾時/HTTP錯誤/回應缺欄位(KeyError)都會直接讓整個
+        # main()迴圈中斷、後面還沒跑的集數全部沒有機會執行——改成這批失敗
+        # 只記錯誤、回空清單，其餘集數繼續跑，不因單一批次失敗就整個沒產出。
+        logging.error(f"  批次 {nums} 呼叫失敗（{type(e).__name__}: {e}），這批候選會是空的，不是這幾集真的沒有模式")
         return []
     return _parse_json_array(raw)
 
@@ -205,11 +223,18 @@ def consolidate(all_candidates: list[dict]) -> dict:
     try:
         raw = _call_deepseek(_CONSOLIDATE_SYSTEM, json.dumps(all_candidates, ensure_ascii=False))
         parsed = json.loads(re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip()))
+        if not isinstance(parsed, dict):
+            raise ValueError(f"彙整結果最外層不是物件，而是 {type(parsed).__name__}")
         for key in ("inexplicit_reference", "irony_pattern", "catchphrase"):
-            parsed.setdefault(key, [])
+            items = parsed.get(key, [])
+            # 同樣過濾非dict元素（見_parse_json_array同款防護理由）
+            parsed[key] = [x for x in items if isinstance(x, dict)] if isinstance(items, list) else []
         return parsed
-    except (RuntimeError, json.JSONDecodeError) as e:
-        logging.error(f"  二次彙整LLM呼叫失敗/解析失敗（{e}），改用純程式化去重當保底方案"
+    except (RuntimeError, requests.RequestException, KeyError, json.JSONDecodeError, ValueError) as e:
+        # 2026-08-02完工前Codex最終審查指出：原本只接(RuntimeError,
+        # JSONDecodeError)，網路錯誤/回應缺欄位不會被擋下；擴大例外範圍，
+        # 任何一種失敗都落到程式化保底方案，不讓腳本整個崩潰、沒有任何產出。
+        logging.error(f"  二次彙整LLM呼叫失敗/解析失敗（{type(e).__name__}: {e}），改用純程式化去重當保底方案"
                        f"（沒有語意合併，只是精簡展示原始候選，品質比LLM彙整版粗糙，"
                        f"完工報告會如實揭露這個降級）")
         return _fallback_group(all_candidates)
@@ -230,7 +255,8 @@ def render_markdown(final: dict, sample_episodes: list[int], missing: list[int],
         f"  - 歷史8集等距抽樣（EP50/130/210/290/370/450/530/610，捕捉長期存在的口頭禪/黑話）",
         f"  - 取樣清單中 EP677 逐字稿檔案在 transcripts/ 目錄缺失（既有資料缺口，"
         f"跟 crosscheck.py 那輪的發現一致），實際處理 {len(sample_episodes) - len(missing)} 集",
-        f"- 分批萃取（每批3集）+ 二次彙整去重，共產生 {n_candidates} 條候選、"
+        f"- 逐集萃取（每次1集，避免批次過大導致輸出被截斷）+ 二次彙整去重，"
+        f"共產生 {n_candidates} 條候選、"
         f"彙整後保留下方列出的條目",
         f"- DeepSeek 呼叫總花費：約 ${cost_usd:.4f}",
         "",

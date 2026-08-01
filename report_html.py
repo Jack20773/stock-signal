@@ -1475,11 +1475,23 @@ def generate_html_transcripts(episodes: list[dict], title: str = "逐字稿") ->
     展開時 fetch 404 會顯示清楚的「這集逐字稿檔案缺失」提示，不是靜默失敗。"""
     today = date.today().isoformat()
     eps_sorted = sorted(episodes, key=lambda e: e.get("number", 0), reverse=True)
-    meta = [{
-        "num":   e.get("number"),
-        "title": e.get("display_title") or e.get("title") or "",
-        "date":  e.get("date", ""),
-    } for e in eps_sorted if e.get("number")]
+    meta = []
+    for e in eps_sorted:
+        # 2026-08-02完工前Codex最終審查指出：number未經型別驗證就直接插進
+        # HTML屬性與inline onclick JS（見下方_item()），episodes.json是從
+        # 外部網站下載的資料，理論上若上游被污染塞進非整數字串，這裡會變成
+        # 一個stored XSS缺口。用int()強制轉型當防線——轉不成功代表資料本身
+        # 有問題，跳過這筆並警告，不要讓非整數值有機會流進HTML/JS。
+        try:
+            num = int(e.get("number"))
+        except (TypeError, ValueError):
+            logging.warning(f"[report_html] episodes.json 有一筆 number 不是合法整數，跳過：{e.get('number')!r}")
+            continue
+        meta.append({
+            "num":   num,
+            "title": e.get("display_title") or e.get("title") or "",
+            "date":  e.get("date", ""),
+        })
     meta_json = _json_for_script(meta, ensure_ascii=False)
 
     def _item(m: dict) -> str:
@@ -1551,24 +1563,43 @@ def generate_html_transcripts(episodes: list[dict], title: str = "逐字稿") ->
 <script>
 {_onboard_js('sig_onboard_dismissed_transcripts')}
 const TR_META = {meta_json};
-const _trTextCache = {{}};   // num -> 全文（已載入過的集數快取，不重複下載）
+const _trTextCache = {{}};    // num -> 全文（已完成的下載結果快取，不重複下載）
+const _trPending = {{}};      // num -> 進行中的fetch Promise（2026-08-02完工前
+                            // Codex最終審查指出：原本只靠_trTextCache擋重複
+                            // 下載，但同一個num的fetch還沒resolve前，第二次
+                            // 呼叫trFetchOne()看到cache還是undefined，會再送
+                            // 一次fetch——尤其trEnsureAllLoaded()一次對679個
+                            // num發動Promise.all時，若使用者手滑觸發第二次
+                            // 搜尋，兩批Promise.all會互相疊加成上千個並行
+                            // 請求。這裡改成同一個num的fetch進行中時直接回傳
+                            // 同一個pending promise，不重新發起。
 let _trFullLoaded = false;
+let _trFullLoadPromise = null;
+let _trSearchGen = 0;  // 搜尋世代計數器：避免舊搜尋在使用者已經改了關鍵字之後
+                        // 才跑完，用過期結果覆蓋新搜尋的畫面（見trDoSearch()）
 
 async function trFetchOne(num) {{
   if (_trTextCache[num] !== undefined) return _trTextCache[num];
-  try {{
-    const resp = await fetch('{TRANSCRIPTS_DATA_DIR_NAME}/EP' + num + '.txt');
-    if (!resp.ok) {{
+  if (_trPending[num]) return _trPending[num];
+  const p = (async () => {{
+    try {{
+      const resp = await fetch('{TRANSCRIPTS_DATA_DIR_NAME}/EP' + num + '.txt');
+      if (!resp.ok) {{
+        _trTextCache[num] = null;
+        return null;
+      }}
+      const text = await resp.text();
+      _trTextCache[num] = text;
+      return text;
+    }} catch (e) {{
       _trTextCache[num] = null;
       return null;
+    }} finally {{
+      delete _trPending[num];
     }}
-    const text = await resp.text();
-    _trTextCache[num] = text;
-    return text;
-  }} catch (e) {{
-    _trTextCache[num] = null;
-    return null;
-  }}
+  }})();
+  _trPending[num] = p;
+  return p;
 }}
 
 async function trToggle(num) {{
@@ -1596,10 +1627,15 @@ async function trToggle(num) {{
 
 async function trEnsureAllLoaded() {{
   if (_trFullLoaded) return;
+  if (_trFullLoadPromise) return _trFullLoadPromise;  // 已經有一次全量下載在
+                                                        // 跑，共用同一個promise
+                                                        // 不重新發起679個請求
   const status = document.getElementById('tr-status');
   status.textContent = '首次搜尋下載全部逐字稿中...';
-  await Promise.all(TR_META.map(m => trFetchOne(m.num)));
-  _trFullLoaded = true;
+  _trFullLoadPromise = Promise.all(TR_META.map(m => trFetchOne(m.num))).then(() => {{
+    _trFullLoaded = true;
+  }});
+  await _trFullLoadPromise;
 }}
 
 let _trSearchTimer = null;
@@ -1610,6 +1646,8 @@ function trOnSearchInput(v) {{
 
 async function trDoSearch(q) {{
   q = q.trim();
+  const myGen = ++_trSearchGen;  // 這次搜尋的世代號，跑完後如果已經不是最新
+                                  // 世代（使用者又改了關鍵字），就放棄更新畫面
   const status = document.getElementById('tr-status');
   const items = document.querySelectorAll('.tr-item');
   if (!q) {{
@@ -1620,6 +1658,9 @@ async function trDoSearch(q) {{
   }}
   const t0 = performance.now();
   await trEnsureAllLoaded();
+  if (myGen !== _trSearchGen) return;  // 2026-08-02完工前Codex最終審查指出：
+                                         // 舊搜尋在使用者改關鍵字後才跑完，會
+                                         // 用過期結果覆蓋新搜尋畫面——這裡擋下
   const ql = q.toLowerCase();
   let matched = 0;
   items.forEach(el => {{

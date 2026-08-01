@@ -91,22 +91,33 @@ def call_deepseek(transcript: str) -> dict:
     today = date.today().isoformat()
     user_content = f"今天日期：{today}\n\n以下是今天的逐字稿：\n\n{transcript}"
 
-    resp = requests.post(
-        DEEPSEEK_URL,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={
-            "model": "deepseek-chat",
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_content},
-            ],
-            "temperature": 0,
-        },
-        timeout=180,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    raw = data["choices"][0]["message"]["content"].strip()
+    # 2026-08-02完工前Codex最終審查指出：requests.post()逾時/連線錯誤、
+    # raise_for_status()的HTTPError、回應缺choices/message欄位的KeyError，
+    # 原本都不會被包成CrosscheckError，會直接從main()的for迴圈炸出去，
+    # 讓還沒跑的其餘集數全部沒有機會執行——這裡統一包一層，讓main()既有的
+    # `except CrosscheckError`能接住所有DeepSeek呼叫失敗的情況。
+    try:
+        resp = requests.post(
+            DEEPSEEK_URL,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": "deepseek-chat",
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_content},
+                ],
+                "temperature": 0,
+            },
+            timeout=180,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        raw = data["choices"][0]["message"]["content"].strip()
+    except requests.RequestException as e:
+        raise CrosscheckError(f"DeepSeek API呼叫失敗（網路/HTTP錯誤）：{e}") from e
+    except (KeyError, IndexError, ValueError) as e:
+        raise CrosscheckError(f"DeepSeek回應格式不符預期（缺欄位或無法解析JSON）：{e}") from e
+
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
     try:

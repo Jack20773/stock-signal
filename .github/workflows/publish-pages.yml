@@ -6,7 +6,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 2026-08-02 索羅門完工前Codex最終審查指出：原本10分鐘在cache完全命中
+    # 時夠用，但cache miss（例如第一次跑、或cache被GitHub自動清掉）時
+    # download_transcripts.py單是重試延遲（680集×0.5秒sleep）就要近6分鐘，
+    # 加上實際下載+報告生成+artifact上傳，10分鐘有明顯逾時風險。拉高到
+    # 25分鐘給足冷啟動空間，不影響cache命中時的正常快速結束。
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
