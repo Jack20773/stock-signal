@@ -36,8 +36,10 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
+import urllib.error
+
 from independent_transcribe import (
-    run_independent_transcription, srt_to_md, safe_filename,
+    run_independent_transcription, srt_to_md, safe_filename, atomic_write_text,
     TRANSCRIPTS_DIR, IndependentTranscribeError,
 )
 
@@ -65,8 +67,10 @@ def fetch_youtube_episodes(timeout: int = 120) -> dict[int, dict]:
     """
     import subprocess
     cmd = ["yt-dlp", "--flat-playlist", "-J", CHANNEL_URL]
-    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", timeout=timeout)
+    # 2026-08-02 索羅門修正（Codex 審查指出）：errors="replace" 會把解碼不出來的位元組
+    # 靜默換成 U+FFFD，JSON 仍可能解析成功，但欄位內容已經被污染——這裡改成嚴格 UTF-8
+    # （不帶 errors=），解碼失敗就整段報錯，不讓壞資料悄悄流進 EP 編號/標題。
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
     if proc.returncode != 0:
         raise RuntimeError(f"yt-dlp 取得頻道清單失敗 (exit {proc.returncode}): {proc.stderr[-2000:]}")
     data = json.loads(proc.stdout)
@@ -120,6 +124,28 @@ def detect_gap_episodes(yt_map: dict[int, dict], local_nums: set[int],
     return gaps
 
 
+def detect_duplicate_episode_files() -> dict[int, list[str]]:
+    """掃 transcripts/ 找出同一個 EP 編號對到 2 個以上檔案的情況，回傳 {EP編號: [檔名,...]}。
+
+    2026-08-02 索羅門新增（完工前 Codex 獨立審查指出最重要的相容性風險）：如果獨立轉錄
+    寫入的 `EPxxx_我的標題.md` 之後，whatmkreallysaid.com 又補上同一集，
+    `download_transcripts.py` 是依「完整檔名」判斷是否已下載（不是依 EP 號），通常會
+    另外寫一份 `EPxxx_對方的標題.md`——這樣 transcripts/ 就會有同一集兩個檔案。
+    `batch.py::load_transcripts()` 用 glob 抓全部 `EP*.md`，兩份都會被讀到、都映射成
+    同一個 `episode_id`；哪一份先被分析、寫進 `episode_analysis` 表，另一份就會因為
+    「已分析」被永久跳過——分析結果會卡在先分析到的那個版本，即使後來 whatmkreallysaid.com
+    版本品質更好也不會被拿去重新分析。這是這一輪機制無法在不動 batch.py 核心邏輯（任務
+    範圍明確排除）的前提下完全解決的問題，只能做偵測+警告，讓使用者知道要處理，
+    詳見完工報告「殘餘風險」。
+    """
+    by_ep: dict[int, list[str]] = {}
+    for f in TRANSCRIPTS_DIR.glob("EP*.md"):
+        m = re.match(r"EP(\d+)", f.stem, re.IGNORECASE)
+        if m:
+            by_ep.setdefault(int(m.group(1)), []).append(f.name)
+    return {ep: names for ep, names in by_ep.items() if len(names) > 1}
+
+
 # ---------------------------------------------------------------- 標題產生
 
 
@@ -135,13 +161,19 @@ def _title_from_description(video_id: str, timeout: int = 30) -> str:
     的顯示問題——已實測跑出 4 個檔名/標題被寫壞的檔案，見 SOLOMON_HANDOFF.md）。改用
     `-J`（JSON dump）：JSON 輸出的編碼是定義明確的 UTF-8，不受主控台編碼影響，跟本模組
     抓頻道清單（fetch_youtube_episodes()）用的是同一種可靠做法。
+
+    2026-08-02 索羅門修正（Codex 審查指出）：這裡故意保留嚴格 UTF-8 解碼（不帶
+    errors="replace"）——跟 fetch_youtube_episodes() 同一個理由，解碼失敗就當標題抓取
+    失敗（回退到「獨立轉錄」），不讓亂碼字元悄悄寫進檔名。這個函式本身允許失敗退化
+    （裝飾性資訊），跟前者「失敗就整段報錯」的處理不同，是因為這裡影響範圍只是檔名
+    好不好看，不影響資料正確性。
     """
     import subprocess
     try:
         proc = subprocess.run(
             ["yt-dlp", "--skip-download", "-J",
              f"https://www.youtube.com/watch?v={video_id}"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+            capture_output=True, text=True, encoding="utf-8", timeout=timeout)
         if proc.returncode != 0:
             return "獨立轉錄"
         data = json.loads(proc.stdout)
@@ -149,7 +181,7 @@ def _title_from_description(video_id: str, timeout: int = 30) -> str:
         first_line = description.splitlines()[0].strip() if description else ""
         first_line = re.sub(r"[\\/:*?\"<>|]", "_", first_line)
         return first_line[:40] or "獨立轉錄"
-    except Exception:  # noqa: BLE001 - 裝飾性資訊，任何失敗都不該擋住主流程
+    except Exception:  # noqa: BLE001 - 裝飾性資訊，任何失敗（含解碼失敗）都退回預設值，不擋主流程
         return "獨立轉錄"
 
 
@@ -176,25 +208,47 @@ def _append_manifest_record(record: dict):
 # ---------------------------------------------------------------- 交叉驗證（1d）
 
 
+class RemoteFetchTransportError(RuntimeError):
+    """連線層失敗（逾時/DNS/TLS/5xx等）——跟「這一集真的不存在（404）」是不同性質的問題，
+    不能都當「對方沒有」處理，否則暫時性網路故障會被誤判成真缺口，寫出一份獨立轉錄版，
+    等網路恢復、whatmkreallysaid.com 其實一直都有這集時，會造成同一集兩個檔案並存
+    （2026-08-02 索羅門依 Codex 完工前獨立審查意見修正，原版把所有例外都吞成 None）。"""
+
+
 def _fetch_remote_md(filename: str, timeout: int = 20) -> str | None:
     """直接向 whatmkreallysaid.com 要單一集的逐字稿內容（不透過本地 transcripts/，
-    因為這個情境下本地本來就還沒有這一集）。查不到（例如剛好對方也還沒更新）回 None。
+    因為這個情境下本地本來就還沒有這一集）。
+
+    回傳 None 只代表「確認是 404，這一集真的不存在」；其他任何連線層問題（逾時/DNS/
+    TLS/5xx/解碼失敗）一律拋出 RemoteFetchTransportError，呼叫端要分開處理，不能把
+    「連不上」跟「查證過真的沒有」混為一談。
     """
     url = f"https://whatmkreallysaid.com/episodes/{urllib.parse.quote(filename)}"
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.read().decode("utf-8")
-    except Exception:  # noqa: BLE001 - 404/逾時都視為「對方沒有」，不是程式錯誤
-        return None
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise RemoteFetchTransportError(f"HTTP {e.code}（非 404，視為暫時性錯誤）: {e}") from e
+    except Exception as e:  # noqa: BLE001 - 逾時/DNS/TLS/解碼失敗都算連線層問題
+        raise RemoteFetchTransportError(f"{type(e).__name__}: {e}") from e
 
 
 def compare_paragraphs(remote_text: str, independent_text: str) -> dict:
     """逐段落比對差異。回傳整體相似度 + 差異區塊清單，只記錄不覆蓋任何檔案。
 
-    誠實邊界：差異的「類型」是啟發式判斷（看差異區塊落在哪一邊），不是語意層級的
-    精準分類——「兩邊都有但不同」有可能只是斷句/措辭差異，不一定是實質內容衝突，
-    需要人工複核，不能把這個腳本的分類當成最終結論。
+    誠實邊界（2026-08-02 索羅門依 Codex 完工前獨立審查意見補強說明）：
+    - 這是**字串對齊層級**的差異候選，不是語意判斷。`difflib.SequenceMatcher` 在段落
+      陣列上只會把完全相等的段落當錨點——whatmkreallysaid.com 版有人工主題分節，獨立
+      轉錄版是純字數切段，兩者分段方式不同時，即使文字內容幾乎一樣，也可能整篇被判成
+      一大塊「replace」，這時「diff_count」與各區塊的「類型」主要反映的是分段方式差異，
+      不是內容差異——不能把這個腳本的分類當成「這裡真的漏字/這裡真的省略」的定論。
+    - `similarity_ratio` 是對含標題/`##`/空行/標點的原始 markdown 全文算的，這些格式
+      字元本身就會拉低分數，不是內容相似度的精確量測，只能當粗略參考。
+    - 只回報，不下因果結論；不能輸出「官方省略」這種帶因果意味的字眼（見下方 whatmkreallysaid.com
+      不是股癌官方這件事的說明）。
     """
     def paras(text):
         return [p.strip() for p in text.split("\n\n") if p.strip() and not p.strip().startswith("#")]
@@ -210,15 +264,26 @@ def compare_paragraphs(remote_text: str, independent_text: str) -> dict:
         remote_chunk = "\n\n".join(remote_paras[i1:i2])
         indep_chunk = "\n\n".join(indep_paras[j1:j2])
         if tag == "delete":
-            dtype = "官方有、獨立轉錄沒有（可能是獨立轉錄辨識遺漏，也可能是斷段方式不同，需人工複核）"
+            dtype = ("whatmkreallysaid.com 版有、獨立轉錄沒有（可能是獨立轉錄辨識遺漏，也可能只是"
+                     "兩邊段落切法不同、內容其實有對齊到別的區塊，需人工複核，這是字串對齊層級的"
+                     "差異候選，不是語意判斷）")
         elif tag == "insert":
-            dtype = "獨立轉錄有、官方沒有（可能是官方逐字稿省略贊助口白/開場白，也可能是誤聽多出的內容，需人工複核）"
+            dtype = ("獨立轉錄有、whatmkreallysaid.com 版沒有（可能是對方逐字稿省略贊助口白/開場白，"
+                     "也可能是獨立轉錄誤聽多出的內容，也可能只是段落切法不同，需人工複核，這是字串"
+                     "對齊層級的差異候選，不是語意判斷）")
         else:
-            dtype = "兩邊都有但內容不同（可能是實質差異，也可能只是措辭/斷句不同，需人工複核）"
+            dtype = ("兩邊都有但內容不同（可能是實質差異，也可能只是措辭/斷句不同或段落切法不同，"
+                     "需人工複核，這是字串對齊層級的差異候選，不是語意判斷）")
         diffs.append({"type": dtype,
                        "remote_excerpt": remote_chunk[:200],
                        "independent_excerpt": indep_chunk[:200]})
     return {"similarity_ratio": round(overall_ratio, 4), "diff_count": len(diffs), "diffs": diffs}
+
+
+def _md_code_safe(text: str) -> str:
+    """把要塞進 Markdown inline code（反引號包住）的片段做最小清理：反引號跟換行
+    都會讓 inline code 語法壞掉，換成全形反引號/空格分隔，不影響閱讀。"""
+    return text.replace("`", "｀").replace("\n", " ")
 
 
 def _append_diff_report(ep_id: str, comparison: dict, remote_filename: str):
@@ -228,19 +293,28 @@ def _append_diff_report(ep_id: str, comparison: dict, remote_filename: str):
         if is_new:
             f.write("# 獨立轉錄 vs whatmkreallysaid.com 交叉驗證差異紀錄\n\n"
                      "純附加紀錄，只記錄差異，不覆蓋任何既有 .md 檔案內容。\n"
-                     "由 `sync_independent_transcripts.py` 自動產生。\n\n---\n\n")
+                     "由 `sync_independent_transcripts.py` 自動產生。\n\n"
+                     "**用詞說明**：whatmkreallysaid.com 是第三方粉絲網站，不是股癌節目"
+                     "官方逐字稿來源，下面一律稱「whatmkreallysaid.com 版」，不稱「官方版」。\n\n"
+                     "**方法論說明**：差異是字串對齊層級的候選，不是語意判斷，見\n"
+                     "`compare_paragraphs()` 的 docstring；下面每筆差異都需要人工複核，"
+                     "不能直接當結論引用。\n\n---\n\n")
         f.write(f"## {ep_id}（比對時間 {datetime.now(timezone.utc).isoformat()}）\n\n")
-        f.write(f"- 官方逐字稿檔名：`{remote_filename}`\n")
-        f.write(f"- 整體字元相似度：{comparison['similarity_ratio']:.2%}\n")
+        f.write(f"- whatmkreallysaid.com 版逐字稿檔名：`{remote_filename}`\n")
+        f.write(f"- 整體字元相似度（粗略參考，見方法論說明）：{comparison['similarity_ratio']:.2%}\n")
         f.write(f"- 差異區塊數：{comparison['diff_count']}\n\n")
         for i, d in enumerate(comparison["diffs"], 1):
             f.write(f"### 差異 {i}：{d['type']}\n\n")
-            f.write(f"- 官方版片段：`{d['remote_excerpt']}`\n")
-            f.write(f"- 獨立轉錄版片段：`{d['independent_excerpt']}`\n\n")
+            f.write(f"- whatmkreallysaid.com 版片段：`{_md_code_safe(d['remote_excerpt'])}`\n")
+            f.write(f"- 獨立轉錄版片段：`{_md_code_safe(d['independent_excerpt'])}`\n\n")
         f.write("---\n\n")
 
 
 # ---------------------------------------------------------------- 主流程
+
+
+def _cross_validated_path(ep_id: str) -> Path:
+    return MANIFEST_DIR / "cross_validated_raw" / f"{ep_id}_independent.md"
 
 
 def process_episode(ep_num: int, yt_info: dict, remote_map: dict[int, dict],
@@ -252,6 +326,14 @@ def process_episode(ep_num: int, yt_info: dict, remote_map: dict[int, dict],
     existing = list(TRANSCRIPTS_DIR.glob(f"{ep_id}_*.md")) + list(TRANSCRIPTS_DIR.glob(f"{ep_id}.md"))
     if existing:
         print(f"{prefix} SKIP   {ep_id}（transcripts/ 已有檔案 {existing[0].name}）")
+        return "SKIP"
+
+    # 2026-08-02 索羅門新增（Codex 審查指出交叉驗證分支原本不可重複執行：驗證完不寫
+    # transcripts/，下次重跑會重新下載+轉錄+重複寫入差異報告，浪費時間與 GPU）。
+    # 用「已經寫過查核用副本」當交叉驗證的 SKIP 判準。
+    if _cross_validated_path(ep_id).exists():
+        print(f"{prefix} SKIP   {ep_id}（先前已完成交叉驗證，查核副本在 "
+              f"{_cross_validated_path(ep_id).relative_to(HERE)}）")
         return "SKIP"
 
     remote_entry = remote_map.get(ep_num)
@@ -273,18 +355,30 @@ def process_episode(ep_num: int, yt_info: dict, remote_map: dict[int, dict],
 
     if do_cross_validate:
         remote_filename = remote_entry["filename"]
-        remote_text = _fetch_remote_md(remote_filename)
+        try:
+            remote_text = _fetch_remote_md(remote_filename)
+        except RemoteFetchTransportError as e:
+            # 2026-08-02 索羅門新增（Codex 審查指出原版把連線失敗也當「對方沒有」，
+            # 會讓暫時性網路故障誤判成真缺口、寫出獨立版，之後跟 whatmkreallysaid.com
+            # 補上的版本同集雙檔衝突）。連線層問題一律當這集這輪處理不了，不猜測、
+            # 不降級成缺口補齊，轉錄結果先保留在查核目錄，下次重跑再試一次交叉驗證。
+            audit_dir = MANIFEST_DIR / "cross_validated_raw"
+            atomic_write_text(audit_dir / f"{ep_id}_independent_pending.md", md_text)
+            print(f"{prefix} FAIL   {ep_id}  交叉驗證查詢 whatmkreallysaid.com 失敗（{e}），"
+                  f"不假設對方沒有這集，轉錄結果暫存待下次重試，不寫入 transcripts/")
+            return "FAIL"
         if remote_text is not None:
             comparison = compare_paragraphs(remote_text, md_text)
             _append_diff_report(ep_id, comparison, remote_filename)
             print(f"{prefix} OK     {ep_id}  交叉驗證完成，相似度 {comparison['similarity_ratio']:.2%}，"
-                  f"{comparison['diff_count']} 處差異已寫入 {DIFF_REPORT_PATH.name}")
-            print(f"{prefix}        官方版本已存在（{remote_filename}），獨立轉錄結果**不**覆蓋，"
-                  f"只留在 transcripts_data/independent_transcribe/ 供比對，transcripts/ 維持官方版本")
-            # 交叉驗證情境下，transcripts/ 保留官方版本不覆蓋——把獨立轉錄結果另存查核用途
-            audit_dir = MANIFEST_DIR / "cross_validated_raw"
-            audit_dir.mkdir(parents=True, exist_ok=True)
-            (audit_dir / f"{ep_id}_independent.md").write_text(md_text, encoding="utf-8")
+                  f"{comparison['diff_count']} 處差異已寫入 {DIFF_REPORT_PATH.name}"
+                  f"（誠實邊界：字串對齊層級候選，不是語意判斷，需人工複核）")
+            print(f"{prefix}        whatmkreallysaid.com 版本已存在（{remote_filename}），"
+                  f"獨立轉錄結果**不**覆蓋，只留在 transcripts_data/independent_transcribe/ "
+                  f"供比對，transcripts/ 維持 whatmkreallysaid.com 版本")
+            # 交叉驗證情境下，transcripts/ 保留 whatmkreallysaid.com 版本不覆蓋
+            # ——把獨立轉錄結果另存查核用途，並用這個檔案的存在當下次重跑的 SKIP 判準。
+            atomic_write_text(_cross_validated_path(ep_id), md_text)
             _append_manifest_record({
                 "ep_id": ep_id, "video_id": video_id, "processed_at": datetime.now(timezone.utc).isoformat(),
                 "mode": "cross_validated", "written_to_transcripts": False,
@@ -292,13 +386,24 @@ def process_episode(ep_num: int, yt_info: dict, remote_map: dict[int, dict],
             })
             return "OK"
         else:
-            print(f"{prefix}        whatmkreallysaid.com 對 {ep_id} 也還沒有資料"
-                  f"（{remote_entry['filename']} 404 或無法取得），改走缺口補齊流程")
+            print(f"{prefix}        確認 whatmkreallysaid.com 對 {ep_id} 回應 404（真的還沒有這集），"
+                  f"改走缺口補齊流程")
             # 掉回缺口補齊分支，往下走
+
+    # 2026-08-02 索羅門新增（Codex 審查指出原版只在函式開頭檢查一次 existing，
+    # 轉錄可能長達 90 分鐘，這段期間若 download_transcripts.py 剛好把
+    # whatmkreallysaid.com 版本寫進來，原版會直接覆蓋掉）。寫入前再檢查一次，
+    # 大幅縮小競態視窗（從 ~90 分鐘縮到毫秒級，仍非嚴格互斥鎖，但已是低成本的
+    # 高性價比防護，完整解法需要跨 process 鎖，這輪範圍不含）。
+    existing_now = list(TRANSCRIPTS_DIR.glob(f"{ep_id}_*.md")) + list(TRANSCRIPTS_DIR.glob(f"{ep_id}.md"))
+    if existing_now:
+        print(f"{prefix} SKIP   {ep_id}（轉錄期間 whatmkreallysaid.com 版本已出現："
+              f"{existing_now[0].name}，獨立轉錄結果不寫入，避免同集雙檔）")
+        return "SKIP"
 
     filename = safe_filename(f"{ep_id}_{title}.md")
     out_path = TRANSCRIPTS_DIR / filename
-    out_path.write_text(md_text, encoding="utf-8")
+    atomic_write_text(out_path, md_text)
     _append_manifest_record({
         "ep_id": ep_id, "video_id": video_id, "processed_at": datetime.now(timezone.utc).isoformat(),
         "mode": "gap_fill", "written_to_transcripts": True, "path": str(out_path),
@@ -323,6 +428,14 @@ def main():
     remote_map = load_remote_episode_map()
     print(f"本地 transcripts/ 共 {len(local_nums)} 集，本地 episodes.json（鏡像遠端）共 {len(remote_map)} 集")
 
+    duplicates = detect_duplicate_episode_files()
+    if duplicates:
+        print(f"\n[警告] 發現 {len(duplicates)} 個 EP 編號在 transcripts/ 有多個檔案（可能是獨立轉錄版"
+              f"與 whatmkreallysaid.com 版並存，batch.py 只會分析其中一份、另一份被永久跳過，"
+              f"見 detect_duplicate_episode_files() docstring）：")
+        for ep, names in sorted(duplicates.items()):
+            print(f"  EP{ep}: {names}")
+
     gaps = detect_gap_episodes(yt_map, local_nums, remote_map)
     print(f"\n=== 步驟 2：三方比對結果 ===")
     if gaps:
@@ -337,7 +450,12 @@ def main():
         print("\n--check-only：只做偵測，不下載不轉錄。")
         return
 
-    targets = sorted(set(gaps) | latest_2)
+    # 2026-08-02 索羅門修正（Codex 審查指出 --limit 原本用 sorted() 由小到大截斷，
+    # `--limit 2` 會先處理編號最小的兩集，不是任務明確指定優先要處理的「最新 2 集」）。
+    # 改成最新 2 集優先排在前面，其餘缺口依編號由小到大排在後面，--limit 截斷時才會
+    # 真的先做到使用者最在意的最新內容。
+    remaining_gaps = sorted(n for n in gaps if n not in latest_2)
+    targets = sorted(latest_2, reverse=True) + remaining_gaps
     if args.limit > 0:
         targets = targets[:args.limit]
 

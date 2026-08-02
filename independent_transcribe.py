@@ -13,9 +13,11 @@ metadata header），作為第二條逐字稿來源的地基。
 transcripts_data/independent_media/ 底下（用 --output-root 導向），不寫進
 video-transcribe/media/。
 """
+import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -71,16 +73,19 @@ def parse_srt(srt_path: Path) -> list[tuple[float, float, str]]:
 # ---------------------------------------------------------------- 段落合併
 
 
-_TRAILING_PUNCT = ("，", ",", "。", "！", "!", "？", "?", "、", "：", ":")
 _COMMA_CHARS = ("，", ",")
 _GAP_SENTINEL = "\x00"  # 只在函式內部暫用，絕不會出現在最終輸出（split 時就地消耗掉）
+_SPLIT_SEARCH_SLACK = 150  # 逗號搜尋視窗：超過 max_len 這麼多字還找不到逗號就放棄找，直接硬切
 
 
 def _split_by_length(text: str, max_len: int) -> list[str]:
     """把一段連續文字依 max_len 字數上限切成多段，優先在逗號處切，避免硬腰斬句子。
 
-    找逗號的順序：先往後找最近的逗號（讓段落不會太短），找不到才往前找
-    （這段話真的很長一段都沒有逗號，退而求其次在視窗內找），兩者都找不到才硬切。
+    2026-08-02 索羅門依 Codex 完工前獨立審查（挑戰模式）意見修正：原版往後找逗號
+    沒有搜尋範圍上限，遇到一段話很長都沒有逗號時，段落可能被拉到遠超 550 字（Codex
+    實測舉例：下一個逗號在 2000 字後，段落就會長達 2000 字，等於字數上限形同虛設）。
+    改成明確的搜尋視窗：往後找不超過 max_len + _SPLIT_SEARCH_SLACK 字，找不到才退而
+    求其次往前找，兩者都找不到才在門檻處硬切——確保段落長度真的有上界。
     """
     paras = []
     start = 0
@@ -90,9 +95,10 @@ def _split_by_length(text: str, max_len: int) -> list[str]:
             paras.append(text[start:])
             break
         window_end = start + max_len
+        search_limit = min(n, window_end + _SPLIT_SEARCH_SLACK)
         idx = -1
         for ch in _COMMA_CHARS:
-            p = text.find(ch, window_end)
+            p = text.find(ch, window_end, search_limit)
             if p != -1 and (idx == -1 or p < idx):
                 idx = p
         if idx == -1:
@@ -101,7 +107,7 @@ def _split_by_length(text: str, max_len: int) -> list[str]:
                 if p != -1 and p > idx:
                     idx = p
         if idx == -1:
-            idx = window_end - 1  # 真的找不到逗號，硬切避免無限迴圈
+            idx = window_end - 1  # 真的找不到逗號，硬切避免段落無上界
         paras.append(text[start:idx + 1])
         start = idx + 1
     return [p for p in paras if p.strip()]
@@ -115,12 +121,17 @@ def cues_to_paragraphs(cues: list[tuple[float, float, str]],
     為什麼不用「靜音間隔」當主要分段依據：實測 2 小時份的真實 podcast（EP680，1917 筆
     cue），間隔 >= 1 秒的只有 3 筆——Whisper 對這種幾乎不停頓的口語內容，cue 之間的
     間隔本來就趨近 0，純靠間隔偵測段落幾乎起不了作用。改成兩階段：
-    1. 先把整份逐字稿接成一條連續文字，只在間隔 >= gap_break_seconds（通常對應廣告
-       口播/話題轉場這類真正的長停頓）的地方強制斷開。
+    1. 先把整份逐字稿接成一條連續文字（cue 之間**直接串接、不插入任何原文沒有的字元**
+       ——2026-08-02 索羅門依 Codex 審查意見修正：舊版會在前一個 cue 沒有標點收尾時
+       插入逗號，Codex 指出這等於竄改逐字稿內容，Whisper 的 segment 邊界不保證剛好落
+       在語意斷點，插入的逗號有可能改變語意，也會誤導下游 Gemini 判讀「一字不漏」的
+       exact_quote 欄位。中文不需要空白分詞，直接串接不影響可讀性，只是偶爾兩個分句
+       間少一個停頓標點，這是可接受的忠實度換讀起來稍微緊湊一點點的權衡），只在間隔
+       >= gap_break_seconds（通常對應廣告口播/話題轉場這類真正的長停頓）的地方強制斷開。
     2. 每一段連續文字再依 max_para_chars 字數門檻，在**最近的逗號處**（而不是要求剛好
        在 cue 邊界上）切成人類讀起來大小合理的段落——實測 Whisper 產出的逗號幾乎不會
        剛好落在 cue 結尾，用「cue 結尾要有標點才斷段」這個舊版寫法幾乎永遠不觸發，
-       所以改成允許在段落中段切，找最近的逗號當自然斷點。
+       所以改成允許在段落中段切，找最近的逗號當自然斷點（搜尋視窗見 _split_by_length()）。
 
     這是格式橋接的 AI 暫定決定（一般分岔點）：不影響 batch.py/analyzer.py 的相容性
     ——它們只把整份檔案當純文字字串餵給 Gemini，不解析段落結構，只影響人類讀起來的
@@ -131,10 +142,6 @@ def cues_to_paragraphs(cues: list[tuple[float, float, str]],
     for start, end, text in cues:
         if prev_end is not None and start - prev_end >= gap_break_seconds and parts:
             parts.append(_GAP_SENTINEL)
-        elif parts and parts[-1] != _GAP_SENTINEL and not parts[-1].endswith(_TRAILING_PUNCT):
-            # 前一個 cue 沒有以標點收尾：插入逗號避免兩句話黏在一起變得難以閱讀
-            # （Whisper 對中文口語只會產出逗號，幾乎不產出句號，見模組頂端說明）。
-            parts.append("，")
         parts.append(text)
         prev_end = end
     full_text = "".join(parts)
@@ -181,13 +188,18 @@ def run_independent_transcription(source: str, name: str, *, model: str = DEFAUL
     不編輯該專案任何檔案。輸出目錄固定指到 INDEPENDENT_MEDIA_ROOT/<name>，在
     stock-signal 自己的目錄底下。
 
-    已知既有限制（不是本模組造成，見 video-transcribe/OVERNIGHT_REPORT_2026-07-31.md
-    第三節）：mux_softsub 後的 verify() 對某些「視訊軌不是從 0.000 秒開始」的來源
-    會把時間碼整體平移誤判成失敗，導致 transcribe.py 進程以非零 exit code 結束，
-    即使語音辨識本身（我們唯一需要的部分）已經在 verify() 之前就成功寫檔。這裡的
-    處理方式：exit code 非零時，先檢查 source.srt 是否已存在且非空，是的話當作
-    「轉錄本身成功，只是我們用不到的封裝驗證步驟失敗」處理，印警告後繼續，不因為
-    下游一個我們不需要的驗證步驟擋住整份任務。
+    2026-08-02 索羅門修正（完工前 Codex 獨立審查挑戰意見）：初版曾經對非零 exit code
+    做「source.srt 存在且非空就視為成功」的寬容處理，理由是 video-transcribe 曾有一個
+    已知 bug（見 OVERNIGHT_REPORT_2026-07-31.md 第三節：mux_softsub 後的 verify() 對
+    某些視訊軌不是從 0 秒開始的來源會把時間碼平移誤判成失敗）。Codex 實際重讀當前版本
+    的 transcribe.py::verify()（1534-1626 行左右）指出：**這個 bug 現在已經修好了**
+    ——目前的 verify() 已經明確接受「所有字幕筆數的時間碼平移量一致」為通過條件，只有
+    平移量不一致或文字/樣式不符才會真的報錯。也就是說，這個寬容處理現在是在繞過一個
+    已經不存在的問題，反而會把下載失敗/GPU錯誤/舊工作目錄殘留的過期 source.srt 都誤判
+    成「這次成功」——尤其重跑同一個 --name 時，舊的 source.srt 可能還在，這次若下載或
+    轉錄真的失敗，會被誤判為成功並回傳一份不是這次產生的舊資料。已移除這個寬容處理，
+    改成嚴格要求 exit code 為 0 才算成功；若未來真的又出現類似的封裝驗證步驟誤判，
+    應該先去 video-transcribe 那邊確認、修正 verify() 本身，不應該在呼叫端矇混過去。
     """
     if not TRANSCRIBE_SCRIPT.exists():
         raise IndependentTranscribeError(f"找不到 video-transcribe 的 transcribe.py: {TRANSCRIBE_SCRIPT}")
@@ -205,24 +217,38 @@ def run_independent_transcription(source: str, name: str, *, model: str = DEFAUL
         raise IndependentTranscribeError(
             f"transcribe.py 逾時（超過 {timeout}s），來源: {source}") from e
 
-    srt_path = job_dir / "source.srt"
     if proc.returncode != 0:
-        if srt_path.exists() and srt_path.stat().st_size > 0:
-            print(f"[independent_transcribe][警告] transcribe.py exit {proc.returncode}，"
-                  f"但 {srt_path} 已存在且非空，視為轉錄本身成功"
-                  f"（可能是已知的 mux/verify 時間碼平移誤判，語音辨識不受影響）",
-                  file=sys.stderr, flush=True)
-            return srt_path
         raise IndependentTranscribeError(
             f"transcribe.py 執行失敗 (exit {proc.returncode})，來源: {source}\n"
             f"--- stdout 尾段 ---\n{proc.stdout[-3000:]}\n"
             f"--- stderr 尾段 ---\n{proc.stderr[-2000:]}")
 
+    srt_path = job_dir / "source.srt"
     if not srt_path.exists():
         raise IndependentTranscribeError(
             f"transcribe.py 回報成功但找不到預期的逐字稿檔案: {srt_path}\n"
             f"stdout 尾段: {proc.stdout[-2000:]}")
     return srt_path
+
+
+def atomic_write_text(path: Path, text: str):
+    """同目錄建立唯一暫存檔 → 寫完關檔 → os.replace 覆蓋目標，避免中途中斷留下半截檔案。
+
+    2026-08-02 索羅門新增（完工前 Codex 獨立審查指出 load_local_episode_numbers() 不檢查
+    檔案大小，若寫到一半被中斷，半截檔案會被誤判成「已處理」永久跳過）。比照
+    video-transcribe/transcribe.py::_atomic_write_text() 的手法（同檔案系統同目錄才具備
+    原子性，Windows 上必須先關檔才能 replace）。
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def safe_filename(name: str) -> str:
