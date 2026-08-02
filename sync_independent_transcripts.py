@@ -127,16 +127,26 @@ def _title_from_description(video_id: str, timeout: int = 30) -> str:
     """獨立轉錄的來源影片標題本身沒有描述性文字（一律是「EPxxx | emoji」），
     改抓 YouTube 影片描述的第一行當展示標題，比照 whatmkreallysaid.com 用主題短句
     當檔名的既有慣例。抓不到就退回「獨立轉錄」，不讓整個流程因為這個裝飾性資訊卡住。
+
+    2026-08-02 索羅門修正一個實測踩到的編碼 bug：原本用 `yt-dlp --print "%(description)s"`
+    抓純文字，`subprocess.run(text=True, encoding="utf-8")` 在這台 Windows 機器上解出來的
+    是亂碼（yt-dlp 的 `--print` 純文字輸出實際上是照本機主控台編碼 cp950 寫出，不是
+    UTF-8，強制用 utf-8 解碼等於把 cp950 位元組誤讀，產生無法復原的亂碼字元，不是單純
+    的顯示問題——已實測跑出 4 個檔名/標題被寫壞的檔案，見 SOLOMON_HANDOFF.md）。改用
+    `-J`（JSON dump）：JSON 輸出的編碼是定義明確的 UTF-8，不受主控台編碼影響，跟本模組
+    抓頻道清單（fetch_youtube_episodes()）用的是同一種可靠做法。
     """
     import subprocess
     try:
         proc = subprocess.run(
-            ["yt-dlp", "--skip-download", "--print", "%(description)s",
+            ["yt-dlp", "--skip-download", "-J",
              f"https://www.youtube.com/watch?v={video_id}"],
             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
         if proc.returncode != 0:
             return "獨立轉錄"
-        first_line = proc.stdout.strip().splitlines()[0].strip() if proc.stdout.strip() else ""
+        data = json.loads(proc.stdout)
+        description = (data.get("description") or "").strip()
+        first_line = description.splitlines()[0].strip() if description else ""
         first_line = re.sub(r"[\\/:*?\"<>|]", "_", first_line)
         return first_line[:40] or "獨立轉錄"
     except Exception:  # noqa: BLE001 - 裝飾性資訊，任何失敗都不該擋住主流程
