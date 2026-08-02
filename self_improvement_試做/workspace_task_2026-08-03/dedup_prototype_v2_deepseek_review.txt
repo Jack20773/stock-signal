@@ -1,0 +1,23 @@
+呼叫方式：codex exec -s read-only -c model_provider="deepseek" -c model="deepseek-v4-flash" -c model_catalog_json="C:/Users/USER/.codex/models.json" -c model_reasoning_effort=high
+問法：要求挑戰/找問題，不要只附和；讀 dedup_prototype.py + dedup_prototype_test.py 兩支檔案
+tokens used：8,120（累計，見SOLOMON_HANDOFF.md deepseek_usd_spent欄位換算）
+
+DeepSeek 回覆全文：
+
+已讀完兩支檔案，以下按重要性排序：
+
+1. 根因沒解：batch.py 仍靠 glob 隨機序，ambiguous 時照樣讀到哪個用哪個。真正該做的是讓 batch.py 固定優先官方版，刪檔只是清症狀。
+2. 自動刪檔違反 AGENTS.md 安全底線（刪檔應列清單請使用者動手），且不可逆。至少先移入 quarantine 暫存，或先寫 log 成功再 unlink——現行 unlink 成功但 log 寫失敗會無紀錄刪檔。
+3. manifest 未同步：刪完獨立版後記錄仍在，下輪 gap_fill 可能重新轉錄同集，造成循環；應順便標記 superseded。
+4. 只比檔名太脆弱：官方檔若與獨立檔同名、或大小寫/Unicode 正規化不同（Windows 不分大小寫），會誤判；建議用 ep_id+路徑或內容 header 交叉驗證。
+5. 缺測試：manifest 損壞、EP0123 與 EP123 被 int() 正規化誤判成同集、多官方版、log 寫入失敗。
+6. append_dedup_log 讀-改-寫非原子，並行執行會互相覆蓋；log 檔壞掉直接 crash。
+
+---
+索羅門採納情況（v2迭代）：
+- #2（自動刪檔不可逆）→ 採納，v2改成quarantine移動而非unlink，見 dedup_prototype_v2.py
+- #6（log非atomic）→ 採納，v2改用atomic write（同目錄暫存檔+os.replace），比照專案既有 independent_transcribe.py::atomic_write_text() 手法
+- #1（batch.py根因）→ 記錄為延伸建議，這輪範圍不能動正式檔案，寫進SOLOMON_HANDOFF.md建議清單
+- #3（manifest未同步/superseded標記）→ 同上，記錄為延伸建議
+- #4（檔名比對脆弱/大小寫）→ 記錄為延伸建議，v2程式碼註解已說明現況與限制
+- #5（缺測試案例）→ 部分採納，v2測試腳本新增quarantine相關驗證，但manifest損壞/EP0123正規化等邊界案例留給正式採用時補齊，不在這輪試做展開（避免無限迭代排擠其他research track）

@@ -1,0 +1,9 @@
+[PASS] test_case_1_clear_resolution：明確情況正確刪除獨立版、保留官方版
+[PASS] test_case_2_ambiguous_neither_in_manifest：兩個都不在manifest時不誤刪
+[PASS] test_case_3_ambiguous_both_in_manifest：異常雙記錄狀況不誤刪（安全邊界測試）
+[PASS] test_case_4_no_duplicates：正常無重複情況不觸發任何事件
+[PASS] test_case_5_dry_run_does_not_delete：dry_run模式正確地只回報不動手
+[PASS] test_case_6_log_append_not_overwrite：log是累加不是覆蓋
+[INFO] 正式 transcripts/ 目錄實際掃描結果：0 個EP有重複檔案（目前為0，符合規劃稿「風險尚未發生」的判斷)
+
+全部測試通過。
