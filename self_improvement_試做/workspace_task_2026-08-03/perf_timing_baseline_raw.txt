@@ -1,0 +1,14 @@
+原始基準測試（無任何快取，直接跑LINE bot實際會呼叫的指令）：
+
+$ cd stock-signal && time (python -X utf8 line_query.py perf > out.txt 2>&1)
+real    0m19.384s
+user    0m0.000s
+sys     0m0.000s
+
+這是這輪Track 4發現問題的起點：使用者在LINE輸入「/股癌績效」，stock_handler.py
+同步呼叫這支腳本、沒有背景thread、沒有中間提示，19.4秒內畫面完全沒有任何回應。
+
+註：perf_cache_prototype.py demo裡的「第一次呼叫」量到7.39秒（同一台機器、
+相近時間點，可能受price_cache/DB連線暖機、外部行情來源當下回應速度影響有波動），
+但不影響本輪核心發現——不管是7秒還是19秒，這都是「使用者盯著已讀無回應的畫面」
+的等待時間，且經測試可以用TTL快取壓到0.01秒（見perf_cache_demo_output.txt）。
