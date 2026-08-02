@@ -1,0 +1,12 @@
+=== 測試1：原始寫法（重現 bug，text=True + encoding='utf-8'，未覆蓋子行程env）===
+輸出 repr: 'EP684 |'
+偵測到 U+FFFD 亂碼字元: False
+跟已知真實標題「EP684 | 🔦」完全一致: False
+
+=== 測試2：PYTHONIOENCODING=utf-8 修法（覆蓋子行程環境變數）===
+輸出 repr: 'EP684 | 🔦'
+跟已知真實標題「EP684 | 🔦」完全一致: True
+
+=== 結論 ===
+這次測試1（未修法）成功重現了原始 bug，測試2（加 PYTHONIOENCODING=utf-8）
+修正了它: True

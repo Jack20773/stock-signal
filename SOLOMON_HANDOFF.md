@@ -9,9 +9,15 @@ user_mid_session_instructions: |
      OS 層級行程自動叫醒。收到後立即改成同一個 turn 內阻塞式輪詢等待，直到腳本
      真正跑完才繼續，之後全程比照辦理，沒有再用背景+等通知的模式跑長流程。
   2. 主控 session 另傳達使用者裁決：截止時間由 23:09 改為 23:00；自我精進條款
-     Part A/B 有新版規則（要求先讀更新後的規則）。因主線任務（1a-1e）在截止前
-     已全數完成且完工前 Codex 審查又抓到需要處理的重大問題，時間全部用於處理
-     這些問題，沒有餘裕進入自我精進環節，見下方 self_improvement_this_round。
+     Part A/B 有新版規則。當時因主線任務（1a-1e）雖已全數完成，但完工前 Codex
+     審查又抓到需要處理的重大問題，時間全部用於處理這些問題，尚未進入自我精進
+     環節。
+  3. 主線 DoD 完工後，主控 session 傳達已完成獨立核對（git commit範圍/EP677
+     URL/batch.py --dry-run/Codex花費/程式碼抽查/沒push沒碰DB 皆核對通過），
+     並確認「有時間的話就執行閒置計畫」的條件成立（20:12，離23:00還有約2小時
+     48分鐘），指示進入自我精進 Part A/B，且提醒不要再用背景+等通知模式跑長
+     流程（同一提醒的第二次）。已依指示完整執行 Part A/B，見下方
+     self_improvement_this_round 與 self_improvement_new_ideas。
 files_changed: |
   新增：
   - independent_transcribe.py（1a 格式橋接模組：.srt→.md 轉換 + video-transcribe
@@ -19,6 +25,12 @@ files_changed: |
   - sync_independent_transcripts.py（1b-1e：三方比對缺口偵測 + 缺口補齊 +
     交叉驗證 + 可重複執行的整合腳本）
   - docs/independent_transcript_diffs.md（1d 交叉驗證差異紀錄，純附加，git 追蹤）
+  - self_improvement_試做/（自我精進 Part B 試做，5個檔案，隔離不影響任何 DoD
+    正式檔案，git 追蹤——內容不是 whatmkreallysaid.com 逐字稿也不是密鑰，屬於
+    程式碼與研究筆記，進 git 沒有敏感性疑慮）
+  修改（純文件/註解更正，不改邏輯，commit f43a64d）：
+  - independent_transcribe.py（自我精進 Part B 試做2意外發現：精確計數後 EP680
+    真實逐字稿只有2個內容逗號，先前文件誤把SRT時間碼本身的逗號算進去，更正說明）
   新增（transcripts_data/，gitignore 不進 git，比照既有慣例）：
   - transcripts_data/independent_transcribe/manifest.json（獨立轉錄留痕）
   - transcripts_data/independent_media/EP681~684/（下載的影片+.srt/.ass/.mkv，共547MB）
@@ -115,12 +127,121 @@ verification: |
   ——這是任務檔第1e節明文要求的聲明，不是本輪自己決定要不要做。
 codex_credits_spent_this_stage: 8.13（344.8726750000 → 336.7425550000）
 codex_credits_spent_total: 8.13
-deepseek_usd_spent_this_stage: 0（本輪未呼叫 DeepSeek）
-deepseek_usd_spent_total: 0
+deepseek_usd_spent_this_stage: 約US$0.02（自我精進Part B試做用，56,490 tokens累加估算，
+  遠低於Part B獨立US$15上限；DoD主線本身未呼叫DeepSeek）
+deepseek_usd_spent_total: 約US$0.02
 self_improvement_this_round: |
-  未觸發。主線任務（1a-1e）雖然在截止前已全數完成，但完工前 Codex 獨立審查
-  （見下方 autonomous_decisions）抓到多項需要處理的真實風險，時間全部用於
-  逐項修正+重新驗證，直到收工前都沒有餘裕，不宜為了湊自我精進而壓縮驗證品質。
+  觸發並完整執行（主控 session 20:12 確認條件成立、指示進入，DoD 6項此時已
+  100% 完成並經主控 session 獨立核對通過）。
+
+  === Part A（效率/成本研究，已小幅自調，記在 project_pm_agent_solomon.md
+  不是章程本身）===
+  WebSearch 查「LLM token優化」+「AI coding agent驗證/防幻覺」，找到兩個可
+  自行採用的習慣：
+  1. Codex 審查 prompt 避免整段貼 diff（Codex 自己有 shell 能重新讀檔驗證，
+     這輪貼了 605 行 diff 進 prompt 是重複的 token 浪費）——以後改成只描述
+     背景+具體要挑戰的設計決策，讓 Codex 自己 `git diff` 讀取。
+  2. 驗證改用 hash/exact-match 而非純肉眼比對 diff 摘要——這輪 Part B 試做1
+     直接示範了這個做法的價值。
+  來源：[LLM Token Optimization 2026](https://redis.io/blog/llm-token-optimization-speed-up-apps/)、
+  [Stop AI Agent Hallucinations](https://dev.to/aws/5-techniques-to-stop-ai-agent-hallucinations-in-production-oik)。
+
+  === Part B（3個新想法+多次試做）=== 詳見下方 self_improvement_new_ideas。
+self_improvement_new_ideas: |
+  三個想法全部隔離在 stock-signal/self_improvement_試做/（git 追蹤，5個檔案，
+  未修改任何 DoD 正式檔案——唯一對正式檔案的觸碰是試做2意外發現後的
+  independent_transcribe.py 純註解更正，commit f43a64d，已在 files_changed
+  說明）。三個想法各試做1輪（想法2實際做了3次迭代：短句切分→n-gram覆蓋率→
+  跟DeepSeek討論CER指標），每次都跟 DeepSeek 討論（read-only 顧問角色），
+  總計5次DeepSeek呼叫（含1次連線測試）約56,490 tokens，估算花費約
+  US$0.02（遠低於 Part B 獨立 US$15 上限，估算方式：tokens累加乘
+  deepseek-v4-flash混合費率，見「硬性預算與範圍界線」第1項）。
+
+  === 想法1：本機LLM幫ASR逐字稿加標點（來源：ASR punctuation restoration
+  研究領域，[arxiv 2606.05179](https://arxiv.org/abs/2606.05179) 等） ===
+  背景動機：這輪主線任務實測 faster-whisper 中文輸出幾乎無標點（見殘餘風險
+  第4點），讀起來生硬。
+  可行性：技術上完全可行（本機 Ollama qwen2.5:14b-instruct 本來就在跑，
+  video-transcribe 已用它做翻譯，不需新裝套件/新下載模型）。
+  試做內容：`trial1_punctuation_restore.py`，取 EP681 一段~550字獨立轉錄，
+  丟給 Ollama 加標點，看 `trial1_demo_output.txt`。
+  **實測發現（重要）**：標點加得正確合理，但意外把「戒菸/電子煙/加熱煙/煙影」
+  全部竄改成「戒菜/電子菜/加熱菜/菜影」（同音異字漂移，違反 prompt 明確要求的
+  「不要改動文字內容」）。用 `trial1_verification_result.txt` 記錄的「去標點後
+  逐字比對」驗證機制成功攔截這個錯誤（第223字元位置起偵測到差異）。
+  DeepSeek討論摘要：確認這是「原地編輯型任務」LLM重寫本質的高發問題（模型是
+  自迴歸重新生成不是原地插入，跟溫度/量化關係較小），逐字比對可以可靠**攔截**
+  但不能**防止**；要真正保證不改字需要 constrained decoding（Ollama 本身
+  不支援，需換 SGLang/vLLM）；正式功能建議改核心用「標點還原」專用模型
+  （如 FunASR CT-Transformer，架構上就無法竄改文字），LLM 只當語意斷句
+  fallback。
+  **延伸方向選項（供使用者裁決，不是索羅門能自己拍板）**：
+    (a) 不追加此功能，維持現狀（獨立轉錄結果保持無標點，忠實度優先）
+    (b) 加值功能：用「LLM加標點 + 逐字比對驗證，不通過就丟棄該次結果、
+        改保留無標點原文」的組合，作為獨立轉錄後處理的可選步驟（風險可控，
+        因為有驗證閘門，即使失敗也不影響正確性，只是有時候拿不到標點加值）
+    (c) 正式投入：換用專用標點還原模型（需要額外調查/安裝，成本較高，
+        但架構上更可靠、不需要逐字比對這個安全網）
+
+  === 想法2：改善 compare_paragraphs() 的差異對齊粒度（來源：文本對齊研究，
+  [SentAlign/Vecalign](https://arxiv.org/pdf/2509.18360) 等embedding對齊文獻）===
+  背景動機：完工前 Codex 審查指出正式版 compare_paragraphs() 在段落粒度比對，
+  兩邊分段方式不同時容易整篇被判成一大塊「replace」，診斷價值低（見殘餘風險
+  第2點）。
+  可行性：文獻建議的 embedding+動態規劃做法這輪環境沒有現成中文 embedding
+  服務，改試做兩個不需要額外模型的輕量替代方案。
+  試做內容與結果（3次迭代，誠實記錄含負面結果）：
+    1. `trial2_finer_diff_alignment.py`——短句切分後比對：**失敗**。獨立版因
+       這輪修正（移除逗號竄改，見 autonomous_decisions）幾乎沒標點可切，只
+       切出8個chunk（對方1653個），細粒度這個變數根本沒被測到。
+    2. `trial2b_char_ngram_coverage.py`——改用字元n-gram重疊率（DeepSeek建議
+       的替代方案，語言無關不需斷詞）：發現n-gram覆蓋率（27-40%，視n而定）
+       遠低於現有 SequenceMatcher.ratio()（87.39%）。
+    3. 再次跟DeepSeek討論這個落差：確認計算無誤，是兩種指標的數學本質不同
+       （LCS式配對對散布錯字很寬容，n-gram要求連續完全相等，對雜訊過度嚴苛）
+       ——這揭露一個對主線任務有意義的額外發現：whisper逐字稿本身散布大量
+       同音異字辨識錯誤（股癌→古愛等），現有87.39%這個相似度數字可能沒有
+       完全反映這一點。
+  DeepSeek討論摘要：建議正式方案改用CER（字元編輯距離相似度，語音辨識標準
+  評估指標）取代SequenceMatcher.ratio()，能同時處理替代/插入/刪除、比n-gram
+  抗雜訊、比ratio()更貼近人眼判斷；短句切分本身的問題不是「切不細」而是
+  「兩邊標點密度差太多，標點不能當兩邊都存在的切分訊號」。
+  **延伸方向選項（供使用者裁決）**：
+    (a) 不變更，維持現有 SequenceMatcher 段落粒度比對（正確性夠用，
+        只是診斷粒度較粗）
+    (b) 小幅升級：只換相似度指標（ratio()→CER加權平均），不動對齊演算法，
+        改動範圍小、風險低
+    (c) 較大升級：引入兩階段對齊（先用n-gram/滑動視窗粗對齊定位分歧區塊，
+        再局部細比），診斷價值最高但工程量較大，且要重新測試
+
+  === 想法3：Windows subprocess呼叫Python CLI工具的通用編碼防護模式（來源：
+  這輪主線任務實際踩到的真bug + [CPython issue #105312](https://github.com/python/cpython/issues/105312)）===
+  背景動機：這輪修正過 yt-dlp `--print` 純文字輸出在 cp950 主控台下的編碼問題
+  （已改用 `-J` JSON 輸出解決，見 daf11a4）。這裡驗證一個更通用、不依賴目標
+  工具剛好有JSON輸出選項的備用修法。
+  可行性：查證確認這是已知的 CPython 生態系問題，`PYTHONIOENCODING=utf-8`
+  是文獻常見建議修法。
+  試做內容：`trial3_subprocess_encoding.py`，用真實 yt-dlp 呼叫做 A/B 對照。
+  **實測發現**：不修法時 emoji 字元是**靜默丟失**（'EP684 | 🔦' 變成
+  'EP684 |'），不是我原本以為的亂碼——這點本身就是重要發現，代表這類 bug
+  可能連「肉眼看起來有點怪」的警訊都沒有，更難察覺。加上
+  `env={**os.environ, "PYTHONIOENCODING": "utf-8"}`（per-call傳，不動全域
+  os.environ）後逐字元比對完全正確。
+  DeepSeek討論摘要：確認根因是 yt-dlp 自己的 `write_string()` 在非TTY輸出時
+  用 `errors='ignore'` encode 成主控台編碼，encode不過的字元直接丟棄；
+  `PYTHONIOENCODING` 修法只對 Python 寫的 CLI 有效（Rust/Go/Node工具不吃）、
+  必須跟 parent 的 `encoding="utf-8"` 成對設定、要用 per-call env 不要動全域
+  os.environ、Python 3.15（PEP 686）後這招會自然變多餘。
+  **延伸方向選項（供使用者裁決）**：
+    (a) 不需要正式導入：這輪唯一實際踩到的具體案例已經用 -J 方案解決，
+        目前程式碼裡沒有其他已知會踩到類似問題的 subprocess 呼叫
+    (b) 預防性導入：把 `env={**os.environ, "PYTHONIOENCODING": "utf-8"}`
+        當成 independent_transcribe.py/sync_independent_transcripts.py 裡
+        所有 subprocess.run() 呼叫的標準寫法，即使目前沒有已知問題，也降低
+        未來遇到類似情境的風險（低成本、無明顯副作用的預防性強化）
+    (c) 寫進索羅門的個人工作筆記（已完成，見 project_pm_agent_solomon.md），
+        以後索羅門本人在任何專案遇到類似 subprocess 編碼情境時直接套用這個
+        pattern，不需要每次重新踩坑才學到
 autonomous_decisions: |
   === 重大自主決策：完工前 Codex 挑戰式審查抓到的問題，全部已修正 ===
 
@@ -220,8 +341,8 @@ remaining_risk: |
      矇混過去）——這是刻意的取捨（正確性優先於可用性），但代表 video-transcribe
      那邊如果出新 bug，本模組的成功率會直接受影響，需要去那邊修，不能在這邊繞過。
 next_step: |
-  已完工，DoD 6 項全數達成，無 blocked_items。下一棒（下次索羅門指派或使用者
-  自己接手）建議優先順序：
+  已完工，DoD 6 項全數達成，無 blocked_items，且已完成自我精進 Part A/B。
+  下一棒（下次索羅門指派或使用者自己接手）建議優先順序：
   1. 看過本報告 remaining_risk 第1項後，決定要不要授權設計「偵測到
      whatmkreallysaid.com 補上獨立轉錄過的集數時如何處理」的遷移機制（會需要
      討論是否允許刪除獨立版+重置分析紀錄，涉及 DB DELETE，需要另外拍板）
@@ -229,5 +350,8 @@ next_step: |
      明確排除，任務檔原文要求另外確認執行頻率與方式）
   3. 如果满意這輪的獨立轉錄品質，可以考慮之後真的遇到 whatmkreallysaid.com
      停更時，把 sync_independent_transcripts.py 當唯一逐字稿來源持續使用
-  4. 本輪 6 個 commit 全部本地（95d288a..a04060d），尚未 push，跟其他輪一樣
+  4. 看過 self_improvement_new_ideas 三個延伸方向選項，決定要不要挑選任何一項
+     正式投入（想法1標點復原/想法2相似度指標CER化/想法3編碼防護預防性導入）
+     ——三者都只是研究筆記+試做，沒有一項已經是正式功能，索羅門沒有自行拍板
+  5. 本輪 8 個 commit 全部本地（95d288a..HEAD），尚未 push，跟其他輪一樣
      由使用者/主控 session 決定要不要 push

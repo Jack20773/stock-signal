@@ -1,0 +1,26 @@
+=== 字元 n-gram 覆蓋率估算（語言無關，不需要斷詞/embedding）===
+
+n=6:
+  whatmkreallysaid.com版 6-gram 數: 21590
+  獨立版 6-gram 數: 19854
+  重疊數: 8615
+  覆蓋率(whatmkreallysaid.com版有多少比例的6-gram也出現在獨立版): 39.90%
+  Jaccard相似度: 26.24%
+
+n=8:
+  whatmkreallysaid.com版 8-gram 數: 21813
+  獨立版 8-gram 數: 19993
+  重疊數: 5923
+  覆蓋率(whatmkreallysaid.com版有多少比例的8-gram也出現在獨立版): 27.15%
+  Jaccard相似度: 16.51%
+
+n=12:
+  whatmkreallysaid.com版 12-gram 數: 21857
+  獨立版 12-gram 數: 20022
+  重疊數: 2300
+  覆蓋率(whatmkreallysaid.com版有多少比例的12-gram也出現在獨立版): 10.52%
+  Jaccard相似度: 5.81%
+
+=== 對照：正式版/試做版既有結果 ===
+段落粒度(正式版compare_paragraphs): 相似度87.39%, diff_count=1
+短句粒度(試做2,失敗): 獨立版只有8個chunk, diff_count=1(無意義)
