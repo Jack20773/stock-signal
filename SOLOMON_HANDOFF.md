@@ -1,7 +1,8 @@
 status: completed
 monitoring_mode: 無人監督
 task_file_commit: 6be5125
-commit_hash: a04060d
+commit_hash: d735a7b（此為撰寫本欄位時的最新commit；本檔案自身的最終commit hash
+  會比這個新一號，屬於自我指涉無法避免的現象，跟前幾輪報告同樣的處理方式）
 user_mid_session_instructions: |
   1. 主控 session 於執行中途（EP681 剛開始 transcribe 階段時）介入，指出我用
      Bash run_in_background + 等通知的方式跑 sync_independent_transcripts.py，
