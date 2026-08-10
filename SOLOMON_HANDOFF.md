@@ -33,7 +33,27 @@ codex_credits_spent_total: 同上，遠低於 50 點上限
 deepseek_usd_spent_this_stage: 約 US$0.02（134,913 tokens，依 2026-08-01 查到的費率估算，**費率未重新查證**）
 deepseek_usd_spent_total: 同上，遠低於 US$5 上限
 
-self_improvement_this_round: 進行中（主任務 DoD 已達成，距截止 07:30 仍有餘裕，依章程進入 Part A/Part B）
+self_improvement_this_round: 已完成一輪，正本 `self_improvement_試做/ROUND_2026-08-11.md`（+ .html）
+  Part A：①查到的研究與我們的踩坑同向——LLM4FPM 靠「完整精確上下文」把誤報降 85%+；對照 8/10 因刪掉
+    `escapeHtml()` 造出假 critical、今晚素材完整所以三項全中。已採用的作法：素材包一律腳本原檔切片＋行號、
+    附完整檔案清單、附真實渲染文字。下一輪要補：切片每行加 `檔名:行號|` 前綴（兩位審查者引用的都是素材包行號）。
+    ②成本盤點：這輪 Codex 2.01 點、DeepSeek ~US$0.02。通用省錢手法（prompt caching 30–90%）**對我們幫助有限**
+    ——一次性長 prompt 沒有可重用前綴；真正的成本是「重跑」，所以省錢正解是一次問對，不是壓 token。
+    已採用：第二三頁合併成一份素材問一次，省掉一次背景重述。
+  Part B（3 個試做，全部隔離、未接進正式流程）：
+    - trial7/7b 靜態搜尋索引可行性：把我原本「工程量不小」的空話換成數字。兩個非直覺發現——
+      ①壓縮索引最有效的一刀剛好砍死最熱門查詢（台積電/NVIDIA/AI 召回 0%）②整詞索引跟現行 substring
+      語意不等價會靜默漏搜；改 ASCII 2-gram 才 12/12 全 100% 召回，gzip 6.16 MB（原始 35.9 MB 的 17.2%）。
+    - trial8 驗證前資料忠實度 pre-flight：把「先確認比對目標本身對不對」這條沒有機制的記憶規則變成
+      跑得動的唯讀檢查（離開碼 0/1）。鑑別度測試能重現今晚的 EP681-685 缺口；今晚實際抓到 4 集重複逐字稿。
+  要不要延伸成正式功能：三個選項表在 ROUND 檔末，我的傾向是索引維持現狀／pre-flight 接進 notifier.py 開頭
+  ／行號前綴下次直接改，但**都等使用者決定**。
+
+final_review: 完工前 Codex 挑戰式審查結論原文「**不建議直接合併**」，抓到 5 項，逐條回原始碼複查**全部屬實**，
+  已全部修正並各自用打到失敗路徑的方式重測（commit `3850815`）。其中 2 項**推翻我自己在 commit message
+  裡的宣稱**：①`entry_date` 第二來源可能偷渡 `analysis_date`（`performance.py:89` 的 fallback 就是它）
+  ②「網路失敗可再點一次重試」是假的（快取寫成 null 讓重試不發請求）。第 3 項是我今晚自己加出來的顯示錯誤
+  （「歷史累計 128 次（102 多／2 空）」加起來不等於 128，33 檔裡 27 檔對不起來）。詳見 T2/T3 報告第 4b 節。
 
 autonomous_decisions:
 1. 【一般】本機 episodes.json 陳舊 → 直接跑 `download_transcripts.py` 補齊（Downloaded 5／Skipped 680／Failed 0），
