@@ -7664,9 +7664,15 @@ async function trFetchOne(num) {
     try {
       const resp = await fetch('transcripts_data/EP' + num + '.txt');
       if (!resp.ok) {
-        // 404＝這集真的沒有檔案；其餘 HTTP 狀態碼是伺服器/網路層的問題。
-        _trErrKind[num] = (resp.status === 404) ? 'missing' : 'network';
-        _trTextCache[num] = null;
+        // 404＝伺服器上沒有這個檔（多半是這集真的缺逐字稿，但也可能是部署漏拷貝）；
+        // 其餘狀態碼視為暫時性問題。
+        if (resp.status === 404) {
+          _trErrKind[num] = 'missing';
+          _trTextCache[num] = null;      // 永久性結果，可以快取
+        } else {
+          _trErrKind[num] = 'network';
+          delete _trTextCache[num];      // 暫時性失敗**不可以快取**，否則重試會直接
+        }                                // 讀到快取的 null、根本不會重新發請求
         return null;
       }
       const text = await resp.text();
@@ -7674,7 +7680,7 @@ async function trFetchOne(num) {
       return text;
     } catch (e) {
       _trErrKind[num] = 'network';   // fetch 直接 reject＝連不上，不是缺檔
-      _trTextCache[num] = null;
+      delete _trTextCache[num];      // 同上：留成 undefined 才有機會重試
       return null;
     } finally {
       delete _trPending[num];
@@ -7708,9 +7714,10 @@ async function trToggle(num, forceOpen) {
     const text = await trFetchOne(num);
     if (text === null) {
       body.textContent = (_trErrKind[num] === 'network')
-        ? '載入失敗：連不到逐字稿檔案（網路或伺服器問題），請稍後再點一次。這不代表這集沒有逐字稿。'
-        : '這集逐字稿檔案缺失（transcripts/ 目錄裡找不到對應檔案，可能需要重新下載這一集），不是網頁的錯誤。';
-      // 失敗不標記 loaded，讓使用者可以再點一次重試（原本失敗後就永遠卡住）
+        ? '載入失敗：連不到逐字稿檔案（網路或伺服器問題），請稍後再點一次重試。這不代表這集沒有逐字稿。'
+        : '找不到這集的逐字稿檔案（伺服器回 404）。多半是這一集本來就缺逐字稿，也可能是部署時沒被複製上去；不是網頁壞了。';
+      // 只有 404 這種永久性結果才標記 loaded；網路失敗不標記，配合 trFetchOne()
+      // 不快取暫時性失敗，再點一次才會真的重新發請求。
       if (_trErrKind[num] !== 'network') body.dataset.loaded = '1';
     } else {
       body.textContent = text;
@@ -7723,9 +7730,12 @@ async function trToggle(num, forceOpen) {
 }
 
 function trCancelFullLoad() {
+  // 誠實說明範圍：這是「停止排入新的下載」，已經送出的那幾個請求不會被中斷
+  // （要真的中斷得用 AbortController，那是另一層改動）。
   _trCancelled = true;
   document.getElementById('tr-cancel-btn').style.display = 'none';
-  document.getElementById('tr-status').textContent = '已取消（已下載的集數仍可搜尋，按「連內文一起搜」可繼續）';
+  document.getElementById('tr-status').textContent =
+    '已停止排入新下載（少數已送出的請求會自己跑完）；已下載的集數仍可搜尋，按「連內文一起搜」可繼續';
 }
 
 // 有界並行的全量下載：原本一次 Promise.all 685 個請求，瀏覽器自己排隊、
@@ -7739,22 +7749,27 @@ async function trEnsureAllLoaded() {
   cancelBtn.style.display = '';
   const queue = TR_META.map(m => m.num);
   const total = queue.length;
-  let done = 0, failed = 0, idx = 0;
+  let done = 0, failed = 0, netFail = 0, idx = 0;
   const CONC = 8;
   async function worker() {
     while (idx < queue.length && !_trCancelled) {
       const num = queue[idx++];
       const t = await trFetchOne(num);
       done++;
-      if (t === null) failed++;
-      if (done % 10 === 0 || done === total) {
+      if (t === null) {
+        failed++;
+        if (_trErrKind[num] === 'network') netFail++;
+      }
+      // 取消之後不要再蓋掉「已停止」那句提示
+      if (!_trCancelled && (done % 10 === 0 || done === total)) {
         status.textContent = '下載逐字稿中… ' + done + ' / ' + total
           + (failed ? '（' + failed + ' 集取不到）' : '');
       }
     }
   }
   _trFullLoadPromise = Promise.all(Array.from({length: CONC}, worker)).then(() => {
-    if (!_trCancelled) _trFullLoaded = true;
+    // 有網路失敗就**不要**標記成全量完成，否則下次搜尋會直接 return、永遠不重試那幾集
+    if (!_trCancelled && netFail === 0) _trFullLoaded = true;
     cancelBtn.style.display = 'none';
     _trFullLoadPromise = null;
   });
@@ -7764,6 +7779,9 @@ async function trEnsureAllLoaded() {
 let _trSearchTimer = null;
 function trOnSearchInput(v) {
   clearTimeout(_trSearchTimer);
+  // 世代號在**按鍵當下**就遞增，不能等 debounce 之後才進 trDoSearch() 才加——
+  // 否則舊的全文搜尋若剛好在這 250ms 空窗內跑完，還是會蓋掉使用者已經改掉的關鍵字。
+  _trSearchGen++;
   _trSearchTimer = setTimeout(() => trDoSearch(v, false), 250);
 }
 

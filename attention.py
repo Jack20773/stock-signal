@@ -137,16 +137,44 @@ def compute_attention(signals: list[dict], today: date | None = None) -> list[di
     # 關注度」，實際上停在一個月前，而且沒有任何 log、CI 也照樣綠燈。這跟 2026-08-01
     # signals_id_seq 撞號那次是同一種型態（綠燈掩蓋真實失敗）。
     #
-    # 用 `signals.entry_date` 當第二來源是安全的：它是 performance.py::_fill_entry_prices()
-    # 依 episodes.json 的**真實上架日**回填進 DB 的，本質上是同一個時間基準的快照，
-    # **不是** analysis_date（那是 AI 處理當天，任務檔明文禁止拿來當時間基準，這條沒有放寬）。
-    # 實查：266 集裡 248 集至少有一筆帶 entry_date，且同集的值一致。
-    _entry_date_fallback: dict[str, str] = {}
+    # ⚠️ 這裡有一個**必須守住的陷阱**（2026-08-11 完工前 Codex 挑戰式審查抓到，經複查屬實）：
+    # `signals.entry_date` **不保證**是真實上架日。`performance.py:89` 是
+    #     entry_d = _episode_date(ep_id, r["analysis_date"])
+    # ——episodes.json 查不到時，它的 fallback **就是 analysis_date**，而且會被寫進
+    # `entry_date` 欄位（`performance.py:134`）。所以「無條件信任 entry_date」等於偷偷
+    # 把任務檔明文禁止的時間基準放進來，只是換了個欄位名。
+    #
+    # 守法（兩道，缺一不可）：
+    #   (a) **只接受 `entry_date != analysis_date` 的那些筆**。兩者不同 → 當初一定是從
+    #       episodes.json 取到真實上架日才會不同；兩者相同 → 無法排除是 fallback，寧可不用。
+    #       代價：真的在上架當天就分析完的集數會被誤拒，這是安全方向的誤判，可接受。
+    #       實查（2026-08-11，973 筆）：688 筆兩者不同、只有 1 筆相同，代價極小；
+    #       EP681–685 全部落在「不同」那邊，救得回來。
+    #   (b) **同一集的候選日期必須一致**，不一致就整集不用——不能像原本那樣「取第一筆非空值」，
+    #       那會讓結果取決於 `list_signals()` 的 `created_at DESC` 排序。
+    #       實查：目前 266 集全部一致，0 集衝突。
+    _fb_candidates: dict[str, set[str]] = {}
     for s in signals:
         ep_id = s.get("episode_id") or ""
-        ed = s.get("entry_date")
-        if ep_id and ed and ep_id not in _entry_date_fallback:
-            _entry_date_fallback[ep_id] = str(ed)
+        ed, ad = s.get("entry_date"), s.get("analysis_date")
+        if not ep_id or not ed:
+            continue
+        if ad is not None and str(ed) == str(ad):
+            continue                       # (a) 可能是 analysis_date 頂替來的，不採信
+        _fb_candidates.setdefault(ep_id, set()).add(str(ed))
+
+    _entry_date_fallback: dict[str, str] = {}
+    _fb_conflicts: list[str] = []
+    for ep_id, vals in _fb_candidates.items():
+        if len(vals) == 1:
+            _entry_date_fallback[ep_id] = next(iter(vals))
+        else:
+            _fb_conflicts.append(ep_id)    # (b) 同集不一致 → 整集不用
+    if _fb_conflicts:
+        logging.warning(
+            f"[attention] {len(_fb_conflicts)} 集的 signals.entry_date 同集不一致，"
+            f"這些集不套用第二來源：{sorted(_fb_conflicts)[:5]}"
+        )
 
     dropped: dict[str, int] = {}   # 真的連第二來源都查不到而被丟棄的，最後要出聲
 
