@@ -39,29 +39,37 @@
 <body>
 <div class="wrap">
   <div style="background:#1a252f;padding:20px;text-align:center;color:#fff;border-radius:8px 8px 0 0;">
-    <div style="font-size:20px;font-weight:bold;">目前節目關注度</div>
+    <h1 style="font-size:20px;font-weight:bold;margin:0;">目前節目關注度</h1>
     <div style="color:#b3c1cd;font-size:13px;margin-top:4px;">2026-08-11</div>
   </div>
   <div class="nav-tabs"><a href="index.html" class="nav-tab">📊 訊號報告</a><a href="attention.html" class="nav-tab nav-tab-active">🔥 目前關注度</a><a href="transcripts.html" class="nav-tab">📄 逐字稿</a></div>
+  <!-- 2026-08-11：這兩塊原本合計吃掉手機第一屏 792px（視窗才 844px），卡片幾乎看不到。
+       改法是「壓密度不刪資訊」——去掉 onboarding 與黃框互相重複的那句定位說明，
+       句子改短，事實一項沒少。 -->
   
     <div class="onboard-wrap" id="onboard-wrap" style="display:none;">
       <div class="onboard-head">
         <span>💡 怎麼看這個分數</span>
         <span class="onboard-dismiss" onclick="onboardDismiss()">知道了，不用每次都顯示 ✕</span>
       </div>
-      <div class="onboard-body"><ul><li>這個分數量化「股癌最近反覆在講什麼」，跟這檔過去準不準是兩件事</li><li>分數越高代表最近越常被提到、信心等級也越高</li><li>「偏多共識／偏空共識」看的是最近多空次數比例</li><li>「高度關注但分歧」代表多空次數接近，講者立場不明確，不是無訊號</li><li>超過60天沒被提到會自動從這個榜單下架，但歷史紀錄還在主報告</li></ul></div>
+      <div class="onboard-body"><ul><li>分數 0–100，越常被提到、信心等級越高就越高；會隨時間衰減，久沒再提就會掉下來</li><li>「近期偏多／偏空」是時間衰減加權後的方向；「歷史累計 N 次」是全部歷史的原始次數，兩者時間窗不同</li><li>「近期立場分歧」＝加權後多空接近、講者立場不明確，不是無訊號</li><li>超過60天沒被提到自動下架，歷史紀錄仍在主報告；卡片上的 EP 可以點開逐字稿</li></ul></div>
     </div>
     <div class="onboard-fab" id="onboard-fab" onclick="onboardReopen()" title="重新打開新手導覽">？</div>
 
-  <!-- 首屏警語（任務檔8b明確要求，定位差異必須在介面上明確標示） -->
-  <div style="margin:16px;padding:12px 16px;background:#fff8e1;border:1px solid #ffe082;border-radius:8px;font-size:13px;color:#8a6d1f;line-height:1.6;">
-    ⚠ 反映節目近期討論熱度，不是買賣建議。這個分數只量化「股癌最近反覆在講什麼」，
-    跟這檔標的過去準不準（歷史勝率）是兩件不同的事——想看歷史勝率請回
-    <a href="index.html" style="color:#8a6d1f;">主報告</a>，兩者分開看，不要混為一談。
+  <!-- 首屏警語（任務檔8b明確要求，定位差異必須在介面上明確標示）。
+       2026-08-11 雙審：Codex 指出分數量尺只寫在可關閉的 onboarding 裡，關掉之後
+       整頁最大的數字就變成沒有單位的裸數字；量尺說明因此併進這個常駐區塊。 -->
+  <div style="margin:12px 16px;padding:10px 14px;background:#fff8e1;border:1px solid #ffe082;border-radius:8px;font-size:12.5px;color:#8a6d1f;line-height:1.6;">
+    ⚠ 這是<b>節目近期討論熱度</b>，不是買賣建議，也不是這檔準不準——歷史勝率請看
+    <a href="index.html" style="color:#8a6d1f;">主報告</a>。
+    分數 <b>0–100</b>（提及次數 × 信心等級，再依距今天數衰減），<b>不是報酬率也不是勝率</b>；
+    目前榜首 64.55 分。
   </div>
 
   <div style="padding:0 16px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-    <input id="att-search" type="text" placeholder="搜尋標的名稱、代號..."
+    <label for="att-search" style="position:absolute;left:-9999px;">搜尋標的名稱、代號或原話關鍵字</label>
+    <input id="att-search" type="text" placeholder="搜尋名稱、代號或原話關鍵字..."
+      aria-label="搜尋標的名稱、代號或原話關鍵字"
       oninput="attFilter()"
       style="flex:1;max-width:240px;padding:6px 12px;border:1px solid #ddd;border-radius:12px;font-size:13px;outline:none;">
     <button id="amkt-all" class="filter-btn btn-active" onclick="attSetMkt('all')">全部</button>
@@ -71,7 +79,7 @@
   </div>
 
   <div id="att-list">
-        <div class="att-card" data-name="台積電2330.tw" data-mkt="tw">
+        <div class="att-card" data-name="台積電2330.tw 從上禮拜五開始，大家也看到台積電漲停非常誇張，各式各樣的標的都直接從谷底彈上來" data-mkt="tw">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">1</div>
             <div style="flex:1;min-width:0;">
@@ -80,20 +88,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">台股</span>
                 <span style="font-size:12px;color:#aaa;">2330.TW</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（102多／2空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">64.55</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">64.55</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-08-05（EP685）</span>
-            <span>近30天提及：EP685、EP683、EP681、EP680</span>
+            <span>最後提及 2026-08-05（<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a>）（6 天前）</span>
+            <span>歷史累計 128 次提及（102 多／2 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「從上禮拜五開始，大家也看到台積電漲停非常誇張，各式各樣的標的都直接從谷底彈上來」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP685</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a>、<a href="transcripts.html?ep=683" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP683 的逐字稿">EP683</a>、<a href="transcripts.html?ep=681" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP681 的逐字稿">EP681</a>、<a href="transcripts.html?ep=680" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP680 的逐字稿">EP680</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「從上禮拜五開始，大家也看到台積電漲停非常誇張，各式各樣的標的都直接從谷底彈上來」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a></span></div>
         </div>
-        <div class="att-card" data-name="googlegoogl" data-mkt="us">
+        <div class="att-card" data-name="googlegoogl google 前面開財報的時候不是跌嗎？然後跌完之後，很多人就想說因為怎麼樣怎麼樣嘛，結果後來又再漲回去，那請問前面的人是不是就把自己臉打爆了？" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">2</div>
             <div style="flex:1;min-width:0;">
@@ -102,20 +111,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">GOOGL</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（12多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">41.77</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">41.77</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-08-05（EP685）</span>
-            <span>近30天提及：EP685、EP682、EP681</span>
+            <span>最後提及 2026-08-05（<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a>）（6 天前）</span>
+            <span>歷史累計 15 次提及（12 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「Google 前面開財報的時候不是跌嗎？然後跌完之後，很多人就想說因為怎麼樣怎麼樣嘛，結果後來又再漲回去，那請問前面的人是不是就把自己臉打爆了？」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP685</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a>、<a href="transcripts.html?ep=682" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP682 的逐字稿">EP682</a>、<a href="transcripts.html?ep=681" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP681 的逐字稿">EP681</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「Google 前面開財報的時候不是跌嗎？然後跌完之後，很多人就想說因為怎麼樣怎麼樣嘛，結果後來又再漲回去，那請問前面的人是不是就把自己臉打爆了？」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a></span></div>
         </div>
-        <div class="att-card" data-name="聯發科2454.tw" data-mkt="tw">
+        <div class="att-card" data-name="聯發科2454.tw 不管是在 mtk 這裡、或者在博通這裡，大家的 roadmap 都還是一樣，那就算有一些時程上的調整，它應該也不是什麼大不了的事情" data-mkt="tw">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">3</div>
             <div style="flex:1;min-width:0;">
@@ -124,20 +134,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">台股</span>
                 <span style="font-size:12px;color:#aaa;">2454.TW</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（19多／1空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">41.39</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">41.39</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-08-05（EP685）</span>
-            <span>近30天提及：EP685、EP684</span>
+            <span>最後提及 2026-08-05（<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a>）（6 天前）</span>
+            <span>歷史累計 31 次提及（19 多／1 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「不管是在 MTK 這裡、或者在博通這裡，大家的 Roadmap 都還是一樣，那就算有一些時程上的調整，它應該也不是什麼大不了的事情」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP685</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a>、<a href="transcripts.html?ep=684" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP684 的逐字稿">EP684</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「不管是在 MTK 這裡、或者在博通這裡，大家的 Roadmap 都還是一樣，那就算有一些時程上的調整，它應該也不是什麼大不了的事情」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a></span></div>
         </div>
-        <div class="att-card" data-name="palantirpltr" data-mkt="us">
+        <div class="att-card" data-name="palantirpltr 我們最近看到 palantir 直接整個跳上去，我覺得就是一掃過去的陰霾…… palantir 這個財報數字，當然我覺得已經是沒有意外，它本身就是開一個好的數字，但是重點是什麼？重點是市場願意去反映它" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">4</div>
             <div style="flex:1;min-width:0;">
@@ -146,20 +157,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">PLTR</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（18多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">40.25</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">40.25</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-08-05（EP685）</span>
-            <span>近30天提及：EP685、EP682</span>
+            <span>最後提及 2026-08-05（<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a>）（6 天前）</span>
+            <span>歷史累計 24 次提及（18 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「我們最近看到 Palantir 直接整個跳上去，我覺得就是一掃過去的陰霾…… Palantir 這個財報數字，當然我覺得已經是沒有意外，它本身就是開一個好的數字，但是重點是什麼？重點是市場願意去反映它」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP685</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a>、<a href="transcripts.html?ep=682" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP682 的逐字稿">EP682</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「我們最近看到 Palantir 直接整個跳上去，我覺得就是一掃過去的陰霾…… Palantir 這個財報數字，當然我覺得已經是沒有意外，它本身就是開一個好的數字，但是重點是什麼？重點是市場願意去反映它」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a></span></div>
         </div>
-        <div class="att-card" data-name="amdamd" data-mkt="us">
+        <div class="att-card" data-name="amdamd 只有那個 amd 開完之後還是疊的，那個蠻神奇的……如果是這樣的話，那就會導致對於這些產品的需求會大量下降，所以他們一定是不希望這種事情發生的" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">5</div>
             <div style="flex:1;min-width:0;">
@@ -168,20 +180,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">AMD</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（14多／2空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">39.81</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">39.81</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-08-05（EP685）</span>
-            <span>近30天提及：EP685、EP682、EP681</span>
+            <span>最後提及 2026-08-05（<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a>）（6 天前）</span>
+            <span>歷史累計 23 次提及（14 多／2 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「只有那個 AMD 開完之後還是疊的，那個蠻神奇的……如果是這樣的話，那就會導致對於這些產品的需求會大量下降，所以他們一定是不希望這種事情發生的」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP685</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a>、<a href="transcripts.html?ep=682" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP682 的逐字稿">EP682</a>、<a href="transcripts.html?ep=681" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP681 的逐字稿">EP681</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「只有那個 AMD 開完之後還是疊的，那個蠻神奇的……如果是這樣的話，那就會導致對於這些產品的需求會大量下降，所以他們一定是不希望這種事情發生的」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a></span></div>
         </div>
-        <div class="att-card" data-name="微軟msft" data-mkt="us">
+        <div class="att-card" data-name="微軟msft 微軟算是一個分界點，所以微軟的這份財報，他開完之後他上去，其實在我們的判讀裡面，他也是一個非常重要的指標" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">6</div>
             <div style="flex:1;min-width:0;">
@@ -190,20 +203,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">MSFT</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（5多／2空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">26.92</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">26.92</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-08-05（EP685）</span>
-            <span>近30天提及：EP685</span>
+            <span>最後提及 2026-08-05（<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a>）（6 天前）</span>
+            <span>歷史累計 8 次提及（5 多／2 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「微軟算是一個分界點，所以微軟的這份財報，他開完之後他上去，其實在我們的判讀裡面，他也是一個非常重要的指標」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP685</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「微軟算是一個分界點，所以微軟的這份財報，他開完之後他上去，其實在我們的判讀裡面，他也是一個非常重要的指標」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a></span></div>
         </div>
-        <div class="att-card" data-name="cloudflarenet" data-mkt="us">
+        <div class="att-card" data-name="cloudflarenet 有些像是資安，過去一直被誤會的，其實很多都跑去新高、都是持續地越漲越多……或者像像是 palantir、或是像 cloudflare，之前也有一個論述是講說他們也都會被擊敗……後來發現說沒有辦法" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">7</div>
             <div style="flex:1;min-width:0;">
@@ -212,20 +226,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">NET</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（17多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">23.21</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">23.21</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-08-05（EP685）</span>
-            <span>近30天提及：EP685</span>
+            <span>最後提及 2026-08-05（<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a>）（6 天前）</span>
+            <span>歷史累計 18 次提及（17 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「有些像是資安，過去一直被誤會的，其實很多都跑去新高、都是持續地越漲越多……或者像像是 Palantir、或是像 Cloudflare，之前也有一個論述是講說他們也都會被擊敗……後來發現說沒有辦法」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP685</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「有些像是資安，過去一直被誤會的，其實很多都跑去新高、都是持續地越漲越多……或者像像是 Palantir、或是像 Cloudflare，之前也有一個論述是講說他們也都會被擊敗……後來發現說沒有辦法」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a></span></div>
         </div>
-        <div class="att-card" data-name="台達電2308.tw" data-mkt="tw">
+        <div class="att-card" data-name="台達電2308.tw 像最近台達電、或是光寶出來講，基本上他們的說法，你就不會去質疑說 800v 這個東西不會出現，它就只是可能現在中繼先用 400v" data-mkt="tw">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">8</div>
             <div style="flex:1;min-width:0;">
@@ -234,20 +249,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">台股</span>
                 <span style="font-size:12px;color:#aaa;">2308.TW</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（9多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">18.78</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">18.78</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-08-05（EP685）</span>
-            <span>近30天提及：EP685</span>
+            <span>最後提及 2026-08-05（<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a>）（6 天前）</span>
+            <span>歷史累計 10 次提及（9 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「像最近台達電、或是光寶出來講，基本上他們的說法，你就不會去質疑說 800V 這個東西不會出現，它就只是可能現在中繼先用 400V」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP685</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「像最近台達電、或是光寶出來講，基本上他們的說法，你就不會去質疑說 800V 這個東西不會出現，它就只是可能現在中繼先用 400V」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a></span></div>
         </div>
-        <div class="att-card" data-name="teslatsla" data-mkt="us">
+        <div class="att-card" data-name="teslatsla tesla 也是花很多錢，但是 tesla 花的錢，它的賽道就跟大家有點不太一樣，它是在拚 physical ai 這一塊了，所以會相對地難評價一點。" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">9</div>
             <div style="flex:1;min-width:0;">
@@ -256,20 +272,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">TSLA</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（43多／5空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">17.57</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">17.57</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-07-25（EP682）</span>
-            <span>近30天提及：EP682、EP680</span>
+            <span>最後提及 2026-07-25（<a href="transcripts.html?ep=682" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP682 的逐字稿">EP682</a>）（17 天前）</span>
+            <span>歷史累計 67 次提及（43 多／5 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「Tesla 也是花很多錢，但是 Tesla 花的錢，它的賽道就跟大家有點不太一樣，它是在拚 Physical AI 這一塊了，所以會相對地難評價一點。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP682</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=682" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP682 的逐字稿">EP682</a>、<a href="transcripts.html?ep=680" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP680 的逐字稿">EP680</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「Tesla 也是花很多錢，但是 Tesla 花的錢，它的賽道就跟大家有點不太一樣，它是在拚 Physical AI 這一塊了，所以會相對地難評價一點。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=682" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP682 的逐字稿">EP682</a></span></div>
         </div>
-        <div class="att-card" data-name="力積電6770.tw" data-mkt="tw">
+        <div class="att-card" data-name="力積電6770.tw 黃崇仁對我的影響就是，他的力積電、愛普我都是賺錢的。... 那個力積電早日破百，對，希望這個——也不要只有說力積電，就所有這一波遭受到重擊的股票，希望大家都可以盡快早日回到前高" data-mkt="tw">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">10</div>
             <div style="flex:1;min-width:0;">
@@ -278,20 +295,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">台股</span>
                 <span style="font-size:12px;color:#aaa;">6770.TW</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（3多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">17.53</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">17.53</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-08-01（EP684）</span>
-            <span>近30天提及：EP684、EP679</span>
+            <span>最後提及 2026-08-01（<a href="transcripts.html?ep=684" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP684 的逐字稿">EP684</a>）（10 天前）</span>
+            <span>歷史累計 5 次提及（3 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「黃崇仁對我的影響就是，他的力積電、愛普我都是賺錢的。... 那個力積電早日破百，對，希望這個——也不要只有說力積電，就所有這一波遭受到重擊的股票，希望大家都可以盡快早日回到前高」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP684</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=684" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP684 的逐字稿">EP684</a>、<a href="transcripts.html?ep=679" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP679 的逐字稿">EP679</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「黃崇仁對我的影響就是，他的力積電、愛普我都是賺錢的。... 那個力積電早日破百，對，希望這個——也不要只有說力積電，就所有這一波遭受到重擊的股票，希望大家都可以盡快早日回到前高」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=684" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP684 的逐字稿">EP684</a></span></div>
         </div>
-        <div class="att-card" data-name="博通avgo" data-mkt="us">
+        <div class="att-card" data-name="博通avgo 不管是在 mtk 這裡、或者在博通這裡，大家的 roadmap 都還是一樣，那就算有一些時程上的調整，它應該也不是什麼大不了的事情" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">11</div>
             <div style="flex:1;min-width:0;">
@@ -300,20 +318,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">AVGO</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（16多／3空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">16.72</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">16.72</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-08-05（EP685）</span>
-            <span>近30天提及：EP685</span>
+            <span>最後提及 2026-08-05（<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a>）（6 天前）</span>
+            <span>歷史累計 21 次提及（16 多／3 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「不管是在 MTK 這裡、或者在博通這裡，大家的 Roadmap 都還是一樣，那就算有一些時程上的調整，它應該也不是什麼大不了的事情」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP685</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「不管是在 MTK 這裡、或者在博通這裡，大家的 Roadmap 都還是一樣，那就算有一些時程上的調整，它應該也不是什麼大不了的事情」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a></span></div>
         </div>
-        <div class="att-card" data-name="光寶科2301.tw" data-mkt="tw">
+        <div class="att-card" data-name="光寶科2301.tw 像最近台達電、或是光寶出來講，基本上他們的說法，你就不會去質疑說 800v 這個東西不會出現" data-mkt="tw">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">12</div>
             <div style="flex:1;min-width:0;">
@@ -322,20 +341,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">台股</span>
                 <span style="font-size:12px;color:#aaa;">2301.TW</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（2多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">16.21</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">16.21</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-08-05（EP685）</span>
-            <span>近30天提及：EP685</span>
+            <span>最後提及 2026-08-05（<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a>）（6 天前）</span>
+            <span>歷史累計 2 次提及（2 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「像最近台達電、或是光寶出來講，基本上他們的說法，你就不會去質疑說 800V 這個東西不會出現」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP685</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「像最近台達電、或是光寶出來講，基本上他們的說法，你就不會去質疑說 800V 這個東西不會出現」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=685" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP685 的逐字稿">EP685</a></span></div>
         </div>
-        <div class="att-card" data-name="德州儀器txn" data-mkt="us">
+        <div class="att-card" data-name="德州儀器txn texas instrument，就是德州儀器 txn 或是 ti... 它在這次的電話會，基本上釋出一個超級好的訊號，就是告訴大家說它就是看到一個全面性的復甦，東西都上來，車用中心的表現很好，他們開始漲價。" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">13</div>
             <div style="flex:1;min-width:0;">
@@ -344,20 +364,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">TXN</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（2多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">13.06</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">13.06</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-07-25（EP682）</span>
-            <span>近30天提及：EP682</span>
+            <span>最後提及 2026-07-25（<a href="transcripts.html?ep=682" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP682 的逐字稿">EP682</a>）（17 天前）</span>
+            <span>歷史累計 3 次提及（2 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「Texas Instrument，就是德州儀器 TXN 或是 TI... 它在這次的電話會，基本上釋出一個超級好的訊號，就是告訴大家說它就是看到一個全面性的復甦，東西都上來，車用中心的表現很好，他們開始漲價。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP682</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=682" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP682 的逐字稿">EP682</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「Texas Instrument，就是德州儀器 TXN 或是 TI... 它在這次的電話會，基本上釋出一個超級好的訊號，就是告訴大家說它就是看到一個全面性的復甦，東西都上來，車用中心的表現很好，他們開始漲價。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=682" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP682 的逐字稿">EP682</a></span></div>
         </div>
-        <div class="att-card" data-name="愛普*6531.tw" data-mkt="tw">
+        <div class="att-card" data-name="愛普*6531.tw 黃崇仁對我的影響就是，他的力積電、愛普我都是賺錢的。... 所以黃崇仁的股票呢，就是氣氛對了上去就會賺錢，所以有時候會洗比較久，像那時候愛普就洗了好久好久。" data-mkt="tw">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">14</div>
             <div style="flex:1;min-width:0;">
@@ -366,20 +387,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">台股</span>
                 <span style="font-size:12px;color:#aaa;">6531.TW</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（4多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">12.84</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">12.84</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-08-01（EP684）</span>
-            <span>近30天提及：EP684</span>
+            <span>最後提及 2026-08-01（<a href="transcripts.html?ep=684" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP684 的逐字稿">EP684</a>）（10 天前）</span>
+            <span>歷史累計 5 次提及（4 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「黃崇仁對我的影響就是，他的力積電、愛普我都是賺錢的。... 所以黃崇仁的股票呢，就是氣氛對了上去就會賺錢，所以有時候會洗比較久，像那時候愛普就洗了好久好久。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP684</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=684" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP684 的逐字稿">EP684</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「黃崇仁對我的影響就是，他的力積電、愛普我都是賺錢的。... 所以黃崇仁的股票呢，就是氣氛對了上去就會賺錢，所以有時候會洗比較久，像那時候愛普就洗了好久好久。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=684" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP684 的逐字稿">EP684</a></span></div>
         </div>
-        <div class="att-card" data-name="nvidianvda" data-mkt="us">
+        <div class="att-card" data-name="nvidianvda nvidia 的話是直接再次的攻到 200 美元大關了，就很久沒有看到 nvidia 連續出這種紅 k，然後重新的爬上季線，這個長得還蠻好看的" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">15</div>
             <div style="flex:1;min-width:0;">
@@ -388,20 +410,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">NVDA</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（49多／2空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">9.37</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">9.37</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-07-11（EP678）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-07-11（<a href="transcripts.html?ep=678" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP678 的逐字稿">EP678</a>）（31 天前）</span>
+            <span>歷史累計 79 次提及（49 多／2 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「NVIDIA 的話是直接再次的攻到 200 美元大關了，就很久沒有看到 NVIDIA 連續出這種紅 K，然後重新的爬上季線，這個長得還蠻好看的」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP678</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「NVIDIA 的話是直接再次的攻到 200 美元大關了，就很久沒有看到 NVIDIA 連續出這種紅 K，然後重新的爬上季線，這個長得還蠻好看的」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=678" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP678 的逐字稿">EP678</a></span></div>
         </div>
-        <div class="att-card" data-name="國巨2327.tw" data-mkt="tw">
+        <div class="att-card" data-name="國巨2327.tw 過去一個比較大、可以塞很多錢的族群是被動元件，像國巨、華新科這種最大的，法人是有辦法parking進去的...只是按照自己的經驗，一般來講如果拉回到這樣一個程度，會需要橫盤去做整理。" data-mkt="tw">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">16</div>
             <div style="flex:1;min-width:0;">
@@ -410,20 +433,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">台股</span>
                 <span style="font-size:12px;color:#aaa;">2327.TW</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（14多／2空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">7.82</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">7.82</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-07-08（EP677）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-07-08（<a href="transcripts.html?ep=677" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP677 的逐字稿">EP677</a>）（34 天前）</span>
+            <span>歷史累計 20 次提及（14 多／2 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「過去一個比較大、可以塞很多錢的族群是被動元件，像國巨、華新科這種最大的，法人是有辦法parking進去的...只是按照自己的經驗，一般來講如果拉回到這樣一個程度，會需要橫盤去做整理。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP677</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「過去一個比較大、可以塞很多錢的族群是被動元件，像國巨、華新科這種最大的，法人是有辦法parking進去的...只是按照自己的經驗，一般來講如果拉回到這樣一個程度，會需要橫盤去做整理。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=677" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP677 的逐字稿">EP677</a></span></div>
         </div>
-        <div class="att-card" data-name="intelintc" data-mkt="us">
+        <div class="att-card" data-name="intelintc intel 當然它也是有端出新東西啊，只是呢，它的 oak stream... 那應該是要等到今年年底或明年年初才會出來，所以 amd 又可以搶先一點" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">17</div>
             <div style="flex:1;min-width:0;">
@@ -432,20 +456,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">INTC</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（8多／2空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">7.16</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">7.16</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-07-22（EP681）</span>
-            <span>近30天提及：EP681</span>
+            <span>最後提及 2026-07-22（<a href="transcripts.html?ep=681" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP681 的逐字稿">EP681</a>）（20 天前）</span>
+            <span>歷史累計 14 次提及（8 多／2 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「Intel 當然它也是有端出新東西啊，只是呢，它的 Oak Stream... 那應該是要等到今年年底或明年年初才會出來，所以 AMD 又可以搶先一點」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP681</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=681" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP681 的逐字稿">EP681</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「Intel 當然它也是有端出新東西啊，只是呢，它的 Oak Stream... 那應該是要等到今年年底或明年年初才會出來，所以 AMD 又可以搶先一點」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=681" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP681 的逐字稿">EP681</a></span></div>
         </div>
-        <div class="att-card" data-name="spacexspcx" data-mkt="us">
+        <div class="att-card" data-name="spacexspcx 那這禮拜看到 spacex 的股價又繼續落地，但我還是非常勇敢的在持續去加，後來就真的越來越喜歡這家公司。...那就是跟可能在裡面工作的一些朋友聊天完之後，就會覺得應該要再買更多。" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">18</div>
             <div style="flex:1;min-width:0;">
@@ -454,20 +479,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">SPCX</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（2多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">7.14</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">7.14</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-07-18（EP680）</span>
-            <span>近30天提及：EP680</span>
+            <span>最後提及 2026-07-18（<a href="transcripts.html?ep=680" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP680 的逐字稿">EP680</a>）（24 天前）</span>
+            <span>歷史累計 2 次提及（2 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「那這禮拜看到 SpaceX 的股價又繼續落地，但我還是非常勇敢的在持續去加，後來就真的越來越喜歡這家公司。...那就是跟可能在裡面工作的一些朋友聊天完之後，就會覺得應該要再買更多。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP680</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：<a href="transcripts.html?ep=680" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP680 的逐字稿">EP680</a></div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「那這禮拜看到 SpaceX 的股價又繼續落地，但我還是非常勇敢的在持續去加，後來就真的越來越喜歡這家公司。...那就是跟可能在裡面工作的一些朋友聊天完之後，就會覺得應該要再買更多。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=680" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP680 的逐字稿">EP680</a></span></div>
         </div>
-        <div class="att-card" data-name="metameta" data-mkt="us">
+        <div class="att-card" data-name="metameta 祖克柏的訪問裡面，好像是昨天還前天他出來證實了，就是我們這邊的意見才是對的，就是他並沒有要退出，他甚至是要滿倉殺進去，然後更加用力的做多。" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">19</div>
             <div style="flex:1;min-width:0;">
@@ -476,20 +502,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">META</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（4多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">5.07</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">5.07</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-07-11（EP678）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-07-11（<a href="transcripts.html?ep=678" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP678 的逐字稿">EP678</a>）（31 天前）</span>
+            <span>歷史累計 6 次提及（4 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「祖克柏的訪問裡面，好像是昨天還前天他出來證實了，就是我們這邊的意見才是對的，就是他並沒有要退出，他甚至是要滿倉殺進去，然後更加用力的做多。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP678</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「祖克柏的訪問裡面，好像是昨天還前天他出來證實了，就是我們這邊的意見才是對的，就是他並沒有要退出，他甚至是要滿倉殺進去，然後更加用力的做多。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=678" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP678 的逐字稿">EP678</a></span></div>
         </div>
-        <div class="att-card" data-name="crowdstrikecrwd" data-mkt="us">
+        <div class="att-card" data-name="crowdstrikecrwd 那時候當然也可能是因為我自己手上有crowdstrike，所以可能也有一點愛屋及烏吧... 你去回測就會知道，真的很多時候大家覺得市場一定是對的，市場才不是一定是對的... 這些資安全部都在右上角。" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">20</div>
             <div style="flex:1;min-width:0;">
@@ -498,20 +525,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">CRWD</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（8多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">4.53</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">4.53</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-07-08（EP677）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-07-08（<a href="transcripts.html?ep=677" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP677 的逐字稿">EP677</a>）（34 天前）</span>
+            <span>歷史累計 8 次提及（8 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「那時候當然也可能是因為我自己手上有CrowdStrike，所以可能也有一點愛屋及烏吧... 你去回測就會知道，真的很多時候大家覺得市場一定是對的，市場才不是一定是對的... 這些資安全部都在右上角。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP677</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「那時候當然也可能是因為我自己手上有CrowdStrike，所以可能也有一點愛屋及烏吧... 你去回測就會知道，真的很多時候大家覺得市場一定是對的，市場才不是一定是對的... 這些資安全部都在右上角。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=677" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP677 的逐字稿">EP677</a></span></div>
         </div>
-        <div class="att-card" data-name="marvellmrvl" data-mkt="us">
+        <div class="att-card" data-name="marvellmrvl marvell 也是有壓到。但是最近這幾檔都稍微有去做一點調節。" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">21</div>
             <div style="flex:1;min-width:0;">
@@ -520,20 +548,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">MRVL</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（16多／3空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">2.42</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">2.42</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-06-27（EP674）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-06-27（<a href="transcripts.html?ep=674" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP674 的逐字稿">EP674</a>）（45 天前）</span>
+            <span>歷史累計 26 次提及（16 多／3 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「Marvell 也是有壓到。但是最近這幾檔都稍微有去做一點調節。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP674</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「Marvell 也是有壓到。但是最近這幾檔都稍微有去做一點調節。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=674" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP674 的逐字稿">EP674</a></span></div>
         </div>
-        <div class="att-card" data-name="adiadi" data-mkt="us">
+        <div class="att-card" data-name="adiadi 我們已經注意到像 adi，就是一個全球非常大的一個類比 ic 的廠商，他們也是發出了漲價信，其實我們也是注意到說，在功率元件這邊有一個全面漲價的一個狀態" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">22</div>
             <div style="flex:1;min-width:0;">
@@ -542,20 +571,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">ADI</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（1多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">2.2</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">2.2</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-07-11（EP678）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-07-11（<a href="transcripts.html?ep=678" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP678 的逐字稿">EP678</a>）（31 天前）</span>
+            <span>歷史累計 1 次提及（1 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「我們已經注意到像 ADI，就是一個全球非常大的一個類比 IC 的廠商，他們也是發出了漲價信，其實我們也是注意到說，在功率元件這邊有一個全面漲價的一個狀態」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP678</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「我們已經注意到像 ADI，就是一個全球非常大的一個類比 IC 的廠商，他們也是發出了漲價信，其實我們也是注意到說，在功率元件這邊有一個全面漲價的一個狀態」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=678" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP678 的逐字稿">EP678</a></span></div>
         </div>
-        <div class="att-card" data-name="華新科2492.tw" data-mkt="tw">
+        <div class="att-card" data-name="華新科2492.tw 過去一個比較大、可以塞很多錢的族群是被動元件，像國巨、華新科這種最大的，法人是有辦法parking進去的..." data-mkt="tw">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">23</div>
             <div style="flex:1;min-width:0;">
@@ -564,20 +594,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">台股</span>
                 <span style="font-size:12px;color:#aaa;">2492.TW</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（2多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">1.99</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">1.99</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-07-08（EP677）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-07-08（<a href="transcripts.html?ep=677" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP677 的逐字稿">EP677</a>）（34 天前）</span>
+            <span>歷史累計 3 次提及（2 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「過去一個比較大、可以塞很多錢的族群是被動元件，像國巨、華新科這種最大的，法人是有辦法parking進去的...」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP677</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「過去一個比較大、可以塞很多錢的族群是被動元件，像國巨、華新科這種最大的，法人是有辦法parking進去的...」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=677" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP677 的逐字稿">EP677</a></span></div>
         </div>
-        <div class="att-card" data-name="appleaapl" data-mkt="us">
+        <div class="att-card" data-name="appleaapl 我們自己滿手都還是蘋果的產品，所以就還是會相信這家公司有機會為我們帶來一些驚喜。只是一直沒有找到比較合適的切入點，我自己會覺得說可能等到它稍微轉強一點——像禮拜五有注意到已經跌深的微軟或是蘋果，他們反而是在大家很不好的時候跳起來。那如果在接下來注意到他們持續上去的話，那我就有可能把一些錢移到這些地方來。" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">24</div>
             <div style="flex:1;min-width:0;">
@@ -586,20 +617,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">AAPL</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（20多／1空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">1.48</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">1.48</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-06-27（EP674）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-06-27（<a href="transcripts.html?ep=674" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP674 的逐字稿">EP674</a>）（45 天前）</span>
+            <span>歷史累計 24 次提及（20 多／1 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「我們自己滿手都還是蘋果的產品，所以就還是會相信這家公司有機會為我們帶來一些驚喜。只是一直沒有找到比較合適的切入點，我自己會覺得說可能等到它稍微轉強一點——像禮拜五有注意到已經跌深的微軟或是蘋果，他們反而是在大家很不好的時候跳起來。那如果在接下來注意到他們持續上去的話，那我就有可能把一些錢移到這些地方來。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP674</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「我們自己滿手都還是蘋果的產品，所以就還是會相信這家公司有機會為我們帶來一些驚喜。只是一直沒有找到比較合適的切入點，我自己會覺得說可能等到它稍微轉強一點——像禮拜五有注意到已經跌深的微軟或是蘋果，他們反而是在大家很不好的時候跳起來。那如果在接下來注意到他們持續上去的話，那我就有可能把一些錢移到這些地方來。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=674" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP674 的逐字稿">EP674</a></span></div>
         </div>
-        <div class="att-card" data-name="00500050.tw" data-mkt="tw">
+        <div class="att-card" data-name="00500050.tw 以我們節目的氣氛來講，絕大多數人可能是去買 0050 這樣的東西嘛，今年的 year-to-date 都還是有個 50%，這個是非常嚇人的數字。" data-mkt="tw">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">25</div>
             <div style="flex:1;min-width:0;">
@@ -608,20 +640,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">台股</span>
                 <span style="font-size:12px;color:#aaa;">0050.TW</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（6多／1空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">0.88</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">0.88</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-06-27（EP674）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-06-27（<a href="transcripts.html?ep=674" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP674 的逐字稿">EP674</a>）（45 天前）</span>
+            <span>歷史累計 11 次提及（6 多／1 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「以我們節目的氣氛來講，絕大多數人可能是去買 0050 這樣的東西嘛，今年的 Year-to-Date 都還是有個 50%，這個是非常嚇人的數字。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP674</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「以我們節目的氣氛來講，絕大多數人可能是去買 0050 這樣的東西嘛，今年的 Year-to-Date 都還是有個 50%，這個是非常嚇人的數字。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=674" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP674 的逐字稿">EP674</a></span></div>
         </div>
-        <div class="att-card" data-name="vishayvsh" data-mkt="us">
+        <div class="att-card" data-name="vishayvsh 像過去我自己在追 vshare 的話，我觀察的東西其實都是它的被動元件，只是 vshare 這家公司很特別的點是在於說，它除了被動元件之外，它其實算是功率半導體廠商，它是一個綜合體，就是這兩個東西都有。因為我注意到說其實 vshare 有些料那個 lead time 拉得非常的恐怖，比他的被動元件還要恐怖非常多，所以就是有點像歪打正著的感覺啦，一魚兩吃" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">26</div>
             <div style="flex:1;min-width:0;">
@@ -630,20 +663,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">VSH</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（3多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">0.79</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">0.79</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-06-20（EP672）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-06-20（<a href="transcripts.html?ep=672" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP672 的逐字稿">EP672</a>）（52 天前）</span>
+            <span>歷史累計 3 次提及（3 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「像過去我自己在追 Vshare 的話，我觀察的東西其實都是它的被動元件，只是 Vshare 這家公司很特別的點是在於說，它除了被動元件之外，它其實算是功率半導體廠商，它是一個綜合體，就是這兩個東西都有。因為我注意到說其實 Vshare 有些料那個 lead time 拉得非常的恐怖，比他的被動元件還要恐怖非常多，所以就是有點像歪打正著的感覺啦，一魚兩吃」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP672</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「像過去我自己在追 Vshare 的話，我觀察的東西其實都是它的被動元件，只是 Vshare 這家公司很特別的點是在於說，它除了被動元件之外，它其實算是功率半導體廠商，它是一個綜合體，就是這兩個東西都有。因為我注意到說其實 Vshare 有些料那個 lead time 拉得非常的恐怖，比他的被動元件還要恐怖非常多，所以就是有點像歪打正著的感覺啦，一魚兩吃」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=672" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP672 的逐字稿">EP672</a></span></div>
         </div>
-        <div class="att-card" data-name="安森美on" data-mkt="us">
+        <div class="att-card" data-name="安森美on 像我們其實隨時都會去點像什麼 ti、st、安森美（onsemi），這個都是我們設定在範圍內、他們每次有什麼電話會議都會去看的東西" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">27</div>
             <div style="flex:1;min-width:0;">
@@ -652,20 +686,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">ON</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（2多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">0.56</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">0.56</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-06-20（EP672）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-06-20（<a href="transcripts.html?ep=672" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP672 的逐字稿">EP672</a>）（52 天前）</span>
+            <span>歷史累計 3 次提及（2 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「像我們其實隨時都會去點像什麼 TI、ST、安森美（onsemi），這個都是我們設定在範圍內、他們每次有什麼電話會議都會去看的東西」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP672</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「像我們其實隨時都會去點像什麼 TI、ST、安森美（onsemi），這個都是我們設定在範圍內、他們每次有什麼電話會議都會去看的東西」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=672" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP672 的逐字稿">EP672</a></span></div>
         </div>
-        <div class="att-card" data-name="美光mu" data-mkt="us">
+        <div class="att-card" data-name="美光mu 就因為油價現在是相對低下來，可能就還好。可是大家同時也注意到說，因為 ai 導致像大家看到 micron 的財報超級好" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">28</div>
             <div style="flex:1;min-width:0;">
@@ -674,20 +709,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">MU</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#d9534f;font-weight:bold;">偏多共識（10多／0空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">↑ 近期偏多</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">0.46</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">0.46</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-06-27（EP674）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-06-27（<a href="transcripts.html?ep=674" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP674 的逐字稿">EP674</a>）（45 天前）</span>
+            <span>歷史累計 16 次提及（10 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「就因為油價現在是相對低下來，可能就還好。可是大家同時也注意到說，因為 AI 導致像大家看到 Micron 的財報超級好」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP674</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「就因為油價現在是相對低下來，可能就還好。可是大家同時也注意到說，因為 AI 導致像大家看到 Micron 的財報超級好」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=674" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP674 的逐字稿">EP674</a></span></div>
         </div>
-        <div class="att-card" data-name="astsasts" data-mkt="us">
+        <div class="att-card" data-name="astsasts 在盤中也出現一個有趣的現象，就是一些在過去跟衛星火箭相關的股票，不管什麼 rklb、asts 或是 fly，就是這些跟衛星或是通訊有關係的股票，其實他們都出現了一個大逃殺的狀況。其實像這樣子的劇本，在過去也是看過幾次，就是等到一個本來是 rumor 的東西開始實現之後，過去跟著題材上漲的東西，蠻多就會趁機的提款。" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">29</div>
             <div style="flex:1;min-width:0;">
@@ -696,20 +732,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">ASTS</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#2b8a3e;font-weight:bold;">偏空共識（1多／1空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#0d5c8a;font-weight:bold;">↓ 近期偏空</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">0.23</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">0.23</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-06-13（EP670）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-06-13（<a href="transcripts.html?ep=670" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP670 的逐字稿">EP670</a>）（59 天前）</span>
+            <span>歷史累計 4 次提及（1 多／1 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「在盤中也出現一個有趣的現象，就是一些在過去跟衛星火箭相關的股票，不管什麼 RKLB、ASTS 或是 Fly，就是這些跟衛星或是通訊有關係的股票，其實他們都出現了一個大逃殺的狀況。其實像這樣子的劇本，在過去也是看過幾次，就是等到一個本來是 rumor 的東西開始實現之後，過去跟著題材上漲的東西，蠻多就會趁機的提款。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP670</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「在盤中也出現一個有趣的現象，就是一些在過去跟衛星火箭相關的股票，不管什麼 RKLB、ASTS 或是 Fly，就是這些跟衛星或是通訊有關係的股票，其實他們都出現了一個大逃殺的狀況。其實像這樣子的劇本，在過去也是看過幾次，就是等到一個本來是 rumor 的東西開始實現之後，過去跟著題材上漲的東西，蠻多就會趁機的提款。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=670" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP670 的逐字稿">EP670</a></span></div>
         </div>
-        <div class="att-card" data-name="rklbrklb" data-mkt="us">
+        <div class="att-card" data-name="rklbrklb 在盤中也出現一個有趣的現象，就是一些在過去跟衛星火箭相關的股票，不管什麼 rklb、asts 或是 fly，就是這些跟衛星或是通訊有關係的股票，其實他們都出現了一個大逃殺的狀況。其實像這樣子的劇本，在過去也是看過幾次，就是等到一個本來是 rumor 的東西開始實現之後，過去跟著題材上漲的東西，蠻多就會趁機的提款。" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">30</div>
             <div style="flex:1;min-width:0;">
@@ -718,20 +755,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">RKLB</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#2b8a3e;font-weight:bold;">偏空共識（0多／1空）</div>
+              <div style="font-size:12px;margin-top:3px;color:#0d5c8a;font-weight:bold;">↓ 近期偏空</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">0.23</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">0.23</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-06-13（EP670）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-06-13（<a href="transcripts.html?ep=670" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP670 的逐字稿">EP670</a>）（59 天前）</span>
+            <span>歷史累計 1 次提及（0 多／1 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「在盤中也出現一個有趣的現象，就是一些在過去跟衛星火箭相關的股票，不管什麼 RKLB、ASTS 或是 Fly，就是這些跟衛星或是通訊有關係的股票，其實他們都出現了一個大逃殺的狀況。其實像這樣子的劇本，在過去也是看過幾次，就是等到一個本來是 rumor 的東西開始實現之後，過去跟著題材上漲的東西，蠻多就會趁機的提款。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP670</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「在盤中也出現一個有趣的現象，就是一些在過去跟衛星火箭相關的股票，不管什麼 RKLB、ASTS 或是 Fly，就是這些跟衛星或是通訊有關係的股票，其實他們都出現了一個大逃殺的狀況。其實像這樣子的劇本，在過去也是看過幾次，就是等到一個本來是 rumor 的東西開始實現之後，過去跟著題材上漲的東西，蠻多就會趁機的提款。」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=670" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP670 的逐字稿">EP670</a></span></div>
         </div>
-        <div class="att-card" data-name="英飛凌ifnny" data-mkt="us">
+        <div class="att-card" data-name="英飛凌ifnny 就是前端的可能像是什麼 infineon（ifx）、st、安森美、羅姆（rohm），他們有些料非常缺非常好，在 ai 裡面用量大、價格又高、毛利又好" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">31</div>
             <div style="flex:1;min-width:0;">
@@ -740,20 +778,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">IFNNY</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#999;font-weight:bold;">中性／無方向</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">中性／無方向</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">0.2</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">0.2</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-06-20（EP672）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-06-20（<a href="transcripts.html?ep=672" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP672 的逐字稿">EP672</a>）（52 天前）</span>
+            <span>歷史累計 1 次提及（0 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「就是前端的可能像是什麼 Infineon（IFX）、ST、安森美、羅姆（Rohm），他們有些料非常缺非常好，在 AI 裡面用量大、價格又高、毛利又好」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP672</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「就是前端的可能像是什麼 Infineon（IFX）、ST、安森美、羅姆（Rohm），他們有些料非常缺非常好，在 AI 裡面用量大、價格又高、毛利又好」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=672" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP672 的逐字稿">EP672</a></span></div>
         </div>
-        <div class="att-card" data-name="意法半導體stm" data-mkt="us">
+        <div class="att-card" data-name="意法半導體stm 像我們其實隨時都會去點像什麼 ti、st、安森美（onsemi），這個都是我們設定在範圍內、他們每次有什麼電話會議都會去看的東西" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">32</div>
             <div style="flex:1;min-width:0;">
@@ -762,20 +801,21 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">STM</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#999;font-weight:bold;">中性／無方向</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">中性／無方向</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">0.2</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">0.2</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-06-20（EP672）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-06-20（<a href="transcripts.html?ep=672" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP672 的逐字稿">EP672</a>）（52 天前）</span>
+            <span>歷史累計 1 次提及（0 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「像我們其實隨時都會去點像什麼 TI、ST、安森美（onsemi），這個都是我們設定在範圍內、他們每次有什麼電話會議都會去看的東西」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP672</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「像我們其實隨時都會去點像什麼 TI、ST、安森美（onsemi），這個都是我們設定在範圍內、他們每次有什麼電話會議都會去看的東西」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=672" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP672 的逐字稿">EP672</a></span></div>
         </div>
-        <div class="att-card" data-name="瑞薩電子rnecy" data-mkt="us">
+        <div class="att-card" data-name="瑞薩電子rnecy 不管你去看一下什麼 vishay 或是什麼安森美，然後相關的 npn，那或者是瑞薩，就是他們其實都是在過去的兩個月漲蠻多，就是直接拉了一波走，然後現在可能稍微的橫盤在那邊休息一下" data-mkt="us">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">33</div>
             <div style="flex:1;min-width:0;">
@@ -784,18 +824,19 @@
                 <span style="font-size:10px;background:#f1f3f5;color:#888;border-radius:4px;padding:1px 6px;">美股</span>
                 <span style="font-size:12px;color:#aaa;">RNECY</span>
               </div>
-              <div style="font-size:12px;margin-top:3px;color:#999;font-weight:bold;">中性／無方向</div>
+              <div style="font-size:12px;margin-top:3px;color:#8a8f94;font-weight:bold;">中性／無方向</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">0.16</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">0.16</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 2026-06-17（EP671）</span>
-            <span>近30天提及：無</span>
+            <span>最後提及 2026-06-17（<a href="transcripts.html?ep=671" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP671 的逐字稿">EP671</a>）（55 天前）</span>
+            <span>歷史累計 1 次提及（0 多／0 空）</span>
           </div>
-          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「不管你去看一下什麼 Vishay 或是什麼安森美，然後相關的 NPN，那或者是瑞薩，就是他們其實都是在過去的兩個月漲蠻多，就是直接拉了一波走，然後現在可能稍微的橫盤在那邊休息一下」<span style="color:#bbb;font-size:11px;margin-left:6px;">— EP671</span></div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：無</div>
+          <div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;color:#888;font-style:italic;font-size:13px;">「不管你去看一下什麼 Vishay 或是什麼安森美，然後相關的 NPN，那或者是瑞薩，就是他們其實都是在過去的兩個月漲蠻多，就是直接拉了一波走，然後現在可能稍微的橫盤在那邊休息一下」<span style="color:#bbb;font-size:11px;margin-left:6px;">— <a href="transcripts.html?ep=671" style="color:#2b6cb0;text-decoration:none;border-bottom:1px dotted #9dc0e0;" title="開啟 EP671 的逐字稿">EP671</a></span></div>
         </div></div>
   <div id="att-empty" style="display:none;padding:30px;text-align:center;color:#888;font-size:13px;">沒有符合篩選條件的標的</div>
 

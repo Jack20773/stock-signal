@@ -221,12 +221,28 @@ def compute_attention(signals: list[dict], today: date | None = None) -> list[di
 
 def consensus_label(row: dict) -> tuple[str, str]:
     """回傳 (顯示文字, 顏色)。5次看多5次看空這種情況要老實標成「高度關注但
-    分歧」，不能顯示成「無訊號」（任務檔8b明確要求）。"""
+    分歧」，不能顯示成「無訊號」（任務檔8b明確要求）。
+
+    2026-08-11 雙審（Codex + DeepSeek，各自獨立、blinded）**兩邊都把這裡列為
+    第二頁最嚴重的問題**，改動兩件事：
+
+    1. **括號裡的次數拿掉。** 原本是 `偏多共識（102多／2空）`，但 `bull_n`/`bear_n`
+       是**全歷史**去重計數（compute_attention 第194-195行），而方向本身是
+       **時間衰減加權**算出來的（第173-177行）——兩個不同的時間窗被印在同一個
+       括號裡，而且頁面導覽還寫「看的是最近多空次數比例」，三者互相矛盾。
+       真實資料實測：台積電印「102多／2空」，但近30天其實只有4集。
+       次數改由 report_html 另外標明「歷史累計」單獨一行呈現，不再混進方向標籤。
+       （附帶：實測目前33檔沒有任何一檔出現「標籤方向與括號次數相反」，
+       所以這是敘述錯配、不是算錯，嚴重度低於兩位審查者的描述，但確實每張卡都在發生。）
+    2. **顏色改掉綠色。** 原本偏空用綠 `#2b8a3e`，但第一頁的綠是「落後大盤」的意思，
+       同一個綠在兩頁語意不同。改成沿用第一頁方向 chip 的慣例：看多＝中性灰、
+       看空＝藍（`.led-dir.bull` / `.led-dir.bear`），方向靠文字與箭頭表達，不靠紅綠。
+    """
     bull_n, bear_n, consensus = row["bull_n"], row["bear_n"], row["consensus"]
     if bull_n == 0 and bear_n == 0:
-        return ("中性／無方向", "#999")
+        return ("中性／無方向", "#8a8f94")
     if row["is_divergent"]:
-        return (f"高度關注但分歧（{bull_n}次看多／{bear_n}次看空）", "#c77c1f")
+        return ("近期立場分歧", "#c77c1f")
     if consensus is not None and consensus > 0:
-        return (f"偏多共識（{bull_n}多／{bear_n}空）", "#d9534f")
-    return (f"偏空共識（{bull_n}多／{bear_n}空）", "#2b8a3e")
+        return ("↑ 近期偏多", "#8a8f94")
+    return ("↓ 近期偏空", "#0d5c8a")

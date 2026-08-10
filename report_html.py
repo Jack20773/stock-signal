@@ -1577,24 +1577,52 @@ def generate_html_attention(rows: list[dict], title: str = "目前節目關注�
     generate_html_email() 同一套防護）。"""
     today = date.today().isoformat()
 
+    def _ep_link(ep_id: str) -> str:
+        """把 EPxxx 變成可以直接開到第三頁那一集的連結。
+        2026-08-11 雙審共識：訪客在這裡看到一句原話之後，想看上下文只能到第三頁
+        685 集清單裡自己找，或觸發昂貴的全文搜尋——中間缺一個一鍵入口。"""
+        n = _ep_num(ep_id)
+        safe = _esc(ep_id)
+        if n <= 0:
+            return safe
+        return (f'<a href="transcripts.html?ep={n}" style="color:#2b6cb0;text-decoration:none;'
+                f'border-bottom:1px dotted #9dc0e0;" title="開啟 {safe} 的逐字稿">{safe}</a>')
+
     def _card(rank: int, r: dict) -> str:
         label, color = attention.consensus_label(r)
         name      = _esc(r["name"])
         code      = _esc(r["code"])
         mkt_label = "台股" if r["mkt"] == "tw" else "美股"
-        last_ep   = _esc(r["last_episode"])
-        recent_eps = "、".join(_esc(e) for e in r["recent_30d_eps"][:8]) or "無"
+        last_ep   = _ep_link(r["last_episode"])
+        age_last  = r.get("age_last")
+        ago_txt   = f"（{age_last} 天前）" if isinstance(age_last, int) else ""
+
+        # 近30天清單原本硬切 [:8] 且不加省略號，超過 8 集會靜默少列（雙審都點名）。
+        all_recent = r["recent_30d_eps"]
+        shown      = all_recent[:8]
+        recent_eps = "、".join(_ep_link(e) for e in shown) or "無"
+        if len(all_recent) > len(shown):
+            recent_eps += f"…等 {len(all_recent)} 集"
+
+        # 歷史累計次數：原本被塞進方向標籤的括號裡，跟「最近」的說明打架。
+        # 拆出來獨立一行、明寫「歷史累計」，時間窗才不會被誤讀。
+        tot = r.get("total_mentions")
+        cum_txt = (f"歷史累計 {tot} 次提及（{r['bull_n']} 多／{r['bear_n']} 空）"
+                   if isinstance(tot, int) else "")
 
         quote_html = ""
         if r["quote"]:
             quote_html = (
                 f'<div style="margin-top:6px;padding-left:10px;border-left:3px solid #ccc;'
                 f'color:#888;font-style:italic;font-size:13px;">「{_esc(r["quote"])}」'
-                f'<span style="color:#bbb;font-size:11px;margin-left:6px;">— {_esc(r["quote_ep"])}</span></div>'
+                f'<span style="color:#bbb;font-size:11px;margin-left:6px;">— {_ep_link(r["quote_ep"])}</span></div>'
             )
 
+        # 搜尋範圍原本只有名稱＋代號，打「漲價」「AI」這類內容關鍵字一定落空。
+        search_blob = _esc((r["name"] + r["code"] + " " + (r.get("quote") or "")).lower())
+
         return f'''
-        <div class="att-card" data-name="{(name + code).lower()}" data-mkt="{r["mkt"]}">
+        <div class="att-card" data-name="{search_blob}" data-mkt="{r["mkt"]}">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:20px;font-weight:800;color:#bbb;min-width:28px;text-align:right;">{rank}</div>
             <div style="flex:1;min-width:0;">
@@ -1605,15 +1633,16 @@ def generate_html_attention(rows: list[dict], title: str = "目前節目關注�
               </div>
               <div style="font-size:12px;margin-top:3px;color:{color};font-weight:bold;">{label}</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:24px;font-weight:800;color:#2b6cb0;">{r["attention"]}</div>
-              <div style="font-size:10px;color:#bbb;">關注度</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div><span style="font-size:24px;font-weight:800;color:#2b6cb0;">{r["attention"]}</span><span style="font-size:13px;font-weight:600;color:#9db8d2;"> / 100</span></div>
+              <div style="font-size:10px;color:#bbb;">近期討論熱度</div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#999;flex-wrap:wrap;gap:4px;">
-            <span>最後提及 {r["last_date"]}（{last_ep}）</span>
-            <span>近30天提及：{recent_eps}</span>
+            <span>最後提及 {r["last_date"]}（{last_ep}）{ago_txt}</span>
+            <span>{cum_txt}</span>
           </div>
+          <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：{recent_eps}</div>
           {quote_html}
         </div>'''
 
@@ -1640,27 +1669,34 @@ def generate_html_attention(rows: list[dict], title: str = "目前節目關注�
 <body>
 <div class="wrap">
   <div style="background:#1a252f;padding:20px;text-align:center;color:#fff;border-radius:8px 8px 0 0;">
-    <div style="font-size:20px;font-weight:bold;">{_esc(title)}</div>
+    <h1 style="font-size:20px;font-weight:bold;margin:0;">{_esc(title)}</h1>
     <div style="color:#b3c1cd;font-size:13px;margin-top:4px;">{today}</div>
   </div>
   {_render_nav_tabs('attention')}
+  <!-- 2026-08-11：這兩塊原本合計吃掉手機第一屏 792px（視窗才 844px），卡片幾乎看不到。
+       改法是「壓密度不刪資訊」——去掉 onboarding 與黃框互相重複的那句定位說明，
+       句子改短，事實一項沒少。 -->
   {_render_onboarding('sig_onboard_dismissed_attention', '怎麼看這個分數', [
-      "這個分數量化「股癌最近反覆在講什麼」，跟這檔過去準不準是兩件事",
-      "分數越高代表最近越常被提到、信心等級也越高",
-      "「偏多共識／偏空共識」看的是最近多空次數比例",
-      "「高度關注但分歧」代表多空次數接近，講者立場不明確，不是無訊號",
-      "超過60天沒被提到會自動從這個榜單下架，但歷史紀錄還在主報告",
+      "分數 0–100，越常被提到、信心等級越高就越高；會隨時間衰減，久沒再提就會掉下來",
+      "「近期偏多／偏空」是時間衰減加權後的方向；「歷史累計 N 次」是全部歷史的原始次數，兩者時間窗不同",
+      "「近期立場分歧」＝加權後多空接近、講者立場不明確，不是無訊號",
+      "超過60天沒被提到自動下架，歷史紀錄仍在主報告；卡片上的 EP 可以點開逐字稿",
   ])}
 
-  <!-- 首屏警語（任務檔8b明確要求，定位差異必須在介面上明確標示） -->
-  <div style="margin:16px;padding:12px 16px;background:#fff8e1;border:1px solid #ffe082;border-radius:8px;font-size:13px;color:#8a6d1f;line-height:1.6;">
-    ⚠ 反映節目近期討論熱度，不是買賣建議。這個分數只量化「股癌最近反覆在講什麼」，
-    跟這檔標的過去準不準（歷史勝率）是兩件不同的事——想看歷史勝率請回
-    <a href="index.html" style="color:#8a6d1f;">主報告</a>，兩者分開看，不要混為一談。
+  <!-- 首屏警語（任務檔8b明確要求，定位差異必須在介面上明確標示）。
+       2026-08-11 雙審：Codex 指出分數量尺只寫在可關閉的 onboarding 裡，關掉之後
+       整頁最大的數字就變成沒有單位的裸數字；量尺說明因此併進這個常駐區塊。 -->
+  <div style="margin:12px 16px;padding:10px 14px;background:#fff8e1;border:1px solid #ffe082;border-radius:8px;font-size:12.5px;color:#8a6d1f;line-height:1.6;">
+    ⚠ 這是<b>節目近期討論熱度</b>，不是買賣建議，也不是這檔準不準——歷史勝率請看
+    <a href="index.html" style="color:#8a6d1f;">主報告</a>。
+    分數 <b>0–100</b>（提及次數 × 信心等級，再依距今天數衰減），<b>不是報酬率也不是勝率</b>；
+    目前榜首 {max((r["attention"] for r in rows), default=0)} 分。
   </div>
 
   <div style="padding:0 16px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-    <input id="att-search" type="text" placeholder="搜尋標的名稱、代號..."
+    <label for="att-search" style="position:absolute;left:-9999px;">搜尋標的名稱、代號或原話關鍵字</label>
+    <input id="att-search" type="text" placeholder="搜尋名稱、代號或原話關鍵字..."
+      aria-label="搜尋標的名稱、代號或原話關鍵字"
       oninput="attFilter()"
       style="flex:1;max-width:240px;padding:6px 12px;border:1px solid #ddd;border-radius:12px;font-size:13px;outline:none;">
     <button id="amkt-all" class="filter-btn btn-active" onclick="attSetMkt('all')">全部</button>
@@ -1747,6 +1783,22 @@ def export_transcripts_data(transcripts_dir: str = TRANSCRIPTS_DIR_NAME,
     return copied
 
 
+def _footer_counts(meta: list[dict]) -> str:
+    """footer 原本寫死「共 N 集逐字稿」，但 N 是 episodes.json 的節目集數，
+    不等於真的有逐字稿檔案的集數——已知至少 EP677 曾經缺檔。2026-08-11 外部審查
+    點名這是「字面承諾全部都有」。改成實際去數 transcripts_data/ 裡有幾個檔案，
+    缺的就老實講缺幾集。"""
+    have = 0
+    for m in meta:
+        if os.path.exists(os.path.join(TRANSCRIPTS_DATA_DIR_NAME, f"EP{m['num']}.txt")):
+            have += 1
+    total = len(meta)
+    missing = total - have
+    if missing <= 0:
+        return f"共 {total} 集節目，逐字稿全數齊備"
+    return f"共 {total} 集節目，其中 {have} 集有逐字稿、{missing} 集檔案缺失（展開會顯示提示）"
+
+
 def generate_html_transcripts(episodes: list[dict], title: str = "逐字稿") -> str:
     """episodes：episodes.json 內容（number/title/display_title/date...）。
     只用來組『集數清單』中繼資料，不讀逐字稿內容本身（內容由前端 lazy fetch）。
@@ -1775,9 +1827,13 @@ def generate_html_transcripts(episodes: list[dict], title: str = "逐字稿") ->
 
     def _item(m: dict) -> str:
         num = m["num"]
+        # 2026-08-11：補上鍵盤與螢幕閱讀器支援。第一頁的 .led / .stock-card 昨晚
+        # 已經補過 role/tabindex/aria-expanded，這頁還停在純 div + onclick。
         return f'''
-        <div class="tr-item" data-num="{num}" data-title="{_esc(m["title"]).lower()}">
-          <div class="tr-head" onclick="trToggle({num})">
+        <div class="tr-item" id="tr-item-{num}" data-num="{num}" data-title="{_esc(m["title"]).lower()}">
+          <div class="tr-head" role="button" tabindex="0" aria-expanded="false"
+               aria-controls="tr-body-{num}" id="tr-head-{num}"
+               onclick="trToggle({num})" onkeydown="trKey(event,{num})">
             <span class="tr-num">EP{num}</span>
             <span class="tr-title">{_esc(m["title"])}</span>
             <span class="tr-date">{_esc(m["date"])}</span>
@@ -1820,15 +1876,25 @@ def generate_html_transcripts(episodes: list[dict], title: str = "逐字稿") ->
   {_render_nav_tabs('transcripts')}
   {_render_onboarding('sig_onboard_dismissed_transcripts', '這頁在做什麼', [
       "這裡是逐字稿原文，純瀏覽用，不是訊號查核工具",
-      "點集數標題可以展開／收合看全文",
-      "搜尋框可以全文檢索關鍵字，第一次搜尋要下載全部逐字稿，請稍候",
-      "部分較舊集數逐字稿檔案可能缺失，會顯示明確提示，不是網頁壞了",
+      "點集數標題可以展開／收合看全文（也可以用鍵盤 Tab 移動、Enter 展開）",
+      "打字＝只搜集數標題，立刻有結果；要連內文一起搜請按旁邊的按鈕（會下載約 35MB，有進度可取消）",
+      "部分較舊集數逐字稿檔案可能缺失，會顯示明確提示；連不上網路是另一種提示，兩者不會混在一起",
+      "從「目前關注度」頁點 EP 編號進來，會自動展開並跳到那一集",
   ])}
 
+  <!-- 2026-08-11 雙審兩邊都把「首次全文搜尋」列為本頁最嚴重問題：一輸入就對
+       685 集發並行請求（約 35MB），沒有進度、不能取消、失敗還會被靜默吞掉。
+       改成兩段式：打字先即時篩標題（免費、零下載），要搜正文才按按鈕。 -->
   <div style="padding:0 16px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;">
-    <input id="tr-search" type="text" placeholder="全文搜尋（首次搜尋需下載全部逐字稿，請稍候）..."
-      oninput="trOnSearchInput(this.value)"
-      style="flex:1;max-width:320px;padding:6px 12px;border:1px solid #ddd;border-radius:12px;font-size:13px;outline:none;">
+    <label for="tr-search" style="position:absolute;left:-9999px;">搜尋集數標題或逐字稿全文</label>
+    <input id="tr-search" type="text" placeholder="搜尋集數標題…"
+      aria-label="搜尋集數標題或逐字稿全文"
+      oninput="trOnSearchInput(this.value)" onkeydown="if(event.key==='Enter')trStartFullSearch()"
+      style="flex:1;max-width:280px;padding:6px 12px;border:1px solid #ddd;border-radius:12px;font-size:13px;outline:none;">
+    <button id="tr-full-btn" onclick="trStartFullSearch()"
+      style="padding:6px 12px;border:1px solid #2b6cb0;background:#2b6cb0;color:#fff;border-radius:12px;font-size:12px;cursor:pointer;">
+      連內文一起搜（約 35MB）</button>
+    <button id="tr-cancel-btn" onclick="trCancelFullLoad()" style="display:none;padding:6px 12px;border:1px solid #ddd;background:#fff;color:#666;border-radius:12px;font-size:12px;cursor:pointer;">取消</button>
     <span id="tr-status" style="font-size:12px;color:#bbb;">共 {len(meta)} 集</span>
   </div>
 
@@ -1836,7 +1902,7 @@ def generate_html_transcripts(episodes: list[dict], title: str = "逐字稿") ->
   <div id="tr-empty" style="display:none;padding:30px;text-align:center;color:#888;font-size:13px;">沒有符合搜尋條件的集數</div>
 
   <div style="padding:14px;text-align:center;font-size:11px;color:#bbb;border-top:1px solid #f0f0f0;">
-    共 {len(meta)} 集逐字稿 · 純瀏覽用，不代表節目立場
+    {_footer_counts(meta)} · 純瀏覽用，不代表節目立場
   </div>
 </div>
 <script>
@@ -1857,6 +1923,12 @@ let _trFullLoadPromise = null;
 let _trSearchGen = 0;  // 搜尋世代計數器：避免舊搜尋在使用者已經改了關鍵字之後
                         // 才跑完，用過期結果覆蓋新搜尋的畫面（見trDoSearch()）
 
+const _trErrKind = {{}};      // num -> 'missing' | 'network'（2026-08-11 新增）
+                            // 原本 404、網路斷線、CORS 全部塞進同一個 null，
+                            // 畫面一律說「檔案缺失」——使用者被錯誤診斷，
+                            // 自己以為要去補檔案，實際上只是網路斷了。
+let _trCancelled = false;   // 全文下載的取消旗標
+
 async function trFetchOne(num) {{
   if (_trTextCache[num] !== undefined) return _trTextCache[num];
   if (_trPending[num]) return _trPending[num];
@@ -1864,6 +1936,8 @@ async function trFetchOne(num) {{
     try {{
       const resp = await fetch('{TRANSCRIPTS_DATA_DIR_NAME}/EP' + num + '.txt');
       if (!resp.ok) {{
+        // 404＝這集真的沒有檔案；其餘 HTTP 狀態碼是伺服器/網路層的問題。
+        _trErrKind[num] = (resp.status === 404) ? 'missing' : 'network';
         _trTextCache[num] = null;
         return null;
       }}
@@ -1871,6 +1945,7 @@ async function trFetchOne(num) {{
       _trTextCache[num] = text;
       return text;
     }} catch (e) {{
+      _trErrKind[num] = 'network';   // fetch 直接 reject＝連不上，不是缺檔
       _trTextCache[num] = null;
       return null;
     }} finally {{
@@ -1881,38 +1956,79 @@ async function trFetchOne(num) {{
   return p;
 }}
 
-async function trToggle(num) {{
+function trKey(ev, num) {{
+  if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar') {{
+    ev.preventDefault();
+    trToggle(num);
+  }}
+}}
+
+async function trToggle(num, forceOpen) {{
   const body  = document.getElementById('tr-body-' + num);
   const arrow = document.getElementById('tr-arrow-' + num);
+  const head  = document.getElementById('tr-head-' + num);
+  if (!body) return;
   const isOpen = body.style.display !== 'none';
-  if (isOpen) {{
+  if (isOpen && !forceOpen) {{
     body.style.display = 'none';
     arrow.innerHTML = '&#9656;';
+    if (head) head.setAttribute('aria-expanded', 'false');
     return;
   }}
   if (!body.dataset.loaded) {{
     body.textContent = '載入中...';
     const text = await trFetchOne(num);
     if (text === null) {{
-      body.textContent = '這集逐字稿檔案缺失（transcripts/ 目錄裡找不到對應檔案，可能需要重新下載這一集），不是網頁的錯誤。';
+      body.textContent = (_trErrKind[num] === 'network')
+        ? '載入失敗：連不到逐字稿檔案（網路或伺服器問題），請稍後再點一次。這不代表這集沒有逐字稿。'
+        : '這集逐字稿檔案缺失（transcripts/ 目錄裡找不到對應檔案，可能需要重新下載這一集），不是網頁的錯誤。';
+      // 失敗不標記 loaded，讓使用者可以再點一次重試（原本失敗後就永遠卡住）
+      if (_trErrKind[num] !== 'network') body.dataset.loaded = '1';
     }} else {{
       body.textContent = text;
+      body.dataset.loaded = '1';
     }}
-    body.dataset.loaded = '1';
   }}
   body.style.display = '';
   arrow.innerHTML = '&#9662;';
+  if (head) head.setAttribute('aria-expanded', 'true');
 }}
 
+function trCancelFullLoad() {{
+  _trCancelled = true;
+  document.getElementById('tr-cancel-btn').style.display = 'none';
+  document.getElementById('tr-status').textContent = '已取消（已下載的集數仍可搜尋，按「連內文一起搜」可繼續）';
+}}
+
+// 有界並行的全量下載：原本一次 Promise.all 685 個請求，瀏覽器自己排隊、
+// 期間畫面完全沒有回饋。改成一次 8 個、每完成一個就更新進度，並可取消。
 async function trEnsureAllLoaded() {{
   if (_trFullLoaded) return;
-  if (_trFullLoadPromise) return _trFullLoadPromise;  // 已經有一次全量下載在
-                                                        // 跑，共用同一個promise
-                                                        // 不重新發起679個請求
+  if (_trFullLoadPromise) return _trFullLoadPromise;
   const status = document.getElementById('tr-status');
-  status.textContent = '首次搜尋下載全部逐字稿中...';
-  _trFullLoadPromise = Promise.all(TR_META.map(m => trFetchOne(m.num))).then(() => {{
-    _trFullLoaded = true;
+  const cancelBtn = document.getElementById('tr-cancel-btn');
+  _trCancelled = false;
+  cancelBtn.style.display = '';
+  const queue = TR_META.map(m => m.num);
+  const total = queue.length;
+  let done = 0, failed = 0, idx = 0;
+  const CONC = 8;
+  async function worker() {{
+    while (idx < queue.length && !_trCancelled) {{
+      const num = queue[idx++];
+      const t = await trFetchOne(num);
+      done++;
+      if (t === null) failed++;
+      if (done % 10 === 0 || done === total) {{
+        status.textContent = '下載逐字稿中… ' + done + ' / ' + total
+          + (failed ? '（' + failed + ' 集取不到）' : '');
+      }}
+    }}
+  }}
+  _trFullLoadPromise = Promise.all(Array.from({{length: CONC}}, worker)).then(() => {{
+    if (!_trCancelled) _trFullLoaded = true;
+    cancelBtn.style.display = 'none';
+    _trFullLoadPromise = null;
   }});
   await _trFullLoadPromise;
 }}
@@ -1920,13 +2036,23 @@ async function trEnsureAllLoaded() {{
 let _trSearchTimer = null;
 function trOnSearchInput(v) {{
   clearTimeout(_trSearchTimer);
-  _trSearchTimer = setTimeout(() => trDoSearch(v), 300);
+  _trSearchTimer = setTimeout(() => trDoSearch(v, false), 250);
 }}
 
-async function trDoSearch(q) {{
-  q = q.trim();
-  const myGen = ++_trSearchGen;  // 這次搜尋的世代號，跑完後如果已經不是最新
-                                  // 世代（使用者又改了關鍵字），就放棄更新畫面
+// 打字時只搜標題（零下載、立即回應）；要搜正文得自己按按鈕，
+// 才不會有人隨手打一個字就觸發 35MB 下載。
+async function trStartFullSearch() {{
+  const q = document.getElementById('tr-search').value.trim();
+  if (!q) {{
+    document.getElementById('tr-status').textContent = '請先輸入要搜尋的關鍵字';
+    return;
+  }}
+  await trDoSearch(q, true);
+}}
+
+async function trDoSearch(q, fullText) {{
+  q = (q || '').trim();
+  const myGen = ++_trSearchGen;  // 世代號：舊搜尋跑完時若已不是最新，放棄更新畫面
   const status = document.getElementById('tr-status');
   const items = document.querySelectorAll('.tr-item');
   if (!q) {{
@@ -1935,25 +2061,53 @@ async function trDoSearch(q) {{
     status.textContent = '共 ' + TR_META.length + ' 集';
     return;
   }}
-  const t0 = performance.now();
-  await trEnsureAllLoaded();
-  if (myGen !== _trSearchGen) return;  // 2026-08-02完工前Codex最終審查指出：
-                                         // 舊搜尋在使用者改關鍵字後才跑完，會
-                                         // 用過期結果覆蓋新搜尋畫面——這裡擋下
+  if (fullText) {{
+    await trEnsureAllLoaded();
+    if (myGen !== _trSearchGen) return;
+  }}
   const ql = q.toLowerCase();
-  let matched = 0;
+  let matched = 0, bodyHit = 0;
   items.forEach(el => {{
     const num = el.dataset.num;
-    const text = (_trTextCache[num] || '').toLowerCase();
     const titleHit = (el.dataset.title || '').includes(ql);
-    const hit = titleHit || text.includes(ql);
+    let hit = titleHit;
+    if (fullText && !hit) {{
+      const text = (_trTextCache[num] || '').toLowerCase();
+      if (text.includes(ql)) {{ hit = true; bodyHit++; }}
+    }}
     el.classList.toggle('hidden', !hit);
     if (hit) matched++;
   }});
   document.getElementById('tr-empty').style.display = matched === 0 ? '' : 'none';
-  const dt = Math.round(performance.now() - t0);
-  status.textContent = matched + ' / ' + TR_META.length + ' 集符合「' + q + '」（' + dt + 'ms）';
+  if (fullText) {{
+    // 沒抓到的集數要老實講：原本靜默吞掉，結果數字照算，使用者不知道搜漏了。
+    const missing = TR_META.filter(m => _trTextCache[m.num] === null).length;
+    const notLoaded = TR_META.filter(m => _trTextCache[m.num] === undefined).length;
+    let note = '';
+    if (missing) note += '，' + missing + ' 集內文取不到';
+    if (notLoaded) note += '，' + notLoaded + ' 集尚未下載（搜尋不含這些集）';
+    status.textContent = matched + ' / ' + TR_META.length + ' 集符合「' + q + '」'
+      + '（含內文命中 ' + bodyHit + ' 集）' + note;
+  }} else {{
+    status.textContent = matched + ' / ' + TR_META.length + ' 集標題符合「' + q
+      + '」·　要連內文一起搜請按右邊按鈕';
+  }}
 }}
+
+// 深連結：第二頁的 EP 編號會連到 transcripts.html?ep=685，這裡負責展開並捲過去。
+async function trOpenFromUrl() {{
+  const m = /[?&]ep=(\\d+)/.exec(location.search) || /^#ep-(\\d+)$/.exec(location.hash);
+  if (!m) return;
+  const num = parseInt(m[1], 10);
+  const item = document.getElementById('tr-item-' + num);
+  if (!item) return;
+  await trToggle(num, true);
+  item.scrollIntoView({{behavior: 'smooth', block: 'start'}});
+  item.style.transition = 'background .4s';
+  item.style.background = '#fffbe6';
+  setTimeout(() => {{ item.style.background = ''; }}, 2000);
+}}
+trOpenFromUrl();
 </script>
 </body>
 </html>"""
