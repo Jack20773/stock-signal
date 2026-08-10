@@ -363,16 +363,59 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   .sc-dir-chip.neutral{{color:#888;border-color:#ddd;background:#f5f5f5;}}
   .sc-code{{font-size:11px;color:#aaa;}}
   .sc-ret{{font-size:22px;font-weight:800;margin:8px 0 2px;letter-spacing:-.02em;}}
-  .sc-ret.win{{color:#d9534f;}} .sc-ret.lose{{color:#2b8a3e;}}
+  .sc-ret.win{{color:#d9534f;}} .sc-ret.lose{{color:#2b8a3e;}} .sc-ret.pend{{color:#8a8f94;}}
   .sc-spark{{margin:6px 0 8px;}}
   .sc-meta{{display:flex;justify-content:space-between;font-size:11px;color:#999;}}
   .sc-detail{{display:none;grid-column:1/-1;background:#f8f9fa;border-radius:8px;padding:8px 14px;margin-top:-2px;border:1px solid #eee;font-size:13px;color:#555;}}
   .sc-detail-row{{padding:6px 0;border-bottom:1px solid #eee;}}
   .sc-detail-row:last-child{{border-bottom:none;}}
   .empty-state{{grid-column:1/-1;text-align:center;padding:30px 10px;color:#888;font-size:13px;}}
+  /* ── 訊號帳本（2026-08-10 主次對調：原本收合的「依集數列表」升為主區，
+       一筆訊號一張卡；個股排行降為收合次區。勝負一律以 beat 欄位為準，
+       不再用 s_pct 的正負推導——看空訊號跌得比大盤多是「贏」，舊寫法會塗成輸）── */
+  .led{{border-bottom:1px solid #eee;padding:13px 16px;cursor:pointer;}}
+  .led:hover{{background:#fbfcfd;}}
+  .led:focus-visible{{outline:2px solid #2a6fb0;outline-offset:-2px;}}
+  .led-r1{{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}}
+  .led-nm{{font-size:16px;font-weight:700;color:#1a252f;}}
+  .led-cd{{font-size:12px;color:#9aa4ad;}}
+  .led-dir{{margin-left:auto;font-size:13px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;}}
+  .led-dir.bull{{color:#8a8f94;background:#f2f4f6;}}
+  .led-dir.bear{{color:#0d5c8a;background:#e2f1fb;border:1px solid #b9dcf2;}}
+  .led-dir.neu{{color:#7a6a00;background:#fdf6dd;border:1px solid #ecdfa0;}}
+  .led-r2{{font-size:12.5px;color:#7b858e;margin-top:3px;}}
+  .led-q{{margin:8px 0 6px;padding:6px 10px;border-left:3px solid #dfe3e6;background:#fafbfc;
+          font-size:14px;line-height:1.6;color:#4a5157;}}
+  .led-st{{font-size:16px;font-weight:700;}}
+  .led-st.win{{color:#c0392b;}} .led-st.lose{{color:#2b8a3e;}} .led-st.pend{{color:#8a8f94;}}
+  .led-nums{{font-size:13.5px;color:#3d4650;margin-top:2px;}}
+  .led-nums .sep{{color:#ccc;margin:0 6px;}}
+  .led-hist{{margin-top:7px;font-size:12.5px;color:#6c757d;}}
+  .led-detail{{display:none;background:#f8f9fa;border:1px solid #eee;border-radius:8px;
+               padding:10px 14px;margin-top:9px;font-size:13px;color:#555;line-height:1.75;}}
+  .led-detail b{{color:#1a252f;}}
+  .led-dt-head{{font-weight:bold;color:#1a252f;font-size:13.5px;margin-bottom:5px;}}
+  .sec-head{{padding:10px 16px;border-top:1px solid #eee;border-bottom:1px solid #eee;
+             background:#f7f8fa;cursor:pointer;font-size:13px;color:#555;font-weight:bold;}}
+  .lead-note{{padding:11px 16px;background:#fffdf3;border-bottom:1px solid #eee;
+              font-size:12.5px;line-height:1.75;color:#5f5a45;}}
+  .lead-note b{{color:#1a252f;}}
+  .fld-note{{font-size:11px;color:#a6adb4;margin-top:2px;line-height:1.5;}}
+  /* 手機首屏預算（2026-08-10）：改版後量到第一張卡掉到 y=1146px，比改版前還遠。
+     這幾條專門把「前置區塊」壓扁——手機藏掉區塊說明長句、把第二排篩選收起來，
+     內容本身一個字都沒有刪，桌面版維持原樣。 */
+  .filter-row{{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}}
+  .m-only{{display:none;}}
   @media(max-width:600px){{
     .card-grid{{grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:8px;padding:10px 10px;}}
     .sc-ret{{font-size:19px;}}
+    .led{{padding:12px 12px;}}
+    .led-nm{{font-size:15px;}}
+    .led-q{{font-size:13.5px;}}
+    .lead-note{{padding:9px 12px;font-size:12px;line-height:1.65;}}
+    .m-only{{display:inline-block;}}
+    #led-filter-adv{{display:none;}}
+    #led-filter-adv.open{{display:flex;}}
   }}
 {_NAV_TABS_CSS}
 {_ONBOARD_CSS}
@@ -392,12 +435,19 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
        顯眼），三個頁面共用 _render_nav_tabs()，避免風格漂移。 -->
   {_render_nav_tabs('report')}
   {_render_onboarding('sig_onboard_dismissed_report', '怎麼看這份報告', [
-      "每張卡片是一檔標的：chip顯示看多／看空，數字是最近被提到的次數",
-      "報酬率＝播出日收盤價到今天的漲跌幅，不是已經入袋的獲利",
-      "Sparkline是這檔股票近期股價走勢的縮圖，不是精確報價",
-      "勝率＝有沒有打贏對應大盤（台股比0050、美股比SPY），不是絕對賺賠",
-      "點卡片可以展開看歷次被提到的完整脈絡與原話",
+      "主區「最近訊號」＝一筆訊號一張卡：哪一集、哪一天、講了哪檔、看多還看空",
+      "「跑贏／落後大盤」是這筆訊號期間內個股 vs 同期大盤（台股比0050、美股比SPY）；看空訊號以「跌得比大盤多」為贏",
+      "勝率一律附分母（例如 8/11），分母不含「待觀察」；同一檔被提多次會算成多筆訊號，不代表獨立交易次數",
+      "報酬＝播出日收盤價到資料截止日的漲跌幅，不是已經入袋的獲利，也未扣手續費",
+      "點任一筆可展開原話、AI 摘要原因與進場價；「依標的查看履歷」在下方，收合起來的區塊點一下就開",
   ])}
+  <!-- 常駐導讀（2026-08-10 新增）：onboarding 可以被關掉，關掉之後新訪客只會看到
+       裸露的 KPI 數字——外部審查兩邊都點名這一條，所以定義不能只存在於可關閉的區塊。 -->
+  <div class="lead-note">
+    本頁整理 Podcast 逐字稿中<b>由 AI 萃取</b>的歷史訊號：主持人<b>在哪一集、哪一天</b>提到什麼標的、當時方向，
+    以及截至 {today} 收盤<b>相對大盤</b>的結果。<br>
+    「跑贏大盤」比較的是同一段期間的表現，<b>這是歷史追蹤紀錄，不是投資建議</b>；訊號由 AI 自動萃取，可能包含判斷錯誤，原話可展開查證。
+  </div>
 
   <!-- Stats 第一列 -->
   <div style="display:flex;text-align:center;border-bottom:1px solid #eee;">
@@ -476,11 +526,14 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
   </div>
   </div><!-- /adv-stats -->
 
-  <!-- 字體控制（2026-08-02 索羅門移除 Tab 切換：任務1a/1d 定案卡片網格是唯一
-       主視圖，不再需要「每集訊號 / 個股排行」二選一的分頁按鈕） -->
+  <!-- ── 主區：最近訊號帳本（2026-08-10 主次對調）──────────────────────────
+       原本這個位置是「個股排行」卡片網格，而一筆一筆的訊號被收在下方「依集數列表」
+       的收合區塊裡。兩位外部審查（Codex／DeepSeek，各自獨立）都指出：使用者—尤其
+       是從週報連結進來的陌生訪客—打開第一頁要問的是「他最近講了什麼」，而那個答案
+       原本藏在要點一下才打得開的灰橫條裡。因此兩區對調；個股排行整塊保留、改成收合。 -->
   <div style="padding:10px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-    <span style="font-size:13px;font-weight:bold;color:#1a252f;">個股排行</span>
-    <span style="font-size:12px;color:#999;">依標的彙總：每檔被提到幾次、看多看空比例、勝率與平均報酬，點卡片可展開歷次紀錄</span>
+    <span style="font-size:13px;font-weight:bold;color:#1a252f;">最近訊號</span>
+    <span class="hm" style="font-size:12px;color:#999;">依節目上架日倒序，一筆訊號一張卡；點任一筆可展開原話、AI 摘要與進場價</span>
     <div style="margin-left:auto;display:flex;align-items:center;gap:4px;">
       <span style="font-size:12px;color:#999;">字體</span>
       <button class="fs-btn" id="fs0" onclick="setFontSize(0)" style="font-size:11px;">小</button>
@@ -490,7 +543,50 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     </div>
   </div>
 
-  <!-- 個股排行卡片網格：現在是主視圖，永遠顯示（取代原本 display:none 靠 Tab 切換的邏輯） -->
+  <!-- 帳本篩選列：新增「方向」維度——兩位審查者都獨立點名現況只有市場/範圍/排序，
+       使用者無法回答「他過去看空過哪些標的」這種最基本的問題。 -->
+  <div style="padding:9px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <span style="font-size:13px;color:#888;white-space:nowrap;">搜尋：</span>
+    <input id="led-search" type="text" placeholder="標的、代號、集數、原話..."
+      oninput="lgSearch(this.value)"
+      style="flex:1;max-width:260px;padding:5px 12px;border:1px solid #ddd;border-radius:12px;font-size:13px;outline:none;">
+    <button id="lmkt-all" class="filter-btn led-mkt-btn btn-active" onclick="lgSetMkt('all')">全部</button>
+    <button id="lmkt-tw"  class="filter-btn led-mkt-btn" onclick="lgSetMkt('tw')">台股</button>
+    <button id="lmkt-us"  class="filter-btn led-mkt-btn" onclick="lgSetMkt('us')">美股</button>
+    <button class="filter-btn m-only" id="led-filter-btn" onclick="toggleLedFilters()">範圍 · 方向 ▸</button>
+    <span id="led-count" style="font-size:12px;color:#bbb;margin-left:auto;"></span>
+  </div>
+  <div id="led-filter-adv" class="filter-row" style="padding:8px 16px;border-bottom:1px solid #eee;background:#fafafa;">
+    <span style="font-size:12px;color:#aaa;">範圍：</span>
+    <button id="lr-0"   class="filter-btn lr-btn" onclick="lgSetRange(0)">全部</button>
+    <button id="lr-100" class="filter-btn lr-btn" onclick="lgSetRange(100)">最新 100 集</button>
+    <button id="lr-50"  class="filter-btn lr-btn" onclick="lgSetRange(50)">最新 50 集</button>
+    <button id="lr-20"  class="filter-btn lr-btn btn-active" onclick="lgSetRange(20)">最新 20 集</button>
+    <span style="font-size:12px;color:#aaa;margin-left:10px;">方向：</span>
+    <button id="ld-all" class="filter-btn ld-btn btn-active" onclick="lgSetDir('all')">全部</button>
+    <button id="ld-b"   class="filter-btn ld-btn" onclick="lgSetDir('+1')">看多</button>
+    <button id="ld-s"   class="filter-btn ld-btn" onclick="lgSetDir('-1')">看空</button>
+  </div>
+  <!-- 區塊級說明（放這裡，不要放進每張卡——第一版每張卡都印一次同一句，太吵）。
+       說明分三層：欄位級小字（卡片內）／區塊級（這一行）／完整方法（頁尾 details）。 -->
+  <div class="fld-note" style="padding:7px 16px 8px;border-bottom:1px solid #eee;background:#fcfcfd;">
+    「跑贏／落後大盤」＝這筆訊號期間內，個股表現與同期基準（台股比 0050、美股比 SPY）相比；
+    <b>看空訊號以「跌得比大盤多」為贏</b>。「待觀察」表示還算不出結果，不列入勝率分母。
+    同一標的多次提及會計為多筆訊號，<b>不代表獨立交易次數</b>。
+  </div>
+  <div id="ledger-list"></div>
+
+  <!-- ── 次區：個股排行（原本的主區，整塊原樣保留，只是改成收合＋內容改用 beat）── -->
+  <div class="sec-head" id="stock-section-toggle" role="button" tabindex="0"
+       aria-expanded="false" aria-controls="stock-section-body"
+       onclick="toggleStockSection()"
+       onkeydown="if(event.key==='Enter'||event.key===' '){{event.preventDefault();toggleStockSection();}}">
+    <span id="stock-section-arrow">▸</span> 依標的查看履歷
+    <span class="hm" style="color:#aaa;font-size:12px;margin-left:6px;font-weight:normal;">依標的彙總：每檔被提到幾次、跑贏大盤幾次、最近一次是哪一集</span>
+    <span style="float:right;color:#aaa;font-size:12px;font-weight:normal;">點擊展開</span>
+  </div>
+  <div id="stock-section-body" style="display:none;">
+
   <div id="view-stock" style="padding:0 0 8px;">
     <!-- 簡化篩選列（任務1c 定案：只留搜尋+市場，不做勝負/持倉天數篩選） -->
     <div style="padding:10px 16px;border-bottom:1px solid #eee;background:#fafafa;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -518,6 +614,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     </div>
     <div id="stock-card-grid" class="card-grid"></div>
   </div>
+  </div><!-- /stock-section-body（2026-08-10 主次對調新增的收合外層） -->
 
   <!-- 依集數列表：降級為次要區塊，預設收合（任務1d 定案，比照 demo 的
        ep-toggle/ep-compact 收合行為——原本「每集訊號」的完整功能全部保留，
@@ -611,7 +708,21 @@ function setFontSize(i) {{ fsIdx = i; applyFontSize(); }}
 // 2026-08-02 索羅門改寫（任務1a/1d）：卡片網格現在是唯一主視圖，DOMContentLoaded
 // 直接 renderStockTab()；原本的每集訊號表格（renderDetailTab）改成收合區塊
 // 第一次展開時才 render（見下方 toggleEpSection()），沒展開過就不用付這筆算力。
-document.addEventListener('DOMContentLoaded', () => {{ applyFontSize(); renderStockTab(); }});
+// 2026-08-10 主次對調：主區改成訊號帳本（renderLedger），個股排行網格降級為收合
+// 區塊，沿用「首次展開才 render」模式（見 toggleStockSection），沒展開就不付算力。
+document.addEventListener('DOMContentLoaded', () => {{ applyFontSize(); renderLedger(); }});
+
+// ── 個股排行收合（2026-08-10 新增，與 toggleEpSection/toggleAdv 同一套模式）──
+let _stockSectionInited = false;
+function toggleStockSection() {{
+  const box  = document.getElementById('stock-section-body');
+  const head = document.getElementById('stock-section-toggle');
+  const open = box.style.display === 'none';
+  box.style.display = open ? '' : 'none';
+  document.getElementById('stock-section-arrow').textContent = open ? '▾' : '▸';
+  head.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open && !_stockSectionInited) {{ _stockSectionInited = true; renderStockTab(); }}
+}}
 
 // ── 進階統計收合（趨勢圖等首次展開才初始化，收合狀態下 canvas 量不到尺寸）──
 let _chartInited = false;
@@ -923,8 +1034,10 @@ function renderSparkline(points) {{
   let d = `M ${{x(0)}} ${{y(vals[0])}} `;
   vals.forEach((v, i) => {{ if (i > 0) d += `L ${{x(i)}} ${{y(v)}} `; }});
   const areaD = d + `L ${{x(vals.length - 1)}} ${{H - pad}} L ${{x(0)}} ${{H - pad}} Z`;
-  const up    = vals[vals.length - 1] >= vals[0];
-  const color = up ? '#d9534f' : '#2b8a3e';
+  // 2026-08-10：改成中性灰。原本用「這段序列自己的首尾漲跌」上色，跟卡片上的
+  // 勝負色是兩套語意，畫面上會出現「綠字配紅線」讓人以為是 bug（實例：聯發科）。
+  // 這條線只是近 60 個交易日的股價脈絡，不承擔勝負語意，所以不給紅綠。
+  const color = '#9aa4ad';
   const last  = vals.length - 1;
   return `<svg viewBox="0 0 ${{W}} ${{H}}" width="100%" height="${{H}}" preserveAspectRatio="none" style="display:block;">
     <path d="${{areaD}}" fill="${{color}}" opacity="0.12"></path>
@@ -961,6 +1074,9 @@ function renderStockTab() {{
     return {{
       ...g, total: g.sigs.length, bull, bear, dir,
       wins, dec: dec.length,
+      // 2026-08-10：卡片要顯示「最近一次是哪一集、哪一天」——外部審查兩邊都指出
+      // 舊卡片連 EP 號都沒有，使用者分不出「本週剛講」與「一年前講過」。
+      latestEp: latestSig.ep, latestDate: latestSig.entry_date || '',
       win_rate: dec.length ? Math.round(wins/dec.length*1000)/10 : null,
       avg_ret:  rets.length ? Math.round(rets.reduce((a,b)=>a+b,0)/rets.length*100)/100 : null,
       latest:   Math.max(...g.sigs.map(s=>s.ep_num)),
@@ -994,15 +1110,28 @@ function renderStockTab() {{
   const fc = v => v == null ? '#888' : v >= 0 ? '#d9534f' : '#2b8a3e';
 
   const html = groups.map((g, idx) => {{
-    const isWin    = g.avg_ret != null && g.avg_ret >= 0;
     // 2026-08-02 完工前 Codex 覆核抓到：g.dir 除了 '+1'/'-1' 還可能是 '0'
     // （該標的全部訊號都是中性、或多空平手且最新一筆剛好是中性），原本只
     // 特判 '-1'，其餘（含 '0'）一律被畫成「看多」bull 樣式，是卡片化後
     // 新增的呈現錯誤——這裡補上中性樣式，不讓中性訊號被誤標成看多。
     const dirCls   = g.dir === '-1' ? 'bear' : g.dir === '0' ? 'neutral' : 'bull';
-    const dirLabel = g.dir === '-1' ? '看空' : g.dir === '0' ? '中性' : '看多';
+    const dirLabel = g.dir === '-1' ? '↓ 看空' : g.dir === '0' ? '— 中性' : '↑ 看多';
     const mktLabel = g.mkt === 'tw' ? '台股' : '美股';
-    const daysDisp = g.days != null ? g.days + ' 天' : 'N/A';
+    // 2026-08-10：主數字從「平均個股報酬」改成「跑贏大盤 x/y」。
+    // 舊寫法 isWin = (avg_ret >= 0) 用個股報酬正負決定紅綠，但本站的勝負定義是
+    // beat（對標大盤，且看空訊號是「跌得比大盤多」才算贏，見 performance.py:221-228）。
+    // 實例：國巨 EP674 看空，個股 -50.54% vs 0050 -0.24%，beat=true 是大勝，
+    // 舊卡片卻因為報酬是負的而塗成綠色 .lose，把一筆漂亮的戰績顯示成輸。
+    // 勝率一律附分母（外部審查兩邊獨立點名：1/1 的 100% 會霸榜，沒有分母無法判斷可信度）。
+    const pend     = g.total - g.dec;
+    const rateTxt  = g.dec ? `${{g.wins}}/${{g.dec}}` : '—';
+    const rateCls  = !g.dec ? 'pend' : (g.wins * 2 >= g.dec ? 'win' : 'lose');
+    // 這裡的勝率是「目前選取的集數範圍」內的，跟帳本卡片上「本檔歷史（全期間）」
+    // 不是同一個母體——實測時同一檔國巨出現 2/6 與 11/16 兩個數字，不標範圍會打架。
+    const rateNote = g.dec
+      ? `${{_sr === 0 ? '全期間' : '最新 ' + _sr + ' 集'}}跑贏 ${{Math.round(g.wins / g.dec * 100)}}%`
+        + (pend ? ` · 待觀察 ${{pend}}` : '')
+      : '此範圍內尚無可判定訊號';
 
     const detailRows = g.sigs.slice().sort((a,b) => b.ep_num - a.ep_num).map(s => {{
       const actLbl  = s.action === '+1' ? '看多' : s.action === '-1' ? '看空' : '中性';
@@ -1020,26 +1149,173 @@ function renderStockTab() {{
       </div>`;
     }}).join('');
 
-    return `<div class="stock-card" onclick="toggleCardDetail(${{idx}})">
+    return `<div class="stock-card" role="button" tabindex="0"
+        aria-expanded="false" aria-controls="scd-${{idx}}"
+        onclick="toggleCardDetail(${{idx}}, this)"
+        onkeydown="if(event.key==='Enter'||event.key===' '){{event.preventDefault();toggleCardDetail(${{idx}}, this);}}">
         <div class="sc-row1">
           <span class="sc-name">${{escapeHtml(g.name)}}<span class="sc-mkt-chip">${{mktLabel}}</span></span>
           <span class="sc-dir-chip ${{dirCls}}">${{dirLabel}}</span>
         </div>
         <div class="sc-code">${{escapeHtml(g.code)}}</div>
-        <div class="sc-ret ${{isWin ? 'win' : 'lose'}}">${{fp(g.avg_ret)}}</div>
+        <div class="sc-ret ${{rateCls}}">${{rateTxt}}</div>
+        <div class="fld-note">${{rateNote}}</div>
         <div class="sc-spark">${{renderSparkline(g.spark)}}</div>
-        <div class="sc-meta"><span>持倉 ${{daysDisp}}</span><span>提及 ${{g.total}} 次</span></div>
+        <div class="sc-meta"><span>最近 ${{escapeHtml(g.latestEp)}}</span><span>提及 ${{g.total}} 次</span></div>
+        <div class="fld-note">${{g.latestDate ? '上架於 ' + g.latestDate + ' · ' : ''}}均報酬 ${{fp(g.avg_ret)}}</div>
       </div>
-      <div class="sc-detail" id="scd-${{idx}}">${{detailRows}}</div>`;
+      <div class="sc-detail" id="scd-${{idx}}">
+        <div class="led-dt-head">${{escapeHtml(g.name)}}（${{escapeHtml(g.code)}}）歷次訊號</div>
+        ${{detailRows}}</div>`;
   }}).join('');
 
   document.getElementById('stock-card-grid').innerHTML = html;
 }}
 
-function toggleCardDetail(idx) {{
-  const el = document.getElementById('scd-' + idx);
-  if (!el) return;
-  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+// 2026-08-10：加上 aria-expanded 同步（卡片是 div+role=button，螢幕閱讀器要靠這個
+// 屬性才知道展開狀態；詳情區塊頂端另外重複一次股票名，避免展開後視覺/語音失去錨點）。
+function toggleCardDetail(idx, el) {{
+  const box = document.getElementById('scd-' + idx);
+  if (!box) return;
+  const open = box.style.display !== 'block';
+  box.style.display = open ? 'block' : 'none';
+  if (el) el.setAttribute('aria-expanded', open ? 'true' : 'false');
+}}
+
+// ── 訊號帳本（2026-08-10 新增，主區）──────────────────────────────────
+// 一筆訊號一張卡，依節目上架日倒序。與個股排行的差別：這裡的單位是「事件」
+// （誰、哪一集、哪一天、說了什麼、後來贏沒贏），不需要懂平均/勝率/樣本數就讀得懂。
+const AS_OF = '{today}';
+let _lgSearch = '', _lgMkt = 'all', _lgRange = 20, _lgDir = 'all';
+
+function _lgDaysAgo(ds) {{
+  if (!ds) return null;
+  const a = Date.parse(ds + 'T00:00:00Z'), b = Date.parse(AS_OF + 'T00:00:00Z');
+  if (isNaN(a) || isNaN(b)) return null;
+  return Math.round((b - a) / 86400000);
+}}
+
+// 各標的的歷史戰績：用全期間資料算，**不受上方篩選影響**——「這檔歷來準不準」
+// 不應該被「最新 20 集」這種檢視範圍改寫掉。
+const _LG_HIST = (() => {{
+  const m = {{}};
+  SIGNALS_DATA.forEach(s => {{
+    if (!s.code) return;
+    const h = m[s.code] || (m[s.code] = {{ win: 0, dec: 0, pend: 0 }});
+    if (s.beat === true)       {{ h.win++; h.dec++; }}
+    else if (s.beat === false) {{ h.dec++; }}
+    else                       {{ h.pend++; }}
+  }});
+  return m;
+}})();
+
+// 手機把「範圍／方向」那排收起來（桌面不受影響，CSS 只在 max-width:600px 生效）
+function toggleLedFilters() {{
+  const row = document.getElementById('led-filter-adv');
+  const btn = document.getElementById('led-filter-btn');
+  const open = row.classList.toggle('open');
+  btn.textContent = open ? '範圍 · 方向 ▾' : '範圍 · 方向 ▸';
+}}
+
+function lgSearch(v) {{ _lgSearch = v.trim().toLowerCase(); renderLedger(); }}
+function lgSetMkt(m) {{
+  _lgMkt = m;
+  document.querySelectorAll('.led-mkt-btn').forEach(b => b.classList.remove('btn-active'));
+  document.getElementById('lmkt-' + m).classList.add('btn-active');
+  renderLedger();
+}}
+function lgSetRange(n) {{
+  _lgRange = n;
+  document.querySelectorAll('.lr-btn').forEach(b => b.classList.remove('btn-active'));
+  document.getElementById('lr-' + n).classList.add('btn-active');
+  renderLedger();
+}}
+function lgSetDir(d) {{
+  _lgDir = d;
+  document.querySelectorAll('.ld-btn').forEach(b => b.classList.remove('btn-active'));
+  document.getElementById(d === 'all' ? 'ld-all' : (d === '+1' ? 'ld-b' : 'ld-s')).classList.add('btn-active');
+  renderLedger();
+}}
+
+function renderLedger() {{
+  const allNums = [...new Set(SIGNALS_DATA.map(s => s.ep_num))].sort((a, b) => a - b);
+  const keep    = _lgRange === 0 ? null : new Set(allNums.slice(-_lgRange));
+  const fp      = v => v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+
+  const list = SIGNALS_DATA.filter(s => {{
+    if (keep && !keep.has(s.ep_num)) return false;
+    if (_lgMkt !== 'all' && s.mkt !== _lgMkt) return false;
+    if (_lgDir !== 'all' && s.action !== _lgDir) return false;
+    if (_lgSearch) {{
+      const kw = [s.ep, s.name, s.code, s.raw_reason, s.quote].filter(Boolean).join(' ').toLowerCase();
+      if (!kw.includes(_lgSearch)) return false;
+    }}
+    return true;
+  }}).sort((a, b) => b.ep_num - a.ep_num);
+
+  document.getElementById('led-count').textContent = list.length + ' 筆訊號';
+  const box = document.getElementById('ledger-list');
+  if (!list.length) {{
+    box.innerHTML = "<div class='empty-state'>沒有符合篩選條件的訊號</div>";
+    return;
+  }}
+
+  // 「全部」時有 600+ 筆，一次全畫會讓手機卡住；只畫最新 120 筆並明講還有幾筆。
+  const MAX   = 120;
+  const shown = list.slice(0, MAX);
+
+  box.innerHTML = shown.map((s, i) => {{
+    const dirCls = s.action === '-1' ? 'bear' : s.action === '0' ? 'neu' : 'bull';
+    const dirLbl = s.action === '-1' ? '↓ 看空' : s.action === '0' ? '— 中性' : '↑ 看多';
+    // 勝負一律讀 beat（performance.py 已對看空反向處理），不從 s_pct 正負推導。
+    const stCls  = s.beat === true ? 'win' : s.beat === false ? 'lose' : 'pend';
+    const stLbl  = s.beat === true ? '✓ 跑贏大盤' : s.beat === false ? '✕ 落後大盤' : '○ 待觀察';
+    const mkt    = s.mkt === 'tw' ? '台股' : '美股';
+    const ago    = _lgDaysAgo(s.entry_date);
+    const agoTxt = ago == null ? '' : `（${{ago}} 天前）`;
+    const h      = _LG_HIST[s.code] || {{ win: 0, dec: 0, pend: 0 }};
+    const histTxt = h.dec
+      ? `本檔歷史（全期間）：跑贏 <b>${{h.win}}/${{h.dec}}</b>` + (h.pend ? ` · 待觀察 ${{h.pend}}` : '')
+      : '本檔歷史（全期間）：尚無可判定訊號';
+    const q      = s.quote || s.raw_reason || '';
+    const qShort = q.length > 80 ? q.slice(0, 80) + '…' : q;
+    const entryP = s.entry_p != null ? s.entry_p.toFixed(2) : 'N/A';
+    const currP  = s.curr_p  != null ? s.curr_p.toFixed(2)  : 'N/A';
+    const daysD  = s.days != null ? s.days + ' 天' : 'N/A';
+
+    return `<div class="led" role="button" tabindex="0" aria-expanded="false" aria-controls="lgd-${{i}}"
+        onclick="toggleLed(${{i}}, this)"
+        onkeydown="if(event.key==='Enter'||event.key===' '){{{{event.preventDefault();toggleLed(${{i}}, this);}}}}">
+      <div class="led-r1">
+        <span class="led-nm">${{escapeHtml(s.name)}}</span>
+        <span class="led-cd">${{escapeHtml(s.code)}}</span>
+        <span class="led-dir ${{dirCls}}">${{dirLbl}}</span>
+      </div>
+      <div class="led-r2">${{escapeHtml(s.ep)}} · 上架於 ${{s.entry_date || '日期不詳'}}${{agoTxt}} · ${{mkt}}</div>
+      ${{qShort ? `<blockquote class="led-q">「${{escapeHtml(qShort)}}」</blockquote>` : ''}}
+      <div class="led-st ${{stCls}}">${{stLbl}}</div>
+      <div class="led-nums">個股 <b>${{fp(s.s_pct)}}</b><span class="sep">｜</span>同期 ${{escapeHtml(s.bm || '')}} <b>${{fp(s.b_pct)}}</b></div>
+      <div class="led-hist">${{histTxt}}</div>
+      <div class="led-detail" id="lgd-${{i}}">
+        <div class="led-dt-head">${{escapeHtml(s.name)}}（${{escapeHtml(s.code)}}）· ${{escapeHtml(s.ep)}}</div>
+        ${{s.quote ? `<div>原話：「${{escapeHtml(s.quote)}}」</div>` : ''}}
+        ${{s.raw_reason ? `<div>AI 摘要原因：${{escapeHtml(s.raw_reason)}}</div>` : ''}}
+        <div>進場價 ${{entryP}} → 現價 ${{currP}} · 觀察 ${{daysD}} · 信心等級 ${{escapeHtml(s.conf || 'N/A')}}${{s.tag ? ' · ' + escapeHtml(s.tag) : ''}}</div>
+        <div class="fld-note">「信心等級」指節目中對這檔的信念強度（High／Medium／Low），不是 AI 對萃取正確性的信心；
+          原因欄是 AI 從逐字稿摘要的，不是主持人的原句</div>
+      </div>
+    </div>`;
+  }}).join('') + (list.length > MAX
+    ? `<div class="empty-state">已顯示最新 ${{MAX}} 筆，符合條件的共 ${{list.length}} 筆——請用上方篩選縮小範圍</div>`
+    : '');
+}}
+
+function toggleLed(i, el) {{
+  const box = document.getElementById('lgd-' + i);
+  if (!box) return;
+  const open = box.style.display !== 'block';
+  box.style.display = open ? 'block' : 'none';
+  if (el) el.setAttribute('aria-expanded', open ? 'true' : 'false');
 }}
 
 // ── 趨勢圖 ────────────────────────────────────────────────
