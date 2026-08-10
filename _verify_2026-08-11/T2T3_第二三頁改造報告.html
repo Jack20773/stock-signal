@@ -325,6 +325,93 @@ DeepSeek 說「機制上必然發生」。我用真實資料逐檔驗算：</p>
 </table>
 <p>比原版好 15px。<strong>這是小勝不是解決</strong>——這頁的第一屏仍然被說明區塊佔掉大半。</p>
 <hr />
+<h2 id="4b-codex-5">4b. 🔴 完工前 Codex 挑戰式審查：<strong>「不建議直接合併」</strong>，抓到 5 項，全部屬實</h2>
+<p>我把 <code>da0ae5a..HEAD</code> 的 diff 丟給 Codex 做挑戰式審查（明講「你的任務是找問題，不是附和」），<br />
+並要它逐條查核我在 commit message 裡的三個宣稱。結果它推翻了其中兩個。<strong>這一節是我上面那些<br />
+「已驗證」說法的修正，請以這節為準。</strong></p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>它說</th>
+<th>我複查</th>
+<th>修法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>entry_date</code> 第二來源<strong>可能就是被禁止的 <code>analysis_date</code></strong></td>
+<td><strong>屬實，而且我的註解是錯的</strong>。<code>performance.py:89</code> 是 <code>_episode_date(ep_id, r["analysis_date"])</code>——episodes.json 查不到時 fallback 就是 <code>analysis_date</code>，還會被寫進 <code>entry_date</code> 欄位（<code>:134</code>）</td>
+<td>只採信 <code>entry_date != analysis_date</code> 的筆（不同 → 當初一定是取到真實上架日）＋同集候選日期必須一致</td>
+</tr>
+<tr>
+<td>2</td>
+<td>「網路失敗可再點一次重試」<strong>是假的</strong></td>
+<td><strong>屬實</strong>。<code>trFetchOne</code> 開頭是「快取不是 undefined 就直接回傳」，而網路失敗把快取寫成 <code>null</code> → 再點只會讀到 null，不會重新發請求</td>
+<td>暫時性失敗改成 <code>delete</code> 快取（留 undefined），只有 404 才快取；有網路失敗時不標記 <code>_trFullLoaded</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td>「歷史累計 N 次（X 多／Y 空）」<strong>加起來不等於 N</strong></td>
+<td><strong>屬實，而且是我昨晚自己加出來的</strong>。<code>total_mentions</code> 含中性訊號，33 檔裡 <strong>27 檔</strong>對不起來（台積電 128 次少講了 24 筆中性）</td>
+<td>中性數不是 0 就一起列</td>
+</tr>
+<tr>
+<td>4</td>
+<td>搜尋世代號在 debounce 之後才遞增，250ms 空窗內舊搜尋仍可能蓋掉新關鍵字</td>
+<td>屬實</td>
+<td>改成按鍵當下就遞增</td>
+</tr>
+<tr>
+<td>5</td>
+<td>「可取消」措辭過度——只擋下一輪排程，已送出的最多 8 個請求不會中止</td>
+<td>屬實</td>
+<td>改成「已停止排入新下載（少數已送出的請求會自己跑完）」，且取消後不再被進度文字蓋掉</td>
+</tr>
+</tbody>
+</table>
+<p><strong>它沒找到問題的地方</strong>（也一併記錄）：f-string 大括號與深連結 URL 無語法/注入問題；<br />
+新增的 quote 搜尋 blob 與 EP title 都走 <code>_esc()</code>、逐字稿仍用 <code>textContent</code>，未新增 XSS 缺口；<br />
+第一頁與 Email 版無連帶回歸。</p>
+<p><strong>四組對照實測（第 1 項的守法有沒有真的守住）</strong></p>
+<table>
+<thead>
+<tr>
+<th>組</th>
+<th>條件</th>
+<th>結果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>正常</td>
+<td>33 檔／EP685</td>
+</tr>
+<tr>
+<td>B</td>
+<td>episodes.json 陳舊 ＋ 救援</td>
+<td>33 檔／EP685（<strong>救得回來</strong>）</td>
+</tr>
+<tr>
+<td>C</td>
+<td>陳舊，無救援（改動前行為）</td>
+<td>28 檔／EP680</td>
+</tr>
+<tr>
+<td>D</td>
+<td>陳舊，且<strong>把每筆 <code>entry_date</code> 都換成 <code>analysis_date</code></strong>（模擬污染）</td>
+<td><strong>28 檔／EP680 ← 污染被擋掉，禁令守住</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>重試修好的實測</strong>：模擬斷網 → 顯示網路失敗訊息、<code>fetch</code> 呼叫 1 次、快取留 <code>undefined</code>；<br />
+恢復網路後再點一次 → <code>fetch</code> 呼叫變 2 次、真的載入 22,602 字。修之前這裡是 0 次新請求。</p>
+<blockquote>
+<p>⚠️ 這一輪的教訓值得單獨記著：<strong>我在 commit message 裡寫「錯誤訊息兩種不同、可重試」時，<br />
+只驗了「訊息字串不一樣」，沒驗「重試這件事本身」。字串對了不等於行為對了。</strong></p>
+</blockquote>
 <h2 id="5">5. 還沒做／你可能不同意的地方</h2>
 <ol>
 <li><strong>原話預設展開還是收合</strong>：Codex 建議收合，我沒改（見 2-3）。</li>
