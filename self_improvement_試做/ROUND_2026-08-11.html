@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ROUND_2026-08-11</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+  line-height: 1.75; max-width: 860px; margin: 0 auto; padding: 2.5rem 1.25rem 6rem;
+  color: #1a1a1a; background: #fff; word-wrap: break-word;
+}
+h1, h2, h3, h4 { line-height: 1.35; margin: 2.2em 0 .8em; font-weight: 650; }
+h1 { font-size: 1.9rem; border-bottom: 2px solid #e5e5e5; padding-bottom: .4em; margin-top: 0; }
+h2 { font-size: 1.45rem; border-bottom: 1px solid #ececec; padding-bottom: .3em; }
+h3 { font-size: 1.18rem; }
+code {
+  font-family: "Cascadia Code", Consolas, monospace; font-size: .88em;
+  background: #f2f2f2; padding: .15em .4em; border-radius: 4px;
+}
+pre {
+  background: #f6f6f6; border: 1px solid #e5e5e5; border-radius: 8px;
+  padding: 1rem; overflow-x: auto;
+}
+pre code { background: none; padding: 0; font-size: .85rem; line-height: 1.6; }
+blockquote {
+  margin: 1.2em 0; padding: .6em 1.1em; border-left: 4px solid #c8c8c8;
+  background: #fafafa; color: #444;
+}
+table { border-collapse: collapse; width: 100%; margin: 1.4em 0; font-size: .93rem; display: block; overflow-x: auto; }
+th, td { border: 1px solid #ddd; padding: .55em .8em; text-align: left; vertical-align: top; }
+th { background: #f4f4f4; font-weight: 600; }
+tr:nth-child(even) td { background: #fbfbfb; }
+hr { border: 0; border-top: 1px solid #e0e0e0; margin: 2.5em 0; }
+a { color: #0b62c4; }
+ul, ol { padding-left: 1.6em; }
+li { margin: .3em 0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #e3e3e3; background: #16181c; }
+  h1 { border-bottom-color: #33373d; } h2 { border-bottom-color: #2a2d33; }
+  code { background: #24272c; }
+  pre { background: #1c1f24; border-color: #33373d; }
+  blockquote { background: #1c1f24; border-left-color: #4a4f57; color: #b8bcc4; }
+  th, td { border-color: #33373d; } th { background: #22252a; }
+  tr:nth-child(even) td { background: #1a1d21; }
+  hr { border-top-color: #33373d; } a { color: #66aaff; }
+}
+</style>
+</head>
+<body>
+<h1 id="2026-08-11-stock-signal">自我精進 2026-08-11（索羅門 stock-signal 輪次）</h1>
+<blockquote>
+<p>觸發條件：任務檔 T1/T2/T3 的 DoD 全數達成、且距截止 07:30 仍有餘裕。<br />
+邊界：全部隔離在 <code>self_improvement_試做/</code>，<strong>沒有修改任何正式檔案、沒有接進 <code>notifier.py</code>、沒有寫任何東西進 DB</strong>。</p>
+</blockquote>
+<hr />
+<h2 id="part-a">Part A：效率與成本研究</h2>
+<h3 id="a-1">A-1. 「送審素材失真 → 意見失真」這件事有研究支持，而且方向跟我們踩的坑一致</h3>
+<p>2026-08-10 我因為節錄時刪掉 <code>escapeHtml()</code>，讓 Codex 報了一個假的 XSS critical；<br />
+2026-08-11（今晚）則相反——<strong>素材夠完整，所以它抓到的三個問題全部屬實</strong>。</p>
+<p>查到的研究支持這個方向：LLM4FPM 的做法核心就是「提供完整且精確的程式碼上下文」，<br />
+在真實專案上把誤報降低 <strong>85% 以上</strong>；同一批研究也指出，需要跨模組／深層推理的警告，<br />
+LLM 的判斷品質會明顯下降。另有實務文章指出，沒有明確設定上下文時模型會<strong>靜默截斷</strong>超長輸入，<br />
+後半段的 bug 直接看不到——這跟「我以為它讀完了」是同一種失敗。</p>
+<p><strong>我這輪已經照做的</strong>（不是待辦，是今晚實際採用的作法）：<br />
+- 素材包的程式碼一律<strong>原檔逐行切片＋行號</strong>，用腳本產生，不手抄（<code>build_packet.py</code>）。<br />
+- 附上<strong>完整檔案清單</strong>，明講「還有這些存在但這次沒附」，讓審查者能指名要什麼。<br />
+- 附上<strong>真實渲染出來的畫面文字</strong>，不是只有程式碼——今晚兩位審查者的第一名都是靠畫面文字看出來的。</p>
+<p><strong>下一輪要補的</strong>：素材包裡的行號是「原檔行號」，但兩位審查者回覆時引用的是<strong>素材包自己的行號</strong><br />
+（DeepSeek 明講「行號皆指該檔本身」）。核對時我得手動換算。下次在每個切片行前面直接標<br />
+<code>report_html.py:1583|</code> 這種前綴，讓它引用什麼都能直接對回原檔。</p>
+<h3 id="a-2-token">A-2. 成本：這輪其實很便宜，貴的不是 token 是「重跑」</h3>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>這輪</th>
+<th>對照</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Codex（雙審 1 次 + 完工前挑戰式審查 1 次）</td>
+<td><strong>約 2.01 點</strong>（餘額 278.6595 → 276.6502）</td>
+<td>上限 50 點</td>
+</tr>
+<tr>
+<td>DeepSeek（雙審 1 次）</td>
+<td>134,913 tokens，<strong>估 ~US$0.02</strong></td>
+<td>上限 US$5</td>
+</tr>
+</tbody>
+</table>
+<p>查到的通用手法（prompt caching 可省 30–90%、prompt compression + semantic caching 合計約 60%）<br />
+<strong>對我們現在的用法幫助有限</strong>——我們是「一次性長 prompt、每次內容都不同」，沒有可重用的前綴可快取。<br />
+真正會讓成本失控的是<strong>重跑</strong>：素材錯了要重問一次、問題問歪了要重問一次。所以省錢的正解是<br />
+A-1 那條（一次問對），不是壓 token。</p>
+<p><strong>已採用</strong>：這輪把第二頁與第三頁<strong>合併成一份素材包問一次</strong>，而不是分兩次問，省掉一次完整的背景重述。</p>
+<hr />
+<h2 id="part-b">Part B：三個新想法與試做</h2>
+<h3 id="trial7-trial7b">trial7 ＋ trial7b：第三頁「靜態搜尋索引」到底值不值得做</h3>
+<p><strong>動機</strong>：雙審時 Codex 建議「產生靜態搜尋索引 + Web Worker」，我當下沒做，理由寫成<br />
+「工程量另一個級別，交給使用者決定」——但那句話<strong>沒有任何數字支撐</strong>，等於把決定丟回去卻沒給依據。</p>
+<p><strong>做法</strong>：純 Python、零新依賴，對 685 集（35.9 MB）真實逐字稿建倒排索引，量大小／建置時間／召回率／查詢延遲。</p>
+<p><strong>結果</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>索引 gzip 後</th>
+<th>佔原始全文</th>
+<th>召回率</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>中文 2-gram ＋ ASCII 整詞（trial7）</td>
+<td>6.28 MB</td>
+<td>17.5%</td>
+<td>❌ <code>AI</code> 70%、<code>CoWoS</code> 90%</td>
+</tr>
+<tr>
+<td>同上 ＋ <strong>砍掉高頻 token</strong></td>
+<td>4.97 MB</td>
+<td>13.8%</td>
+<td>❌❌ 台積電／NVIDIA／AI <strong>全部 0%</strong></td>
+</tr>
+<tr>
+<td>中文 2-gram ＋ <strong>ASCII 2-gram</strong>（trial7b）</td>
+<td><strong>6.16 MB</strong></td>
+<td><strong>17.2%</strong></td>
+<td>✅ 12 個關鍵字<strong>全部 100%</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>兩個非直覺的發現</strong>：</p>
+<ol>
+<li><strong>壓縮索引最有效的那一刀（砍掉「幾乎每集都有」的 token）剛好砍死最熱門的查詢</strong>。<br />
+   台積電出現在 446/685 集、AI 在 569 集——它們正是使用者最會搜的字，也正是會被剪掉的字。<br />
+   這條路直接堵死，索引沒有便宜版本。</li>
+<li><strong>整詞切法跟現行行為不等價</strong>。現在線上是 <code>text.includes(q)</code> 的<strong>子字串</strong>語意，<br />
+<code>ai</code> 找得到 <code>AIGC</code>；整詞索引找不到 → <strong>會靜默漏搜</strong>。改成 ASCII 2-gram 才等價，<br />
+   代價是候選會膨脹（<code>CoWoS</code> 候選 242 集 vs 真實 93 集），所以正式用途仍需對候選做一次精確比對。</li>
+</ol>
+<p><strong>給使用者的決策依據（不是我來拍板）</strong>：<br />
+索引方案能把「打開就要下載 35.9 MB」降到 <strong>6.16 MB（約 1/6）</strong>，建置 3.5 秒、查詢 &lt;1ms，<br />
+但<strong>必須用 2-gram、不能修剪、且要保留候選確認步驟</strong>。<br />
+如果覺得 6 MB 仍太大，那就維持現在的「按鈕觸發 + 進度 + 可取消」，不要為了省一半再賠上正確性。</p>
+<p><strong>檔案</strong>：<code>trial7_search_index.py</code> / <code>trial7_demo_output.txt</code>、<code>trial7b_index_substring_gap.py</code> / <code>trial7b_demo_output.txt</code></p>
+<h3 id="trial8-pre-flight">trial8：驗證前的「資料忠實度 pre-flight」</h3>
+<p><strong>動機</strong>：今晚差點交出一份<strong>假的正式站 bug 報告</strong>。第一次產出時第二頁只有 28 檔，看起來像程式壞了，<br />
+追下去才發現是本機 <code>episodes.json</code> 停在 8/2。記憶正本裡早就有<br />
+「查證『缺口/異常』結論前，先確認比對目標本身對不對」這條規則，但它<strong>沒有任何機制</strong>，全靠當下想不想得到。</p>
+<p><strong>做法</strong>：一支唯讀腳本，跑五項檢查——本機 episodes.json 可解析／跟不跟得上遠端／<br />
+DB 裡的集數本機查不查得到上架日／<code>transcripts/</code> 有沒有同集重複檔／三頁產出檔比資料新不新。<br />
+離開碼 0＝可以驗，1＝先補齊。</p>
+<p><strong>鑑別度測試</strong>（把本機 episodes.json 假裝成停在 EP680，＝今晚的真實狀態）：</p>
+<pre><code>!! DB 裡的集數，本機都查得到上架日
+     有 5 集在 episodes.json 查不到：['EP681','EP682','EP683','EP684','EP685']
+     → 這些集的訊號會被關注度頁排除（第二頁會少東西）
+離開碼: 1
+</code></pre>
+<p><strong>它今晚實際抓到的</strong>：<code>transcripts/</code> 有 4 集重複檔（EP681–684，我補下載造成的）——<br />
+這是我原本要靠人工記得的事，現在腳本會講。</p>
+<p><strong>檔案</strong>：<code>trial8_preflight_freshness.py</code> / <code>trial8_demo_output.txt</code></p>
+<hr />
+<h2 id="_1">要不要延伸成正式功能（不是我能拍板的，給選項）</h2>
+<table>
+<thead>
+<tr>
+<th>想法</th>
+<th>選項 A</th>
+<th>選項 B</th>
+<th>選項 C</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>靜態搜尋索引</strong></td>
+<td>正式導入：<code>notifier.py</code> 產 <code>search_index.json.gz</code>，前端優先用索引縮小候選再精確比對</td>
+<td>維持現狀（按鈕觸發＋進度＋可取消），索引留作研究筆記</td>
+<td>折衷：只對<strong>最近 100 集</strong>建索引（多數搜尋落在近期），大小可降到 1 MB 量級——這個變體我還沒量</td>
+</tr>
+<tr>
+<td><strong>pre-flight</strong></td>
+<td>接進 <code>notifier.py</code> 開頭，落差就印警告（不中斷）</td>
+<td>做成獨立指令，驗證前自己跑</td>
+<td>接進 GitHub Actions，CI 上落差就讓 job 紅燈——這條最有價值也最容易誤擋，要先觀察一陣子</td>
+</tr>
+<tr>
+<td><strong>素材包行號前綴</strong></td>
+<td>下次送審直接改（成本幾乎為零）</td>
+<td>不改，繼續手動換算</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>我的傾向：搜尋索引選 <strong>B</strong>（現在的兩段式已經解掉最痛的點，6 MB 換來的邊際效益不明顯）；<br />
+pre-flight 選 <strong>A</strong>（成本低、今晚已證明有效）；行號前綴選 <strong>A</strong>。但這三個都等你決定。</p>
+</body>
+</html>
