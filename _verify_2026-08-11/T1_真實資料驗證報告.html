@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>T1_真實資料驗證報告</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+  line-height: 1.75; max-width: 860px; margin: 0 auto; padding: 2.5rem 1.25rem 6rem;
+  color: #1a1a1a; background: #fff; word-wrap: break-word;
+}
+h1, h2, h3, h4 { line-height: 1.35; margin: 2.2em 0 .8em; font-weight: 650; }
+h1 { font-size: 1.9rem; border-bottom: 2px solid #e5e5e5; padding-bottom: .4em; margin-top: 0; }
+h2 { font-size: 1.45rem; border-bottom: 1px solid #ececec; padding-bottom: .3em; }
+h3 { font-size: 1.18rem; }
+code {
+  font-family: "Cascadia Code", Consolas, monospace; font-size: .88em;
+  background: #f2f2f2; padding: .15em .4em; border-radius: 4px;
+}
+pre {
+  background: #f6f6f6; border: 1px solid #e5e5e5; border-radius: 8px;
+  padding: 1rem; overflow-x: auto;
+}
+pre code { background: none; padding: 0; font-size: .85rem; line-height: 1.6; }
+blockquote {
+  margin: 1.2em 0; padding: .6em 1.1em; border-left: 4px solid #c8c8c8;
+  background: #fafafa; color: #444;
+}
+table { border-collapse: collapse; width: 100%; margin: 1.4em 0; font-size: .93rem; display: block; overflow-x: auto; }
+th, td { border: 1px solid #ddd; padding: .55em .8em; text-align: left; vertical-align: top; }
+th { background: #f4f4f4; font-weight: 600; }
+tr:nth-child(even) td { background: #fbfbfb; }
+hr { border: 0; border-top: 1px solid #e0e0e0; margin: 2.5em 0; }
+a { color: #0b62c4; }
+ul, ol { padding-left: 1.6em; }
+li { margin: .3em 0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #e3e3e3; background: #16181c; }
+  h1 { border-bottom-color: #33373d; } h2 { border-bottom-color: #2a2d33; }
+  code { background: #24272c; }
+  pre { background: #1c1f24; border-color: #33373d; }
+  blockquote { background: #1c1f24; border-left-color: #4a4f57; color: #b8bcc4; }
+  th, td { border-color: #33373d; } th { background: #22252a; }
+  tr:nth-child(even) td { background: #1a1d21; }
+  hr { border-top-color: #33373d; } a { color: #66aaff; }
+}
+</style>
+</head>
+<body>
+<h1 id="t1-db-2026-08-11">T1：真實 DB 端到端驗證報告（2026-08-11 凌晨）</h1>
+<blockquote>
+<p>目的：昨晚 push 的第一頁改造（<code>fef73ea</code>）<strong>從未用真實資料產出過</strong>，而 <code>update.yml</code> 排程<br />
+<strong>週四 08:00（2026-08-13）</strong> 會 checkout 新版並自動部署。這份報告補掉那個缺口。<br />
+版本錨點：<code>da0ae5a</code>（任務檔）。驗證環境：本機 Windows + Neon PostgreSQL 正式庫 + Playwright Chromium。</p>
+</blockquote>
+<hr />
+<h2 id="_1">結論（先講）</h2>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>結果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>真實 DB 產出三頁</td>
+<td>✅ 成功，exit 0</td>
+</tr>
+<tr>
+<td>第一頁 <code>beat</code> 勝負修正（真實資料定樁）</td>
+<td>✅ 通過</td>
+</tr>
+<tr>
+<td>第一頁主次兩區都在、內容未刪</td>
+<td>✅ 通過</td>
+</tr>
+<tr>
+<td>第二頁 <code>attention.html</code> 回歸</td>
+<td>✅ 產出正常（但揭露一個資料新鮮度問題，見下）</td>
+</tr>
+<tr>
+<td>第三頁 <code>transcripts.html</code> 回歸</td>
+<td>✅ 產出正常</td>
+</tr>
+<tr>
+<td>三頁 console errors</td>
+<td>✅ 0（僅本機 <code>favicon.ico</code> 404，是本機伺服器沒有該檔，非頁面程式錯誤）</td>
+</tr>
+<tr>
+<td><strong>是否需要 revert</strong></td>
+<td><strong>不需要</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1-db-dry-run">1. 正式 DB 寫入：dry-run → 執行 → 逐列比對</h2>
+<p><strong>執行前唯讀快照</strong>（973 筆全欄位存成 JSON）：</p>
+<pre><code>總筆數                : 973
+有績效快照(perf_updated_at not null): 689
+有 beat_benchmark     : 684
+最後一次績效更新時間  : 2026-08-09
+price_cache 筆數      : 1202
+</code></pre>
+<p><strong>執行</strong>：<code>python -X utf8 notifier.py --no-fill --no-send</code></p>
+<pre><code>2026-08-11 00:42:02 績效比對：689 筆訊號，684 筆數值有變動送出 UPDATE（5 筆跟上次相同，跳過寫入）
+2026-08-11 00:42:04 HTTP Error 404 ... Quote not found for symbol: CFLT
+2026-08-11 00:42:05 1 Failed download: ['CFLT']: possibly delisted
+2026-08-11 00:42:06 目前關注度頁面已更新：28 檔標的
+2026-08-11 00:42:07 逐字稿頁面已更新：680 集清單
+</code></pre>
+<blockquote>
+<p><code>CFLT</code>（Confluent）2026-03 被 IBM 併購下市，永久查不到價，是<strong>已知且合理</strong>的失敗，不是回歸。</p>
+</blockquote>
+<p><strong>執行後逐列比對（973 筆全比）</strong>：</p>
+<pre><code>before筆數 973 after筆數 973
+有欄位變動的列數: 684   其中 beat_benchmark 翻轉: 15
+beat 翻轉樣本: [(77,'緯創',0→1), (128,'貿聯-KY',1→0), (142,'Palantir',0→1),
+              (206,'Coherent Corp',1→0), (295,'Apple',1→0)]
+</code></pre>
+<ul>
+<li><strong>筆數 973 → 973</strong>：沒有新增列、沒有刪除列。</li>
+<li>684 筆更新＝距上次更新（8/9）過了兩天，價格變動導致報酬率與持有天數變化，<strong>符合預期</strong>。</li>
+<li>15 筆 <code>beat_benchmark</code> 翻轉是兩天價格變動造成的真實勝負易位，不是邏輯改變。</li>
+<li><strong>第二次重跑（補齊資料後）回報「0 筆數值有變動」</strong> → 證明這條路徑是冪等的，第一次已寫入完成。</li>
+</ul>
+<h2 id="2-beat">2. 第一頁：<code>beat</code> 勝負修正的真實資料定樁</h2>
+<p>昨晚修掉的 bug 是「用 <code>avg_ret &gt;= 0</code> 判勝負，但勝負定義在 <code>beat</code>」。定樁案例國巨 EP674（看空、個股大跌、大盤微漲＝大勝）：</p>
+<p><strong>DB 真實值</strong></p>
+<pre><code class="language-json">{&quot;id&quot;:318,&quot;episode_id&quot;:&quot;EP674&quot;,&quot;stock_name&quot;:&quot;國巨&quot;,&quot;stock_code&quot;:&quot;2327.TW&quot;,
+ &quot;action&quot;:&quot;-1&quot;,&quot;stock_return_pct&quot;:-46.8,&quot;benchmark_return_pct&quot;:1.12,
+ &quot;beat_benchmark&quot;:1,&quot;days_held&quot;:45,&quot;perf_updated_at&quot;:&quot;2026-08-11&quot;}
+</code></pre>
+<p><strong>頁面實際渲染</strong>（Playwright 取真實 DOM）</p>
+<pre><code>國巨 | 2327.TW | ↓ 看空 | EP674 · 上架於 2026-06-27（45 天前） · 台股
+「因為前面特別是在 9 點多還是 10 點的時候，有看到國巨的期貨直接跑去跌停。」
+✓ 跑贏大盤 | 個股 -46.80%｜同期 0050.TW +1.12% | 本檔歷史（全期間）：跑贏 11/16
+</code></pre>
+<ul>
+<li><code>led-st</code> 的 class＝<code>led-st win</code>，<code>role=button</code>、<code>aria-expanded=false</code>、<code>tabindex=0</code> 全部就位。</li>
+<li><strong>舊版在同一筆會塗成綠色「輸」</strong>（因為 <code>avg_ret=-46.8 &lt; 0</code>）。修正在真實資料上成立。</li>
+</ul>
+<h2 id="3">3. 第一頁：主次兩區都在、內容未刪</h2>
+<ul>
+<li>主區「最近訊號」：<code>.led</code> 卡片 <strong>64 張</strong>（預設篩選＝最新 20 集），標頭與篩選列（搜尋／市場／範圍／方向）齊全。</li>
+<li>次區「依標的查看履歷」：<code>#stock-section-toggle</code> / <code>#stock-section-body</code> / <code>#stock-card-grid</code> / <code>#stock-search</code> / <code>#stock-count</code> 全部存在於 DOM（收合狀態）。</li>
+<li>常駐導讀（<code>.lead-note</code>）與可關閉 onboarding 皆在。</li>
+<li>統計列：總訊號 689、對標大盤勝率 62.4%、Win/Lose 427/257、待定 5、均報酬 +94.06%、中位數 +57.86%。</li>
+</ul>
+<h2 id="4-episodesjson">4. 🔴 驗證過程中揭露的問題：本機 <code>episodes.json</code> 陳舊，導致我第一次驗到的是失真畫面</h2>
+<p>第一次產出時第二頁只有 <strong>28 檔</strong>、逐字稿頁只有 <strong>680 集</strong>。追下去發現：</p>
+<table>
+<thead>
+<tr>
+<th>事實</th>
+<th>證據</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>本機 <code>episodes.json</code> 停在 2026-08-02，只有 680 集</td>
+<td>檔案 mtime + 逐筆解析</td>
+</tr>
+<tr>
+<td>遠端 <code>whatmkreallysaid.com/episodes.json</code> 已有 685 集</td>
+<td><code>curl</code> HTTP 200，624,672 bytes，EP681–685 日期齊全</td>
+</tr>
+<tr>
+<td>DB 裡 EP681–EP685 有 23 筆訊號、<code>entry_date</code> 也正確</td>
+<td>直接查 DB：EP681 07-22／EP682 07-25／EP683 07-29／EP684 08-01／EP685 08-05</td>
+</tr>
+<tr>
+<td><code>attention.py:147-153</code> 查不到上架日就<strong>整筆丟棄</strong>，沒有任何警告</td>
+<td>原始碼</td>
+</tr>
+<tr>
+<td>⇒ 結果：第二頁「<strong>目前</strong>關注度」實際上停在 EP680（07-18），少了近一個月</td>
+<td>補齊後 28 檔 → <strong>33 檔</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>線上有沒有這個問題？沒有。</strong> 兩個 workflow 都在 <code>notifier.py</code> 之前先跑 <code>download_transcripts.py</code><br />
+（<code>update.yml</code> 走 <code>update.py</code>、<code>publish-pages.yml</code> 第 39 行直接呼叫），而 <code>actions/cache</code> 只快取 <code>transcripts/</code>、<br />
+不含 <code>episodes.json</code>，所以 CI 每次都拿到新的。<strong>這是我本機驗證環境不忠實，不是正式站的 bug。</strong></p>
+<p><strong>但這裡有一個真實的結構性風險</strong>：<code>attention.py</code> 丟棄訊號時是<strong>完全靜默</strong>的。<br />
+若哪天 CI 抓 <code>episodes.json</code> 失敗或對方站台改版，第二頁會安靜地少掉最新集數而 CI 依然綠燈——<br />
+這正是 2026-08-01 <code>signals_id_seq</code> 撞號事故的同一種型態（綠燈掩蓋真實失敗）。已列入 T2 待修。</p>
+<p><strong>補齊後重跑</strong>：<code>Downloaded: 5  Skipped: 680  Failed: 0</code> → 第二頁 33 檔、第三頁 685 集、第一頁最新至 EP685。</p>
+<h3 id="4b">4b. 補齊動作的副作用（需要你知道，我沒有動手處理）</h3>
+<p><code>transcripts/</code> 現在有 <strong>4 集重複檔案</strong>——同一集同時有「獨立轉錄版」與「官方站下載版」：</p>
+<pre><code>EP681: EP681_人道走廊與沙沙西瓜.md      /  EP681_再一次相信真愛存在的機會.md
+EP682: EP682_紅眼路比與魂系股災.md      /  EP682_魂系 everywhere.md
+EP683: EP683_DUV鬼故事與黃金葛玄學.md   /  EP683_一個月前的自己對未來寄予厚望.md
+EP684: EP684_五歲家書與降槓桿浩劫.md    /  EP684_終於可以喘一下.md
+</code></pre>
+<p>這是 2026-08-02 索羅門 r3 任務就記錄過的已知風險（<code>detect_duplicate_episode_files()</code> 只偵測不解決），<br />
+今晚我補下載官方版時真的觸發了。<strong>影響</strong>：<code>export_transcripts_data()</code> 會把兩份都複製成同一個<br />
+<code>transcripts_data/EP&lt;n&gt;.txt</code>，後複製的覆蓋前一個（順序取決於 <code>os.listdir</code>）。<br />
+本機才有這個狀況（<code>transcripts/</code> 未進版控），<strong>線上不受影響</strong>。<br />
+依規則我不自行刪你的原始資料，清單列在這裡等你決定。</p>
+<h2 id="5">5. 第一頁另外抓到的缺陷（已修）</h2>
+<p><strong>站台首頁從來沒有 <code>&lt;title&gt;</code>，也沒有任何 <code>&lt;h1&gt;</code>。</strong></p>
+<pre><code>report_detail.html   : &lt;title&gt; 出現 0 次、&lt;h1 出現 0 次
+report_attention.html: &lt;title&gt;目前節目關注度&lt;/title&gt;
+report_transcripts.html: &lt;title&gt;逐字稿&lt;/title&gt;
+</code></pre>
+<p>後果：瀏覽器分頁與書籤只顯示網址（<code>jack20773.github.io/stock-signal/</code>），螢幕閱讀器抓不到主標題，<br />
+搜尋引擎也拿不到頁名。第二、三頁都有，只有最重要的首頁沒有。</p>
+<p><strong>修法</strong>：<code>&lt;html lang="zh-Hant"&gt;</code> + <code>&lt;title&gt;股癌訊號勝率追蹤&lt;/title&gt;</code>，並把 header 的<br />
+<code>&lt;div style="font-size:22px..."&gt;</code> 改成 <code>&lt;h1 style="...margin:0;"&gt;</code>（視覺零變化，只補語意）。</p>
+<hr />
+<h2 id="_2">附件</h2>
+<table>
+<thead>
+<tr>
+<th>檔案</th>
+<th>內容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>v_p1_desktop.png</code></td>
+<td>第一頁桌機截圖（真實資料）</td>
+</tr>
+<tr>
+<td><code>v_p2_desktop.png</code></td>
+<td>第二頁（<strong>陳舊資料版</strong>，28 檔，保留當對照組）</td>
+</tr>
+<tr>
+<td><code>v_p2_fresh_desktop.png</code></td>
+<td>第二頁（補齊後，33 檔）</td>
+</tr>
+<tr>
+<td><code>v_p3_fresh_desktop.png</code></td>
+<td>第三頁（補齊後，685 集）</td>
+</tr>
+<tr>
+<td><code>p2_text.txt</code> / <code>p3_text.txt</code></td>
+<td>兩頁完整渲染文字</td>
+</tr>
+<tr>
+<td><code>../notifier_run_20260811.log</code> / <code>_b.log</code></td>
+<td>兩次執行原始 log</td>
+</tr>
+<tr>
+<td><code>../dl_20260811.log</code></td>
+<td>逐字稿補齊 log</td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

@@ -326,10 +326,13 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
     )
 
     return f"""<!DOCTYPE html>
-<html>
+<html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- 2026-08-11：本頁（站台首頁）原本沒有頁面標題也沒有主標題語意標籤，瀏覽器分頁與
+     書籤只顯示網址、螢幕閱讀器抓不到主標題；另外兩頁都有。此處補上，視覺不變。 -->
+<title>股癌訊號勝率追蹤</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <style>
   body{{margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#333;}}
@@ -427,7 +430,7 @@ def generate_html_detail(results: list[dict], title: str, stats: dict) -> str:
 
   <!-- Header -->
   <div style="background:#1a252f;padding:20px;text-align:center;color:#fff;border-radius:8px 8px 0 0;">
-    <div style="font-size:22px;font-weight:bold;">股癌訊號勝率追蹤</div>
+    <h1 style="font-size:22px;font-weight:bold;margin:0;">股癌訊號勝率追蹤</h1>
     <div style="color:#b3c1cd;font-size:13px;margin-top:4px;">{title} · {today} · 最新分析至 {latest_ep}</div>
   </div>
   <!-- 2026-08-02 索羅門新增（任務1e）：三頁並列tab導覽，取代原本只有一行

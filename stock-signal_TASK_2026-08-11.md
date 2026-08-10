@@ -1,7 +1,7 @@
 # stock-signal 索羅門任務檔 2026-08-11
 
 > 通用章程：`D:\All claude\000_Agent\006_institution\pm_agent_solomon.md`（開工前必讀）
-> 版本錨點 commit：**（開工 commit，見本檔第一次 commit 的 hash）**
+> 版本錨點 commit：**`da0ae5a`**（本檔第一次 commit）
 > 開工時 repo HEAD：`fef73ea`（= `origin/master`，工作區乾淨，僅兩個使用者裁決保留的 untracked 檔案）
 
 ---
