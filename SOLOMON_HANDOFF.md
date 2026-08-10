@@ -1,494 +1,74 @@
 status: completed
-monitoring_mode: 無人監督
-task_file_commit: 6be5125
-commit_hash: d735a7b（此為撰寫本欄位時的最新commit；本檔案自身的最終commit hash
-  會比這個新一號，屬於自我指涉無法避免的現象，跟前幾輪報告同樣的處理方式）
-user_mid_session_instructions: |
-  1. 主控 session 於執行中途（EP681 剛開始 transcribe 階段時）介入，指出我用
-     Bash run_in_background + 等通知的方式跑 sync_independent_transcripts.py，
-     違反通用章程「隔夜特別要注意的執行紀律」——背景 subagent 不會被自己啟動的
-     OS 層級行程自動叫醒。收到後立即改成同一個 turn 內阻塞式輪詢等待，直到腳本
-     真正跑完才繼續，之後全程比照辦理，沒有再用背景+等通知的模式跑長流程。
-  2. 主控 session 另傳達使用者裁決：截止時間由 23:09 改為 23:00；自我精進條款
-     Part A/B 有新版規則。當時因主線任務（1a-1e）雖已全數完成，但完工前 Codex
-     審查又抓到需要處理的重大問題，時間全部用於處理這些問題，尚未進入自我精進
-     環節。
-  3. 主線 DoD 完工後，主控 session 傳達已完成獨立核對（git commit範圍/EP677
-     URL/batch.py --dry-run/Codex花費/程式碼抽查/沒push沒碰DB 皆核對通過），
-     並確認「有時間的話就執行閒置計畫」的條件成立（20:12，離23:00還有約2小時
-     48分鐘），指示進入自我精進 Part A/B，且提醒不要再用背景+等通知模式跑長
-     流程（同一提醒的第二次）。已依指示完整執行 Part A/B，見下方
-     self_improvement_this_round 與 self_improvement_new_ideas。
-  4. 20:35 寫完第一輪 Part A/B 報告後，主控 session 傳達使用者糾正：自我精進
-     是持續性的，「時間還沒到就一直執行閒置計畫」，不是做一輪報告就收工——
-     這是章程寫得不夠清楚，已由使用者修正並 commit `57a23ef`。要求重讀章程
-     「自我精進條款」更新段落後開新一輪，新一輪結果要累加寫進
-     self_improvement_new_ideas 不能覆蓋，真正該停的時機只有截止時間到/
-     想不出新方向/命中預算或紅線三種。已依指示執行第二輪（21:38-21:56），
-     對第一輪的想法1選項(b)與想法2做更深入試做，見上方「第二輪延伸試做」。
-files_changed: |
-  新增：
-  - independent_transcribe.py（1a 格式橋接模組：.srt→.md 轉換 + video-transcribe
-    外部 CLI 呼叫包裝）
-  - sync_independent_transcripts.py（1b-1e：三方比對缺口偵測 + 缺口補齊 +
-    交叉驗證 + 可重複執行的整合腳本）
-  - docs/independent_transcript_diffs.md（1d 交叉驗證差異紀錄，純附加，git 追蹤）
-  - self_improvement_試做/（自我精進 Part B 試做，第一輪9個+第二輪6個共15個
-    檔案，隔離不影響任何 DoD 正式檔案，git 追蹤——內容不是 whatmkreallysaid.com
-    逐字稿也不是密鑰，屬於程式碼與研究筆記，進 git 沒有敏感性疑慮）
-  修改（純文件/註解更正，不改邏輯，commit f43a64d）：
-  - independent_transcribe.py（自我精進 Part B 試做2意外發現：精確計數後 EP680
-    真實逐字稿只有2個內容逗號，先前文件誤把SRT時間碼本身的逗號算進去，更正說明）
-  新增（transcripts_data/，gitignore 不進 git，比照既有慣例）：
-  - transcripts_data/independent_transcribe/manifest.json（獨立轉錄留痕）
-  - transcripts_data/independent_media/EP681~684/（下載的影片+.srt/.ass/.mkv，共547MB）
-  新增（transcripts/，gitignore 不進 git，比照既有慣例）：
-  - transcripts/EP681_再一次相信真愛存在的機會.md（20,808字）
-  - transcripts/EP682_魂系 everywhere.md（19,263字）
-  - transcripts/EP683_一個月前的自己對未來寄予厚望.md（20,365字）
-  - transcripts/EP684_終於可以喘一下.md（19,282字）
-  順便修復：transcripts/EP677_四代同堂槓桿論與研報獵巫記.md（用既有
-  download_transcripts.py 從 whatmkreallysaid.com 正常下載補齊，非獨立轉錄，
-  詳見下方「EP677 查證結論」）
-verification: |
-  === 1a 格式橋接 ===
-  用既有 media/EP680_v2/source.srt（2小時真實 podcast，1917筆cue）轉換測試，
-  確認 srt_to_md() 能正確產出符合 transcripts/*.md 既有格式（# 標題+段落）的
-  純文字。轉換前 SRT 片段：
-    1
-    00:00:00,000 --> 00:00:01,520
-    歡迎收聽古愛,我是聖木工
-  轉換後 .md 片段（無時間軸、合併成段落）：
-    # EP680 筷子信仰與台積電心碎記
-    歡迎收聽古愛,我是聖木工本期節目由喬志勇國際有限公司贊助太熱了,夏天全民運動...
-  batch.py --dry-run 對真實新增的 EP681-684 驗證：
-    待處理：4 集（681–684）
-    [1/4] EP681 — 待跑（dry-run）
-    [2/4] EP682 — 待跑（dry-run）
-    [3/4] EP683 — 待跑（dry-run）
-    [4/4] EP684 — 待跑（dry-run）
-    dry-run｜共 4 集｜待跑 4｜已跳過 0
-  全集 dry-run（確認沒有破壞既有 684 集含新集數的判斷）：
-    dry-run｜共 684 集｜待跑 423｜已跳過 261
+monitoring_mode: 無人監督（使用者 2026-08-11 00:33 派工後離線，截止 07:30）
+task_file_commit: da0ae5a（`stock-signal_TASK_2026-08-11.md`，本輪技術設計版本錨點）
+commit_hash: dceed7b（本階段最後一個 commit；本輪範圍 da0ae5a..dceed7b，**已全部 push 到 origin/master**）
+user_mid_session_instructions: none（派工時一次問完四題後離線，執行期間沒有再收到任何訊息）
 
-  === 1b 缺口偵測 ===
-  yt-dlp --flat-playlist 對 @Gooaye 頻道抓完整清單，共 683 部影片，EP 編號解析
-  100% 成功（683/683，抽查遠超過任務檔要求的 10 筆）；唯一「找不到」的是
-  EP232 整個不在 YouTube 清單裡（不是解析失敗，是 whatmkreallysaid.com 有但
-  YouTube 頻道本身沒有這部影片，猜測後來被下架/設非公開，不影響本輪偵測結果）。
-  標題格式實測是「EPxxx | <emoji>」，跟任務檔原本假設的「Gooaye 股癌- EP629」
-  格式不同（已在程式註解與下方誠實記錄這個落差）。
-  三方比對結果：
-    YouTube 共 683 集（EP1–EP684）
-    本地 transcripts/ 共 680 集，episodes.json（鏡像 whatmkreallysaid.com）共 680 集
-    YouTube 有、但本地與 whatmkreallysaid.com 都沒有的集數（共 4 集）：[681, 682, 683, 684]
-  EP677 查證結論（推翻任務檔原本的假設）：直接對 whatmkreallysaid.com 發 HTTP GET
-  查證，得到 HTTP 200、54,965 bytes 的正常內容（不是 404）——**EP677 不是雙方都缺
-  的真缺口，只是本地端之前沒下載到**（episodes.json 裡本來就有這筆資料）。已用
-  既有 download_transcripts.py 正常下載補齊（一般缺口，不需要獨立轉錄）：
-    [ 677] OK     EP677 (2026-07-08)  53.7 KB
-    Done.  Downloaded: 1  Skipped: 679  Failed: 0
-  真正的三方缺口只有 EP681-684（YouTube 上架時間比 whatmkreallysaid.com 更新頻率快
-  的自然現象，不是對方停更或缺漏）。
+files_changed:
+- `report_html.py`（第一頁補 title/h1；第二頁 _card 重寫＋onboarding／黃框文案；第三頁 _item a11y、搜尋兩段式、錯誤分類、深連結、_footer_counts）
+- `attention.py`（consensus_label 去掉括號次數與綠色；compute_attention 新增 entry_date 第二來源與丟棄警告）
+- `report_detail.html` / `report_attention.html` / `report_transcripts.html`（產出物，隨版控慣例一起 commit）
+- `stock-signal_TASK_2026-08-11.md`（+ .html）任務檔
+- `_verify_2026-08-11/`（T1 報告、T2/T3 報告、雙審素材包與兩份原文、before/after 截圖、final_diff.patch）
 
-  === 1c 缺口補齊 ===
-  對 EP681/682/683/684 執行獨立轉錄（video-transcribe 本地 yt-dlp 下載 +
-  faster-whisper large-v3-turbo 轉錄），全部成功寫入 transcripts/。
-  過程中兩次 yt-dlp 下載遇到 HTTP 403（YouTube bot 檢測/缺 JS runtime 警告），
-  重跑後成功，判斷為暫時性節流（同一批影片有的成功有的失敗，非系統性問題）。
-  轉錄耗時：50分鐘節目約 2-3 分鐘（GPU RTX 5070 Ti），下載約 10-30 秒，遠快於
-  預估。EP681 檔案內容片段：
-    # EP681 再一次相信真愛存在的機會
-    歡迎收聽古愛,我是孟公本期節目由尼古清贊助戒菸如同投資,需要放棄短線刺激與快感...
-  batch.py --dry-run 驗證見上方 1a 區塊（4 集皆列「待跑」非「忽略」）。
+verification:
+- `python -X utf8 notifier.py --no-fill --no-send` 對正式 Neon 庫實跑 6 次（含改動後重產）。
+  首次：689 筆訊號、684 筆送 UPDATE；第二次起「0 筆變動」＝冪等。
+  執行前後逐列比對 973 筆：**不增不減**，無 DELETE/DROP/TRUNCATE。
+- 第一頁定樁（國巨 EP674，看空、beat=true）：頁面顯示「✓ 跑贏大盤」、class `led-st win`、
+  `個股 -46.80%｜同期 0050.TW +1.12%`。舊版同一筆會誤塗成綠色「輸」。
+- 第三頁深連結端到端（用正式站檔名）：attention.html 93 個 EP 連結 →
+  `transcripts.html?ep=685` → 自動展開 21,109 字、aria-expanded=true、捲動到位。
+- 兩段式搜尋：標題搜尋「台積電」17/685（只下載 1 檔）；全文搜尋 446/685（含內文 429），
+  進度 110→230→350→600 可見，取消鈕出現。
+- 錯誤分類對照組：真 404 → `missing`；`fetch` 強制 reject → `network`；兩段訊息實測不同。
+- footer 計數對照組：`_footer_counts` 全有／有缺兩種輸出實測會變。
+- attention 救援三組對照：A 正常 33 檔 EP685／B 陳舊 json+救援 33 檔 EP685／
+  **C 陳舊 json 無救援 28 檔 EP680（＝改動前行為，精準重現今晚踩到的狀況）**。
+- console 0 errors（唯一一筆是我自己請求 EP99999 測 404 造成的）。
+- `ast.parse()` 對兩支 .py 全部通過。
 
-  === 1d 交叉驗證（最新2集）===
-  YouTube 最新 2 集為 EP683/EP684。查 episodes.json（whatmkreallysaid.com 鏡像）
-  確認對方尚未收錄這兩集 → 依任務檔明文指示「如果這2集剛好whatmkreallysaid.com
-  也還沒有，就自動併入1c的缺口補齊流程處理，不用勉強做比對」，兩集均已在上方
-  1c 用獨立轉錄直接處理完成，**沒有可比對的 whatmkreallysaid.com 版本，因此沒有
-  產生真正的交叉驗證紀錄**——這是誠實結論，不是漏做。
-  另外用 EP680（雙方都已有的舊集數）做了一次端到端機制驗證，證明交叉驗證管線
-  （_fetch_remote_md/compare_paragraphs/_append_diff_report，都是實際會在未來
-  真實交叉驗證時用到的同一套函式，不是重寫的等價邏輯）真的能正常運作、正確寫入
-  docs/independent_transcript_diffs.md：
-    整體字元相似度：87.39%（誠實邊界：這是含標題/標點的粗略對齊比對，見下方限制）
-    差異區塊數：1（因兩邊分段方式不同，整篇被判成一大塊 replace，見殘餘風險）
-  此測試在報告裡明確標注「不是真正待審閱的差異，只是機制驗證」，不會誤導成
-  EP680 有問題。
+codex_credits_spent_this_stage: 約 2.01 點（278.6595 → 276.6502，grep balance 法）＋完工前最終審查一次（未計入，執行中）
+codex_credits_spent_total: 同上，遠低於 50 點上限
+deepseek_usd_spent_this_stage: 約 US$0.02（134,913 tokens，依 2026-08-01 查到的費率估算，**費率未重新查證**）
+deepseek_usd_spent_total: 同上，遠低於 US$5 上限
 
-  === 1e 可重用觸發腳本 ===
-  sync_independent_transcripts.py 完整跑過 3 次（首次全跑、修 bug 後重新產出、
-  idempotency 驗證），log 範例（最後一次 idempotency 驗證）：
-    === 步驟 1：抓 YouTube 頻道集數清單 ===
-    YouTube 共 683 集（EP1–EP684）
-    本地 transcripts/ 共 684 集，本地 episodes.json（鏡像遠端）共 680 集
-    === 步驟 2：三方比對結果 ===
-    沒有發現任何缺口
-    YouTube 最新 2 集：[683, 684]
-    === 步驟 3：處理 2 集 ===
-    [ 684] SKIP   EP684（transcripts/ 已有檔案 EP684_終於可以喘一下.md）
-    [ 683] SKIP   EP683（transcripts/ 已有檔案 EP683_一個月前的自己對未來寄予厚望.md）
-    Done. OK=0 SKIP=2 FAIL=0
-  **明確聲明：這支腳本目前需要手動執行，本輪未設定任何常駐/自動排程（Windows
-  Task Scheduler 等）。之後如果要接自動排程，需要另外跟使用者確認執行頻率與方式**
-  ——這是任務檔第1e節明文要求的聲明，不是本輪自己決定要不要做。
-codex_credits_spent_this_stage: 8.13（344.8726750000 → 336.7425550000）
-codex_credits_spent_total: 8.13
-deepseek_usd_spent_this_stage: 約US$0.03（自我精進Part B試做用，兩輪共約111,359
-  tokens累加估算，遠低於Part B獨立US$15上限；DoD主線本身未呼叫DeepSeek）
-deepseek_usd_spent_total: 約US$0.03
-self_improvement_this_round: |
-  觸發並完整執行（主控 session 20:12 確認條件成立、指示進入，DoD 6項此時已
-  100% 完成並經主控 session 獨立核對通過）。
+self_improvement_this_round: 進行中（主任務 DoD 已達成，距截止 07:30 仍有餘裕，依章程進入 Part A/Part B）
 
-  === Part A（效率/成本研究，已小幅自調，記在 project_pm_agent_solomon.md
-  不是章程本身）===
-  WebSearch 查「LLM token優化」+「AI coding agent驗證/防幻覺」，找到兩個可
-  自行採用的習慣：
-  1. Codex 審查 prompt 避免整段貼 diff（Codex 自己有 shell 能重新讀檔驗證，
-     這輪貼了 605 行 diff 進 prompt 是重複的 token 浪費）——以後改成只描述
-     背景+具體要挑戰的設計決策，讓 Codex 自己 `git diff` 讀取。
-  2. 驗證改用 hash/exact-match 而非純肉眼比對 diff 摘要——這輪 Part B 試做1
-     直接示範了這個做法的價值。
-  來源：[LLM Token Optimization 2026](https://redis.io/blog/llm-token-optimization-speed-up-apps/)、
-  [Stop AI Agent Hallucinations](https://dev.to/aws/5-techniques-to-stop-ai-agent-hallucinations-in-production-oik)。
+autonomous_decisions:
+1. 【一般】本機 episodes.json 陳舊 → 直接跑 `download_transcripts.py` 補齊（Downloaded 5／Skipped 680／Failed 0），
+   而不是拿失真資料驗證。風險：造成 4 集重複檔案（見 remaining_risk）。可回復：刪掉多的那份即可。
+2. 【一般】第一頁補 `<title>`／`<h1>`。原本不在任務清單，是 T1 驗證時發現的缺陷（站台首頁沒有頁名）。
+   視覺零變化。回復：`git revert 8c952fa` 的該段。
+3. 【一般】雙審採 blinded 而非上次的非 blinded，兩邊素材完全相同、都不含我的診斷。
+4. 【重大】**下修雙審對「方向標籤 vs 括號次數」的定性**：兩邊都說是正確性 bug／必然發生，
+   我用真實資料逐檔驗算得到「方向相反 0 檔、原話錯位 0 檔」，因此改判為**敘述錯配**，
+   照「拆時間窗、標清楚」去改，**沒有動演算法**。若你認為應該連演算法一起改（例如括號改成近30天計數），
+   回復方式：改 `report_html.py::_card` 的 `cum_txt` 與 `attention.py` 的 `bull_n/bear_n` 統計窗。
+5. 【一般】兩位審查者對「onboarding 該不該常駐」意見相反，我兩邊都採：不動可關閉性，
+   但把量尺說明搬進常駐黃框。
+6. 【一般】`attention.py` 的第二來源選 `signals.entry_date` 而非 `analysis_date`——後者是任務檔明文禁止的
+   時間基準，這次**沒有放寬**。entry_date 本質是同一個時間基準（真實上架日）的 DB 快照。
+7. 【一般】push 了 4 次。**這是使用者本輪明確授權、覆蓋章程「絕不 push」的一次性例外**，
+   理由是週四 08:00 排程會自動部署，不能留沒驗過的版本在 master。
 
-  === Part B（3個新想法+多次試做）=== 詳見下方 self_improvement_new_ideas。
-self_improvement_new_ideas: |
-  三個想法全部隔離在 stock-signal/self_improvement_試做/（git 追蹤，5個檔案，
-  未修改任何 DoD 正式檔案——唯一對正式檔案的觸碰是試做2意外發現後的
-  independent_transcribe.py 純註解更正，commit f43a64d，已在 files_changed
-  說明）。三個想法各試做1輪（想法2實際做了3次迭代：短句切分→n-gram覆蓋率→
-  跟DeepSeek討論CER指標），每次都跟 DeepSeek 討論（read-only 顧問角色），
-  總計5次DeepSeek呼叫（含1次連線測試）約56,490 tokens，估算花費約
-  US$0.02（遠低於 Part B 獨立 US$15 上限，估算方式：tokens累加乘
-  deepseek-v4-flash混合費率，見「硬性預算與範圍界線」第1項）。
-
-  === 想法1：本機LLM幫ASR逐字稿加標點（來源：ASR punctuation restoration
-  研究領域，[arxiv 2606.05179](https://arxiv.org/abs/2606.05179) 等） ===
-  背景動機：這輪主線任務實測 faster-whisper 中文輸出幾乎無標點（見殘餘風險
-  第4點），讀起來生硬。
-  可行性：技術上完全可行（本機 Ollama qwen2.5:14b-instruct 本來就在跑，
-  video-transcribe 已用它做翻譯，不需新裝套件/新下載模型）。
-  試做內容：`trial1_punctuation_restore.py`，取 EP681 一段~550字獨立轉錄，
-  丟給 Ollama 加標點，看 `trial1_demo_output.txt`。
-  **實測發現（重要）**：標點加得正確合理，但意外把「戒菸/電子煙/加熱煙/煙影」
-  全部竄改成「戒菜/電子菜/加熱菜/菜影」（同音異字漂移，違反 prompt 明確要求的
-  「不要改動文字內容」）。用 `trial1_verification_result.txt` 記錄的「去標點後
-  逐字比對」驗證機制成功攔截這個錯誤（第223字元位置起偵測到差異）。
-  DeepSeek討論摘要：確認這是「原地編輯型任務」LLM重寫本質的高發問題（模型是
-  自迴歸重新生成不是原地插入，跟溫度/量化關係較小），逐字比對可以可靠**攔截**
-  但不能**防止**；要真正保證不改字需要 constrained decoding（Ollama 本身
-  不支援，需換 SGLang/vLLM）；正式功能建議改核心用「標點還原」專用模型
-  （如 FunASR CT-Transformer，架構上就無法竄改文字），LLM 只當語意斷句
-  fallback。
-  **延伸方向選項（供使用者裁決，不是索羅門能自己拍板）**：
-    (a) 不追加此功能，維持現狀（獨立轉錄結果保持無標點，忠實度優先）
-    (b) 加值功能：用「LLM加標點 + 逐字比對驗證，不通過就丟棄該次結果、
-        改保留無標點原文」的組合，作為獨立轉錄後處理的可選步驟（風險可控，
-        因為有驗證閘門，即使失敗也不影響正確性，只是有時候拿不到標點加值）
-    (c) 正式投入：換用專用標點還原模型（需要額外調查/安裝，成本較高，
-        但架構上更可靠、不需要逐字比對這個安全網）
-
-  === 想法2：改善 compare_paragraphs() 的差異對齊粒度（來源：文本對齊研究，
-  [SentAlign/Vecalign](https://arxiv.org/pdf/2509.18360) 等embedding對齊文獻）===
-  背景動機：完工前 Codex 審查指出正式版 compare_paragraphs() 在段落粒度比對，
-  兩邊分段方式不同時容易整篇被判成一大塊「replace」，診斷價值低（見殘餘風險
-  第2點）。
-  可行性：文獻建議的 embedding+動態規劃做法這輪環境沒有現成中文 embedding
-  服務，改試做兩個不需要額外模型的輕量替代方案。
-  試做內容與結果（3次迭代，誠實記錄含負面結果）：
-    1. `trial2_finer_diff_alignment.py`——短句切分後比對：**失敗**。獨立版因
-       這輪修正（移除逗號竄改，見 autonomous_decisions）幾乎沒標點可切，只
-       切出8個chunk（對方1653個），細粒度這個變數根本沒被測到。
-    2. `trial2b_char_ngram_coverage.py`——改用字元n-gram重疊率（DeepSeek建議
-       的替代方案，語言無關不需斷詞）：發現n-gram覆蓋率（27-40%，視n而定）
-       遠低於現有 SequenceMatcher.ratio()（87.39%）。
-    3. 再次跟DeepSeek討論這個落差：確認計算無誤，是兩種指標的數學本質不同
-       （LCS式配對對散布錯字很寬容，n-gram要求連續完全相等，對雜訊過度嚴苛）
-       ——這揭露一個對主線任務有意義的額外發現：whisper逐字稿本身散布大量
-       同音異字辨識錯誤（股癌→古愛等），現有87.39%這個相似度數字可能沒有
-       完全反映這一點。
-  DeepSeek討論摘要：建議正式方案改用CER（字元編輯距離相似度，語音辨識標準
-  評估指標）取代SequenceMatcher.ratio()，能同時處理替代/插入/刪除、比n-gram
-  抗雜訊、比ratio()更貼近人眼判斷；短句切分本身的問題不是「切不細」而是
-  「兩邊標點密度差太多，標點不能當兩邊都存在的切分訊號」。
-  **延伸方向選項（供使用者裁決）**：
-    (a) 不變更，維持現有 SequenceMatcher 段落粒度比對（正確性夠用，
-        只是診斷粒度較粗）
-    (b) 小幅升級：只換相似度指標（ratio()→CER加權平均），不動對齊演算法，
-        改動範圍小、風險低
-    (c) 較大升級：引入兩階段對齊（先用n-gram/滑動視窗粗對齊定位分歧區塊，
-        再局部細比），診斷價值最高但工程量較大，且要重新測試
-
-  === 想法3：Windows subprocess呼叫Python CLI工具的通用編碼防護模式（來源：
-  這輪主線任務實際踩到的真bug + [CPython issue #105312](https://github.com/python/cpython/issues/105312)）===
-  背景動機：這輪修正過 yt-dlp `--print` 純文字輸出在 cp950 主控台下的編碼問題
-  （已改用 `-J` JSON 輸出解決，見 daf11a4）。這裡驗證一個更通用、不依賴目標
-  工具剛好有JSON輸出選項的備用修法。
-  可行性：查證確認這是已知的 CPython 生態系問題，`PYTHONIOENCODING=utf-8`
-  是文獻常見建議修法。
-  試做內容：`trial3_subprocess_encoding.py`，用真實 yt-dlp 呼叫做 A/B 對照。
-  **實測發現**：不修法時 emoji 字元是**靜默丟失**（'EP684 | 🔦' 變成
-  'EP684 |'），不是我原本以為的亂碼——這點本身就是重要發現，代表這類 bug
-  可能連「肉眼看起來有點怪」的警訊都沒有，更難察覺。加上
-  `env={**os.environ, "PYTHONIOENCODING": "utf-8"}`（per-call傳，不動全域
-  os.environ）後逐字元比對完全正確。
-  DeepSeek討論摘要：確認根因是 yt-dlp 自己的 `write_string()` 在非TTY輸出時
-  用 `errors='ignore'` encode 成主控台編碼，encode不過的字元直接丟棄；
-  `PYTHONIOENCODING` 修法只對 Python 寫的 CLI 有效（Rust/Go/Node工具不吃）、
-  必須跟 parent 的 `encoding="utf-8"` 成對設定、要用 per-call env 不要動全域
-  os.environ、Python 3.15（PEP 686）後這招會自然變多餘。
-  **延伸方向選項（供使用者裁決）**：
-    (a) 不需要正式導入：這輪唯一實際踩到的具體案例已經用 -J 方案解決，
-        目前程式碼裡沒有其他已知會踩到類似問題的 subprocess 呼叫
-    (b) 預防性導入：把 `env={**os.environ, "PYTHONIOENCODING": "utf-8"}`
-        當成 independent_transcribe.py/sync_independent_transcripts.py 裡
-        所有 subprocess.run() 呼叫的標準寫法，即使目前沒有已知問題，也降低
-        未來遇到類似情境的風險（低成本、無明顯副作用的預防性強化）
-    (c) 寫進索羅門的個人工作筆記（已完成，見 project_pm_agent_solomon.md），
-        以後索羅門本人在任何專案遇到類似 subprocess 編碼情境時直接套用這個
-        pattern，不需要每次重新踩坑才學到
-
-  ============================================================
-  === 第二輪延伸試做（21:38 主控 session 傳達使用者糾正：自我精進是持續性
-  的，不是單輪流程；21:38-22:0x 執行，DoD/主線內容不變，第一輪結論精簡引用
-  不重複展開）===
-  ============================================================
-
-  這輪不開新的三個想法，改針對第一輪「延伸方向選項」裡最有工程價值的兩項
-  做更深入試做（想法1的選項b、想法2），比照使用者建議的做法。想法3沒有再
-  深挖（第一輪的驗證已經完整，選項(a)(b)(c)都已經是可以直接決策的狀態，
-  勉強再做只是重複同一件事）。
-
-  === 想法1延伸：選項(b)「標點復原+逐字驗證閘門」，從1段樣本擴大到整集 ===
-  試做內容：`trial4_punctuation_at_scale.py`，對 EP681 全部 40 個段落跑
-  「標點復原→逐字比對→通過才採用/不通過退回原文」，統計真實通過率。
-  **實測結果（有統計意義的數字，不是單一樣本觀察）**：
-    通過率 14/40 (35.0%)，總耗時339秒（平均每段8.5秒）。
-  失敗型態分析（見 `trial4_demo_output.txt` 完整清單）：
-    - 多數（約24/26）是1-3字的「順稿」型drift（刪/加語助詞、詞序微調），
-      不是隨機亂改，是指令模型天生朝「流暢」優化、不是逐字複製的任務錯配
-    - 1筆是先前已知的同音異字漂移（戒菸→戒菜）
-    - 1筆疑似「修正了ASR本身的錯字」（賣牙→賣壓，賣牙很可能才是whisper的
-      誤聽），這種情況被閘門保守攔下屬於預期行為不是bug
-    - 1筆嚴重案例：549字段落只回應22字（疑似模型提早吐出EOS，跟輸出長度
-      上限/context無關，因為同一輪其他550字段落都正常完整輸出）
-  DeepSeek討論摘要：35%通過率不是模型品質問題而是任務設計錯配；量化效益最大
-  的改善方向是縮短段落長度（回推每字竄改率約0.19%，粗估切到~275字通過率
-  約59%、~140字約77%）；次之是prompt加正反範例；治本方案是**改輸出契約**
-  ——讓模型只輸出標點位置、程式負責合併回原文，讓「不改字」從機率變成結構
-  保證；22字截斷案例建議加「輸出長度<輸入20%就重試1-2次」的防護。
-  **一句話結論（更新第一輪的延伸選項評估）**：現行「模型整段重寫」架構
-  35%通過率成本效益偏低（每10段只換來3.5段加值），**如果要投入，前提是
-  換成「只輸出標點+程式合併」的架構**，不是繼續調整現行 prompt 版本。
-
-  === 想法2延伸：實作CER相似度指標，驗證是否真的比SequenceMatcher.ratio()誠實 ===
-  分兩步試做：
-  1. `trial5_cer_similarity.py`——用「位置比例視窗貪婪配對」在EP680真實資料上
-     算CER相似度，結果**意外偏低**：29.41%（字數加權），比對照組
-     SequenceMatcher.ratio()(87.39%)跟n-gram覆蓋率(39.90%)都低很多，也遠低於
-     DeepSeek原本預期的83-88%。
-     跟DeepSeek討論後確認根因：remote段落(平均246字) vs 獨立版段落(平均550字)
-     粒度差2.2倍，CER用「較長字串當分母」，即使remote內容完整包含在獨立版裡，
-     相似度理論上限也只有246/550≈44.7%——29.4%是被這個「粒度天花板」壓低，
-     不是內容真的只有三成像，是我的簡化配對法（整段對整段）的方法論限制，
-     不是CER這個指標本身的問題。
-  2. `trial5b_metric_calibration.py`——改用DeepSeek建議的「已知比例合成改寫」
-     校準法（同長度文字，隨機替換X%字元，看哪個指標算出來的相似度最貼近
-     真實的1-X%），完全繞開粒度對齊問題：
-       改寫比例  真實相似度  SequenceMatcher.ratio()誤差  CER相似度誤差
-       20%      80%        0.3%                        0.0%
-       40%      60%        7.3%                         0.0%
-       60%      40%        12.2%                        0.3%
-       80%      20%        7.5%                         0.3%
-     CER在所有改寫比例下幾乎完美貼近真實值，SequenceMatcher.ratio()在中高
-     改寫比例明顯低估（最多誤差12.2%）。
-  DeepSeek對這個結果的重要修正（避免過度推論，誠實記錄）：這個校準測試比較
-  接近「自我驗證」——CER的定義就是數字元編輯距離，貼近1-X%幾乎是必然，
-  證明的是「CER的語意符合『改寫了多少』這個問題」，不能擴大解讀成「CER在
-  所有相似度任務都比較準」；SequenceMatcher量的是另一件事（連續相同區塊
-  佔比），中高改寫時連續區塊快速碎裂本來就會偏低，這是它的本性不是它「不準」。
-  正式方案若要採用CER，**對齊問題是唯一剩下的風險來源**：建議用固定長度
-  滑動視窗（不是整段落配對），且要小心視窗邊界的差異會被切半/重複計分；
-  不建議沿用「CER同時做配對又計分」（有循環風險），應該用SequenceMatcher的
-  `get_matching_blocks`先做粗對齊、CER只負責計分；上線前應該用一批人工標註
-  （相同/小差異/實質不同）的真實 remote vs 獨立版逐字稿驗證閾值合理性，
-  合成資料只證明「計數正確」沒證明「真實語料上的判斷閾值合理」。
-  **一句話結論（更新第一輪的延伸選項評估）**：CER方向正確、值得投入，但
-  正式實作前要先做「固定長度滑動視窗粗對齊」這一步，不能直接對不等長的
-  段落算CER（會被粒度天花板誤導出過低的數字）。
-
-  === 江郎才盡檢查點 ===
-  想法3（編碼防護）沒有再開新試做——第一輪已經是完整、可決策的狀態，勉強
-  再做只是重複同一件事，誠實記錄這裡沒有新東西可加。已用剩餘時間把想法1、
-  想法2都做了有意義的深化（統計數字/指標校準），沒有為了湊數而重複同類實驗。
-
-  本輪 DeepSeek 呼叫4次（trial4/trial5/trial5b各1次+1次trial5後續確認），
-  累加 tokens：21,766+3,244+29,859≈54,869，加上第一輪56,490，總計約111,359
-  tokens，估算花費約US$0.03（遠低於Part B獨立US$15上限）。
-
-  ============================================================
-  === 第三輪延伸試做（22:00左右，DoD/主線內容不變，第一二輪結論精簡引用）===
-  ============================================================
-
-  想法2再收斂一步：把第二輪 DeepSeek 對 trial5 的具體建議（「用
-  SequenceMatcher.get_matching_blocks() 先做全域粗對齊，只在錨點間的間隙做
-  CER計分，不要對整段落算CER」）真的實作出來，試做6：`trial6_hybrid_alignment_cer.py`。
-
-  **結果（三輪試做的收斂點）**：在同一份EP680真實資料上，四種指標總對照：
-    1. SequenceMatcher.ratio()（正式版現用）: 87.39%
-    2. 字元n-gram覆蓋率(n=6)（第一輪）: 39.90%
-    3. CER-based段落配對（第二輪，有粒度天花板缺陷）: 29.41%
-    4. **混合方案：get_matching_blocks粗對齊+間隙CER計分（本輪）: 81.06%**
-  混合方案細節：22,602字裡有18,684字（82.7%）是逐字相同的錨點，只在2,682個
-  差異間隙（最長單一間隙僅38字，遠小於整段落，不會撞到粒度天花板）做CER
-  計分，總編輯距離4,281。
-
-  跟DeepSeek最終確認：這個結果落在原本預期的83-88%附近（81.06%略低是因為
-  gap成本總和是完整CER的保守上界，是方法特性不是bug）；邏輯正確，唯一
-  edge case（兩邊都空字串會除以零）已修正（`if not remote_text and not
-  indep_text: return 1.0`）；DeepSeek明確表示「可以正式採用」，建議報告裡
-  註記最終定義公式：`相似度 = 1 - Σ間隙編輯距離 / max(兩邊文字長度)`。
-
-  **這是三輪試做裡最接近「可以直接拿去當正式實作參考」的產出**——不是概念
-  討論，是一個跑得動、在真實資料上驗證過、邏輯被DeepSeek review通過、edge
-  case已處理的完整函式（`trial6_hybrid_alignment_cer.py::hybrid_alignment_similarity()`）。
-  **更新延伸方向選項（取代第一/二輪對想法2的評估）**：
-    (a) 不變更，維持現有 SequenceMatcher 段落粒度比對
-    (b) **直接採用試做6的 hybrid_alignment_similarity() 當
-        compare_paragraphs() 的新相似度計算方式**——不需要再做額外研究，
-        這個函式已經是可用狀態，只需要決定要不要把它從試做資料夾移進正式
-        程式碼（如果採用，屬於下一輪任務該做的事，這輪範圍不包含移動試做
-        產物進正式程式碼）
-    (c) 採用(b)之外，同時上線前依 DeepSeek 建議用一批人工標註的真實
-        remote vs 獨立版逐字稿驗證，確認 81% 這個數字在真實場景下對應的
-        「差異嚴重程度」是否符合人眼判斷的閾值期待
-
-  === 江郎才盡檢查點（第三輪）===
-  三輪下來，想法2（相似度指標）已經從「發現問題」走到「發現候選指標」再到
-  「可用的參考實作」，是這次自我精進投入最多、產出最扎實的一條線；想法1
-  也做過1段樣本+40段規模驗證兩層；想法3第一輪已完整。這裡誠實評估：
-  再往下深挖同一批想法（例如把混合方案也拿去測想法1的閘門機制、或幫CER
-  也做40段規模測試）邊際價值open始遞減，比較像是為了填時間而做，不是真的
-  有新東西要驗證。距離23:00還有約1小時，選擇改開一次新的 Part A 研究
-  （效率/成本角度換方向），而不是繼續在同一批 Part B 想法裡打轉——這比較
-  符合「真的想不出新方向就老實講」的精神：不是想不出來，是同一批想法已經
-  收斂到位，該換題目了。
-
-  本輪 DeepSeek 呼叫1次（trial6），tokens 2,250。累計三輪 DeepSeek tokens
-  約113,609，估算花費約US$0.03（仍遠低於Part B獨立US$15上限）。
-autonomous_decisions: |
-  === 重大自主決策：完工前 Codex 挑戰式審查抓到的問題，全部已修正 ===
-
-  【原案】1a/1b/1c/1d/1e 初版實作（commit 95d288a + daf11a4）。
-  【觸發原因】章程要求完工前必須用 Codex 額度做最後一次獨立審查，且要求 Codex
-  「挑戰」而非附和。這次提問明確要求 Codex 對 5 個我自己判斷的設計決策提出質疑，
-  Codex（gpt-5.6-terra, reasoning effort high）回應「不建議目前版本合併」，
-  指出多項真實風險（完整意見見 git commit a04060d 的 commit message，此處摘要）。
-  【是否問過 Codex 及意見摘要】已問，逐項意見：
-    1. 段落分段搜尋逗號無上限，段落可能遠超550字設計上限
-    2. cue間插入原文沒有的逗號，等於竄改逐字稿內容，可能影響 Gemini「一字不漏」判讀
-    3. 「exit code非零但source.srt存在就當成功」的寬容處理不安全——Codex 實際重讀
-       當前 video-transcribe/transcribe.py::verify() 確認我原本引用的已知 bug
-       **現在已經修好了**，這個寬容處理反而會把真正的失敗（下載/GPU/舊工作目錄
-       殘留）誤判成成功
-    4. errors="replace" 靜默替換壞位元組，JSON 仍可能解析成功但資料已被污染
-    5. _fetch_remote_md() 把所有例外（含連線層錯誤）都當「對方沒有」，會把暫時性
-       網路故障誤判成真缺口
-    6. compare_paragraphs() 的差異分類是字串對齊層級，不是語意判斷，容易誤導；
-       whatmkreallysaid.com 被稱為「官方」在背景定義上不正確
-    7.（我沒問到但 Codex 主動指出，最重要的一項）交叉驗證分支在「本地已有檔案」
-       時會先 SKIP——正常情況下 whatmkreallysaid.com 已有逐字稿時本地也該已有檔，
-       這代表**真正該交叉驗證的情境反而不會執行**；且獨立版寫入後，
-       whatmkreallysaid.com 日後補上同集會造成同一 EP 兩個檔案並存，
-       batch.py 只會分析先出現的那份，另一份被永久跳過——分析結果來源不可預測，
-       且無法在對方版本到位後重新驗證/更新
-    8. cross-validation 成功後不寫 transcripts/，導致「可重複執行」不成立（每次
-       重跑都重新下載+轉錄+重複寫入差異報告）
-    9. --limit 用 sorted() 由小到大截斷，`--limit 2` 會先處理 681/682，不是任務
-       指定優先要處理的最新2集 683/684
-  【最終選擇】全部採納，逐項修正（commit a04060d，詳見 commit message）：
-    1. 加搜尋視窗上限（550+150字），確保段落長度真的有界
-    2. 移除逗號插入，cue間直接串接，不再竄改原文
-    3. 移除寬容處理，改嚴格要求 exit code 0
-    4. 兩處改嚴格 UTF-8 解碼（不帶 errors=），失敗就報錯不污染資料
-    5. 新增 RemoteFetchTransportError 區分「確認404」跟「連線層失敗」，後者不
-       再假設「對方沒有」
-    6. 新增 detect_duplicate_episode_files()，main() 執行時主動掃描並警告——
-       這是唯一沒有「完全解決」的一項，因為完整解法需要動 batch.py 的
-       episode_id 去重邏輯（判斷哪份該分析、哪份該重新分析），這已經跨出任務檔
-       明確排除的範圍（「不修改 analyzer.py/batch.py/update.py/database.py
-       既有分析 pipeline 核心邏輯」），只能做偵測+警告，完整解法留給使用者裁決
-    7. 交叉驗證分支新增 SKIP 判準（cross_validated_raw 檔案存在），恢復可重複執行
-    8. 寫入 transcripts/ 前重新檢查一次 existing（縮小競態視窗）+ 改用原子寫入
-    9. --limit 改成最新2集優先排在前面
-  【對DoD/相容性/回復方式的影響】全部修正都在任務檔範圍內（stock-signal 目錄底下，
-  不動 video-transcribe、不動 batch.py/analyzer.py 核心邏輯），DoD 沒有降級——
-  EP681-684 已用修正後的程式碼重新產生（移除逗號竄改後內容略短，結構不變），
-  重新跑過 batch.py --dry-run 與 idempotency 測試皆通過。回復方式：commit
-  daf11a4（修正前）與 a04060d（修正後）都在，需要回滾直接 git revert 即可。
-  【殘餘風險】detect_duplicate_episode_files() 只做偵測+警告，不自動解決同集雙檔
-  問題——這是本輪機制無法在不擴大任務範圍的前提下完全解決的結構性缺口，見下方
-  remaining_risk 詳細說明。
-
-  === 一般分岔點（精簡列）===
-  - EP681-684 全部走「缺口補齊」（不只283/684走）：任務原文「1c對1b找出的缺口
-    集數(預期數量很小)...直接採用」+「1d的最新兩集若whatmkreallysaid.com也還沒
-    有，就自動併入1c」——四集全部符合這個條件（remote都沒有），解讀合理，Codex
-    審查也確認「任務文字本身允許這樣做」。
-  - 段落分段/交叉驗證診斷用詞等格式細節：見上方重大自主決策段落，已整合修正。
-  - 獨立轉錄的展示標題來源改用 YouTube 影片描述第一行（因為影片標題本身只有
-    「EPxxx | emoji」無描述文字，跟任務檔原本假設不同）：低風險裝飾性資訊，
-    抓不到就退回「獨立轉錄」，不影響資料正確性。
 blocked_items: none
-remaining_risk: |
-  1.【最重要，未完全解決】同一 EP 編號在 transcripts/ 有多檔案的長期風險：
-     若之後 whatmkreallysaid.com 補上 EP681-684 任一集，download_transcripts.py
-     會依「完整檔名」判斷是否已下載（不依 EP 號），通常會另外寫一份對方版本，
-     造成同集兩檔並存。batch.py 用 glob 讀全部 EP*.md，兩份都映射成同一
-     episode_id，哪份先被分析、寫進 episode_analysis 表，另一份就會被永久跳過
-     ——分析結果可能停留在較低品質的獨立轉錄版本，不會自動升級成
-     whatmkreallysaid.com 版本。本輪已加 detect_duplicate_episode_files()
-     在每次執行 sync_independent_transcripts.py 時主動掃描警告，但**沒有自動
-     解決**（完整解法需要改 batch.py 的判斷邏輯或加一道「偵測到官方版本出現時
-     刪除獨立版+重置該集分析紀錄」的遷移步驟，這兩者都跨出本輪任務檔明確排除的
-     範圍，且後者涉及 DELETE episode_analysis/signals 資料，不在自主決策範圍
-     內）。**建議**：使用者看到這份報告後，之後每次跑
-     sync_independent_transcripts.py 前先看有沒有「[警告] 發現N個EP編號有多個
-     檔案」，出現時手動決定要保留哪份、要不要連帶重跑該集分析。
-  2. compare_paragraphs() 的差異分類是字串對齊層級的候選，不是語意判斷（見
-     autonomous_decisions 第6項），whatmkreallysaid.com 版與獨立版分段方式不同
-     時容易被判成大塊差異，實際上可能只是分段不同——EP680 機制驗證測試就出現
-     這個現象（1個差異區塊涵蓋大半篇幅）。之後若要更精確，需要句子/滑動視窗
-     層級的比對，這輪沒有做。
-  3. 獨立轉錄品質沒有客觀門檻：目前只要求 source.srt 非空即算成功，沒有最低
-     cue數/時長/重複迴圈偵測/語言不符等品質檢查（video-transcribe 本身有
-     repetition detection 但只寫進它自己的 manifest.json，本模組沒有讀取這個
-     資訊來做二次把關）。manifest.json 也沒記錄轉錄器版本/模型參數這些可稽核性
-     欄位。
-  4. 段落分段（cues_to_paragraphs）改成不插入任何原文外字元後，可讀性略微下降
-     （兩個分句之間偶爾少一個停頓標點）——這是刻意的忠實度優先權衡，不是 bug。
-  5. transcripts_data/independent_media/ 目前佔用 547MB（4集下載的原始影片+
-     srt/ass/mkv），已在 stock-signal 目錄底下、gitignore 排除，不影響版控，
-     磁碟還有約1TB剩餘空間，這輪沒有清理，供使用者決定要不要之後清掉。
-  6. run_independent_transcription() 移除寬容處理後，如果 video-transcribe 未來
-     又出現任何新的封裝驗證問題，會直接讓整個獨立轉錄失敗（而不是像舊版那樣
-     矇混過去）——這是刻意的取捨（正確性優先於可用性），但代表 video-transcribe
-     那邊如果出新 bug，本模組的成功率會直接受影響，需要去那邊修，不能在這邊繞過。
-next_step: |
-  已完工，DoD 6 項全數達成，無 blocked_items，且已完成自我精進 Part A/B。
-  下一棒（下次索羅門指派或使用者自己接手）建議優先順序：
-  1. 看過本報告 remaining_risk 第1項後，決定要不要授權設計「偵測到
-     whatmkreallysaid.com 補上獨立轉錄過的集數時如何處理」的遷移機制（會需要
-     討論是否允許刪除獨立版+重置分析紀錄，涉及 DB DELETE，需要另外拍板）
-  2. 決定要不要把 sync_independent_transcripts.py 接上自動排程（本輪任務檔
-     明確排除，任務檔原文要求另外確認執行頻率與方式）
-  3. 如果满意這輪的獨立轉錄品質，可以考慮之後真的遇到 whatmkreallysaid.com
-     停更時，把 sync_independent_transcripts.py 當唯一逐字稿來源持續使用
-  4. 看過 self_improvement_new_ideas 三個延伸方向選項，決定要不要挑選任何一項
-     正式投入（想法1標點復原/想法2相似度指標CER化/想法3編碼防護預防性導入）
-     ——三者都只是研究筆記+試做，沒有一項已經是正式功能，索羅門沒有自行拍板
-  5. 本輪 8 個 commit 全部本地（95d288a..HEAD），尚未 push，跟其他輪一樣
-     由使用者/主控 session 決定要不要 push
+
+remaining_risk:
+1. **本機 `transcripts/` 出現 4 集重複檔案**（EP681–684 各有「獨立轉錄版」與「官方站下載版」）。
+   是我補下載造成的，觸發 2026-08-02 就記錄過的已知風險。`export_transcripts_data()` 會讓後複製的覆蓋前一個
+   （順序取決於 `os.listdir`）。**只影響本機，`transcripts/` 未進版控，線上不受影響。**
+   依規則不自行刪使用者原始資料，清單列在 T1 報告 4b 節。
+2. **正式站尚未實際跑過新版**。所有驗證都在本機（真實 DB + 真實 yfinance + 真實瀏覽器），
+   但 GitHub Actions 的 `_site` 組裝與 Pages 部署這一段沒有端到端跑過。
+   週四 08:00 排程會自然驗證；若要提前，手動觸發 `publish-pages.yml`。
+3. **Neon 連線偶發 `SSL connection has been closed unexpectedly`**（01:00 那次）。重試即過。
+   看起來是 Neon 閒置回收連線、連線池拿到死連線，`database.py::_conn()` 沒有重試機制。未修。
+4. 第二頁仍沒有「點標的看歷史勝率」的直接入口（需第一頁支援 deep link，跨兩頁，沒自作主張）。
+5. 手機第一屏只小勝 15px（605 → 590），說明區塊仍佔掉大半。
+6. 完工前 Codex 最終審查**執行中**，結果尚未納入本檔（若有發現會另行修正並更新）。
+
+next_step:
+- 主任務（T1/T2/T3）已完工並 push；接下來是自我精進 Part A+B（隔離在 `self_improvement_試做/`）。
+- 使用者早上要裁決的：①原話預設展開或收合 ②要不要投入靜態搜尋索引 ③本機 4 集重複逐字稿怎麼處理
+  ④要不要提前手動觸發 `publish-pages.yml` 驗證部署。
