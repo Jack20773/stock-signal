@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>T2T3_第二三頁改造報告</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+  line-height: 1.75; max-width: 860px; margin: 0 auto; padding: 2.5rem 1.25rem 6rem;
+  color: #1a1a1a; background: #fff; word-wrap: break-word;
+}
+h1, h2, h3, h4 { line-height: 1.35; margin: 2.2em 0 .8em; font-weight: 650; }
+h1 { font-size: 1.9rem; border-bottom: 2px solid #e5e5e5; padding-bottom: .4em; margin-top: 0; }
+h2 { font-size: 1.45rem; border-bottom: 1px solid #ececec; padding-bottom: .3em; }
+h3 { font-size: 1.18rem; }
+code {
+  font-family: "Cascadia Code", Consolas, monospace; font-size: .88em;
+  background: #f2f2f2; padding: .15em .4em; border-radius: 4px;
+}
+pre {
+  background: #f6f6f6; border: 1px solid #e5e5e5; border-radius: 8px;
+  padding: 1rem; overflow-x: auto;
+}
+pre code { background: none; padding: 0; font-size: .85rem; line-height: 1.6; }
+blockquote {
+  margin: 1.2em 0; padding: .6em 1.1em; border-left: 4px solid #c8c8c8;
+  background: #fafafa; color: #444;
+}
+table { border-collapse: collapse; width: 100%; margin: 1.4em 0; font-size: .93rem; display: block; overflow-x: auto; }
+th, td { border: 1px solid #ddd; padding: .55em .8em; text-align: left; vertical-align: top; }
+th { background: #f4f4f4; font-weight: 600; }
+tr:nth-child(even) td { background: #fbfbfb; }
+hr { border: 0; border-top: 1px solid #e0e0e0; margin: 2.5em 0; }
+a { color: #0b62c4; }
+ul, ol { padding-left: 1.6em; }
+li { margin: .3em 0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #e3e3e3; background: #16181c; }
+  h1 { border-bottom-color: #33373d; } h2 { border-bottom-color: #2a2d33; }
+  code { background: #24272c; }
+  pre { background: #1c1f24; border-color: #33373d; }
+  blockquote { background: #1c1f24; border-left-color: #4a4f57; color: #b8bcc4; }
+  th, td { border-color: #33373d; } th { background: #22252a; }
+  tr:nth-child(even) td { background: #1a1d21; }
+  hr { border-top-color: #33373d; } a { color: #66aaff; }
+}
+</style>
+</head>
+<body>
+<h1 id="t2t3">T2／T3：第二頁（關注度）與第三頁（逐字稿）改造報告</h1>
+<blockquote>
+<p>2026-08-11 凌晨，索羅門模式（無人監督，截止 07:30）。版本錨點 <code>da0ae5a</code>。<br />
+相關 commit：<code>b2f4800</code>（改造）、<code>aac476f</code>（靜默丟棄修正），<strong>均已 push</strong>。<br />
+方法論沿用第一頁那套：<strong>先看真實產出的畫面 → 雙審 → 改造 → 對照組實測</strong>。</p>
+</blockquote>
+<hr />
+<h2 id="0">0. 先看結論</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>改了什麼</th>
+<th>為什麼</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>第二頁方向標籤不再夾帶「歷史累計次數」</td>
+<td>括號裡的數字是全歷史，頁面說明卻寫「最近」，兩個時間窗打架</td>
+</tr>
+<tr>
+<td>2</td>
+<td>分數 <code>64.55</code> → <code>64.55 / 100</code> ＋常駐量表說明</td>
+<td>全頁最大的字沒有單位，訪客不知道 64.55 是高是低</td>
+</tr>
+<tr>
+<td>3</td>
+<td>第二頁不再出現綠色方向</td>
+<td>綠色在第一頁是「落後大盤」，同色兩義</td>
+</tr>
+<tr>
+<td>4</td>
+<td>EP 編號變成可點連結 → 逐字稿該集</td>
+<td>看到一句原話想看上下文，中間沒有入口</td>
+</tr>
+<tr>
+<td>5</td>
+<td>第三頁全文搜尋改「兩段式」</td>
+<td>原本打一個字就對 685 集發並行請求（約 35MB），無進度、不能取消、失敗靜默</td>
+</tr>
+<tr>
+<td>6</td>
+<td>第三頁錯誤訊息分「缺檔」與「網路失敗」</td>
+<td>網路斷線也顯示「檔案缺失」，等於給使用者錯誤診斷</td>
+</tr>
+<tr>
+<td>7</td>
+<td>第三頁補鍵盤與螢幕閱讀器支援</td>
+<td>第一頁昨晚補過，這頁還停在純 div + onclick</td>
+</tr>
+<tr>
+<td>8</td>
+<td><code>attention.py</code> 不再靜默丟棄查不到上架日的訊號</td>
+<td>T1 揭露的結構性風險，跟撞號事故同型態</td>
+</tr>
+</tbody>
+</table>
+<p><strong>沒有一項刪掉既有資訊</strong>——資訊只有被拆開、標清楚時間窗，或補上原本算了卻沒顯示的欄位。</p>
+<hr />
+<h2 id="1">1. 雙審怎麼做的（以及花了多少）</h2>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>內容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>素材包</td>
+<td><code>_verify_2026-08-11/review_packet.md</code>（56,925 bytes）。程式碼一律<strong>原檔逐行切片</strong>（含行號），不手抄、不刪任何 escape/驗證呼叫；另附真實渲染文字與完整檔案清單</td>
+</tr>
+<tr>
+<td>是否 blinded</td>
+<td><strong>是</strong>。素材包裡沒有我的診斷、沒有我的傾向；兩邊各自獨立作答，互相看不到對方</td>
+</tr>
+<tr>
+<td>Codex</td>
+<td><code>gpt-5.6-terra</code> high，1 次呼叫，tokens 95,885。<strong>餘額 278.6595 → 276.6502＝2.01 點</strong>（50 點預算內）</td>
+</tr>
+<tr>
+<td>DeepSeek</td>
+<td><code>deepseek-v4-flash</code> high，1 次呼叫，tokens 134,913。依 2026-08-01 查到的費率估<strong>約 US$0.02</strong>（US$5 預算內；費率未重新查證）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>兩邊獨立收斂到同一個第一名</strong>，這是這次雙審最有價值的地方：</p>
+<ul>
+<li>第二頁：<strong>「偏多共識（102多／2空）」的括號數字與頁面自我說明矛盾</strong></li>
+<li>第三頁：<strong>首次全文搜尋的體驗（35MB、無進度、無取消、失敗靜默）</strong></li>
+</ul>
+<h2 id="2">2. 我對雙審意見的裁決（含我不同意的地方）</h2>
+<h3 id="2-1">2-1. 我實測後<strong>下修</strong>了嚴重度的一條</h3>
+<p>兩邊都說「方向標籤（衰減加權）與括號次數（全歷史）<strong>會</strong>互相矛盾」，Codex 說是正確性 bug，<br />
+DeepSeek 說「機制上必然發生」。我用真實資料逐檔驗算：</p>
+<pre><code>方向相反的檔數: 0        （33 檔全數一致）
+原話來源集數 ≠ 最後提及集數: 0 / 33
+</code></pre>
+<p><strong>所以這不是現在算錯，是敘述錯配</strong>——但錯配本身確實<strong>每張卡都在發生</strong>：<br />
+台積電印「102多／2空」，而頁面說明寫這是「最近」的比例，實際近 30 天只有 4 集。<br />
+我照這個定性去改（拆時間窗、標清楚），而不是照「正確性 bug」去改（改算法）。</p>
+<h3 id="2-2">2-2. 兩邊有衝突、我做了取捨的一條</h3>
+<ul>
+<li><strong>Codex</strong>：第二頁應該補「常駐短圖例」，因為分數量尺只寫在可關閉的 onboarding 裡。</li>
+<li><strong>DeepSeek</strong>：第二頁 onboarding 可關閉是<strong>對的</strong>、不該改，因為已經有常駐黃框補位。</li>
+</ul>
+<p>我兩邊都採：<strong>不動 onboarding 的可關閉性</strong>（DeepSeek 對），但<strong>把量尺說明搬進常駐黃框</strong>（Codex 對）。<br />
+這樣關掉 onboarding 之後，最大的那個數字仍然有單位。</p>
+<h3 id="2-3">2-3. 我沒有採納的建議（留給你裁決，不是忘記）</h3>
+<table>
+<thead>
+<tr>
+<th>建議</th>
+<th>來源</th>
+<th>我為什麼沒做</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>產生靜態搜尋索引 + Web Worker</td>
+<td>Codex</td>
+<td>按鈕觸發已經解掉「無意間觸發 35MB」這個急迫問題；建索引是另一個工程量級，且會改變產生流程與部署內容，應該由你決定要不要投入</td>
+</tr>
+<tr>
+<td>原話預設收合</td>
+<td>Codex</td>
+<td>跟你對第一頁的裁決（「說明要更詳細不是更精簡」）方向相反，而且原話是這頁最有價值的證據。<strong>這條我判斷不了你的偏好，列為待裁決</strong></td>
+</tr>
+<tr>
+<td>第三頁預設只顯示最近 30 集 + 載入更多</td>
+<td>兩邊</td>
+<td>685 列渲染實測沒有效能問題，而標題搜尋現在是即時的，已能快速定位。加分頁反而多一層操作</td>
+</tr>
+<tr>
+<td>搜尋命中顯示前後文 snippet ／ 高亮</td>
+<td>DeepSeek</td>
+<td>有價值，但工程量不小，且要處理跳脫。列為下一輪候選</td>
+</tr>
+<tr>
+<td>引用句加方向標記（↑／↓）</td>
+<td>DeepSeek</td>
+<td>引用句是「最近一次提及」，跟卡片的加權方向不是同一個東西，加箭頭反而製造新的錯配。<strong>刻意不做</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="3">3. 逐項改動與證據</h2>
+<h3 id="3-1">3-1. 第二頁：方向與次數拆開</h3>
+<p><strong>改前</strong>（真實畫面）</p>
+<pre><code>台積電  台股 2330.TW
+偏多共識（102多／2空）          ← 紅色
+                                        64.55
+                                        關注度
+最後提及 2026-08-05（EP685）    近30天提及：EP685、EP683、EP681、EP680
+</code></pre>
+<p><strong>改後</strong>（真實畫面）</p>
+<pre><code>台積電  台股 2330.TW
+↑ 近期偏多                     ← 中性灰（沿用第一頁方向 chip 慣例）
+                                   64.55 / 100
+                                   近期討論熱度
+最後提及 2026-08-05（EP685）（6 天前）      歷史累計 128 次提及（102 多／2 空）
+近30天提及：EP685、EP683、EP681、EP680      ← 每個 EP 都是連結
+</code></pre>
+<p>同時修掉 onboarding 那句錯的說明（原文：「『偏多共識／偏空共識』看的是最近多空次數比例」）。</p>
+<h3 id="3-2">3-2. 第二頁：量表</h3>
+<p>常駐黃框新增一句：分數 <strong>0–100</strong>（提及次數 × 信心等級，再依距今天數衰減），<strong>不是報酬率也不是勝率</strong>；<br />
+並顯示當期榜首分數（目前 64.55），讓訪客有相對尺標。</p>
+<h3 id="3-3">3-3. 第二頁：其餘</h3>
+<ul>
+<li><code>近30天提及</code> 超過 8 集不再靜默截斷，改顯示「…等 N 集」</li>
+<li>補「距今幾天」與「歷史累計 N 次提及」（<code>age_last</code>／<code>total_mentions</code> 原本算了卻沒顯示）</li>
+<li>搜尋範圍納入原話（原本只有名稱＋代號，打「漲價」「AI」一定落空）</li>
+<li>搜尋框補 <code>&lt;label&gt;</code> 與 <code>aria-label</code>；header 的站名改成 <code>&lt;h1&gt;</code></li>
+</ul>
+<h3 id="3-4">3-4. 第三頁：搜尋改兩段式（實測）</h3>
+<pre><code>打字「台積電」→ 17 / 685 集標題符合（只下載 1 個檔案）
+按「連內文一起搜」→ 進度：110/685 → 230/685 → 350/685 → 600/685
+                 → 446 / 685 集符合「台積電」（含內文命中 429 集）
+</code></pre>
+<p>下載期間出現「取消」按鈕；並行度從 685 降到 8。</p>
+<h3 id="3-5">3-5. 第三頁：錯誤分類（對照組實測）</h3>
+<table>
+<thead>
+<tr>
+<th>情境</th>
+<th>判定</th>
+<th>使用者看到</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>要求不存在的 EP99999（真 404）</td>
+<td><code>missing</code></td>
+<td>「這集逐字稿檔案缺失…不是網頁的錯誤。」</td>
+</tr>
+<tr>
+<td>把 <code>fetch</code> 換成必定 reject（模擬斷網）</td>
+<td><code>network</code></td>
+<td>「載入失敗：連不到逐字稿檔案（網路或伺服器問題），請稍後再點一次。<strong>這不代表這集沒有逐字稿</strong>。」</td>
+</tr>
+</tbody>
+</table>
+<p>兩段文字實測不同。網路失敗<strong>不標記 loaded</strong>，所以再點一次會重試（原本失敗後永遠卡住）。</p>
+<h3 id="3-6">3-6. 第三頁：深連結（端到端實測）</h3>
+<p>用正式站的檔名（<code>_site_preview/</code> 比照 workflow 的 <code>index.html</code>／<code>attention.html</code>／<code>transcripts.html</code>）：</p>
+<pre><code>attention.html 上 93 個 EP 連結，href = transcripts.html?ep=685
+  → 開啟後 tr-body-685 自動展開，全文 21,109 字，aria-expanded=true，捲動到位並高亮
+</code></pre>
+<h3 id="3-7-footer">3-7. footer 不再空口承諾</h3>
+<p>原本寫死「共 685 集逐字稿」。改成實際數 <code>transcripts_data/</code> 有幾個檔案：<br />
+目前顯示「共 685 集節目，逐字稿全數齊備」；缺檔時會顯示「其中 X 集有逐字稿、Y 集檔案缺失」。<br />
+<strong>對照組實測</strong>兩個分支都會真的變（不是永遠印齊備）。</p>
+<h3 id="3-8-attentionpy">3-8. <code>attention.py</code> 靜默丟棄 → 出聲 + 第二來源</h3>
+<p>三組對照：</p>
+<table>
+<thead>
+<tr>
+<th>組</th>
+<th>條件</th>
+<th>結果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>episodes.json 完整</td>
+<td>33 檔，榜首最後提及 <strong>EP685</strong></td>
+</tr>
+<tr>
+<td>B</td>
+<td>episodes.json 停在 EP680 <strong>＋新救援</strong></td>
+<td>33 檔，<strong>EP685</strong>（救回來了）</td>
+</tr>
+<tr>
+<td>C</td>
+<td>episodes.json 停在 EP680，<strong>拔掉救援</strong>（＝改動前行為）</td>
+<td><strong>28 檔，停在 EP680</strong> ← 精準重現今晚踩到的狀況</td>
+</tr>
+</tbody>
+</table>
+<p>C 組同時噴出警告，列出 <code>EP685(10筆)、EP684(3筆)、EP683(1筆)、EP682(5筆)、EP681(4筆)</code>。</p>
+<blockquote>
+<p>第二來源用的是 <code>signals.entry_date</code>（<code>performance.py</code> 依 episodes.json <strong>真實上架日</strong>回填的快照），<br />
+<strong>沒有</strong>動用 <code>analysis_date</code>——那條禁令是任務檔明文拍板的，這次沒有放寬。</p>
+</blockquote>
+<hr />
+<h2 id="4">4. 手機第一屏（我自己造成的退步，已修回來）</h2>
+<p>加完量表說明與每張卡多一行之後，390px 手機上第一張卡被推到 <strong>792px</strong>（視窗才 844px）。<br />
+壓密度（去掉 onboarding 與黃框互相重複那句、句子改短、<strong>事實一項沒少</strong>）之後：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>第一張卡距頂</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>改造前（對照組，<code>git show 8c952fa</code>）</td>
+<td>605px</td>
+</tr>
+<tr>
+<td>我改壞的中間版本</td>
+<td>792px</td>
+</tr>
+<tr>
+<td>目前</td>
+<td><strong>590px</strong></td>
+</tr>
+</tbody>
+</table>
+<p>比原版好 15px。<strong>這是小勝不是解決</strong>——這頁的第一屏仍然被說明區塊佔掉大半。</p>
+<hr />
+<h2 id="5">5. 還沒做／你可能不同意的地方</h2>
+<ol>
+<li><strong>原話預設展開還是收合</strong>：Codex 建議收合，我沒改（見 2-3）。</li>
+<li><strong>靜態搜尋索引</strong>：真正的解法，但工程量與部署內容都要改，等你決定。</li>
+<li><strong>第二頁沒有「這檔過去準不準」的直接入口</strong>：現在只有黃框裡一句「請回主報告」。<br />
+   要做成「點標的 → 跳到第一頁該檔履歷」需要第一頁支援 deep link，跨兩頁，我沒自作主張。</li>
+<li><strong>這三頁的字級與間距沒有統一</strong>：第二頁 <code>filter-btn</code> 是 <code>5px 12px</code>、第一頁是 <code>4px 10px</code>，<br />
+   兩份 CSS 各自定義。沒動，因為改共用樣式會同時影響三頁，風險大於收益。</li>
+</ol>
+</body>
+</html>
