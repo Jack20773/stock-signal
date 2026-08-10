@@ -149,6 +149,64 @@ A-1 那條（一次問對），不是壓 token。</p>
 但<strong>必須用 2-gram、不能修剪、且要保留候選確認步驟</strong>。<br />
 如果覺得 6 MB 仍太大，那就維持現在的「按鈕觸發 + 進度 + 可取消」，不要為了省一半再賠上正確性。</p>
 <p><strong>檔案</strong>：<code>trial7_search_index.py</code> / <code>trial7_demo_output.txt</code>、<code>trial7b_index_substring_gap.py</code> / <code>trial7b_demo_output.txt</code></p>
+<h3 id="trial9-100">trial9：把我自己丟出來的「只索引最近 100 集」那個數字量掉</h3>
+<p><strong>動機</strong>：trial7b 收尾時我在選項表裡寫「選項 C：只對最近 100 集建索引，大小可降到 1 MB 量級」——<br />
+<strong>那個數字是我猜的，沒有量過</strong>。把沒量過的數字寫進要給使用者做決定的文件裡，<br />
+跟先前「工程量不小」那種空話是同一個毛病，只是換了個外觀。所以我把它量掉。</p>
+<table>
+<thead>
+<tr>
+<th>視窗</th>
+<th>索引 gzip</th>
+<th>原文</th>
+<th>建置</th>
+<th><strong>平均涵蓋率</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>最近 50 集</td>
+<td>0.64 MB</td>
+<td>2.8 MB</td>
+<td>0.22s</td>
+<td>8.7%</td>
+</tr>
+<tr>
+<td>最近 100 集</td>
+<td><strong>1.14 MB</strong></td>
+<td>5.6 MB</td>
+<td>0.48s</td>
+<td><strong>18.1%</strong></td>
+</tr>
+<tr>
+<td>最近 200 集</td>
+<td>2.11 MB</td>
+<td>11.4 MB</td>
+<td>1.05s</td>
+<td>34.6%</td>
+</tr>
+<tr>
+<td>最近 400 集</td>
+<td>3.95 MB</td>
+<td>22.7 MB</td>
+<td>2.1s</td>
+<td>68.7%</td>
+</tr>
+<tr>
+<td>全部 685 集</td>
+<td>6.16 MB</td>
+<td>35.9 MB</td>
+<td>3.26s</td>
+<td>100%</td>
+</tr>
+</tbody>
+</table>
+<p><strong>大小猜對了，但這個選項該被否掉</strong>：最近 100 集的視窗下，使用者搜「台積電」只會找到<br />
+446 集裡的 <strong>77 集（17%）</strong>、搜「AI」找到 569 集裡的 98 集、搜「降息」只有 120 集裡的 10 集——<br />
+而且畫面上<strong>不會有任何地方告訴他漏了</strong>。這正是我整晚在修的那種靜默漏失（<code>attention.py</code> 丟訊號、<br />
+搜尋失敗靜默、footer 空口承諾），沒有理由為了省 5 MB 再製造一個。</p>
+<p><strong>結論：選項 C 撤回。</strong> 要嘛全站索引（6.16 MB），要嘛維持現在的兩段式搜尋。</p>
+<p><strong>檔案</strong>：<code>trial9_recent_window_index.py</code> / <code>trial9_demo_output.txt</code></p>
 <h3 id="trial8-pre-flight">trial8：驗證前的「資料忠實度 pre-flight」</h3>
 <p><strong>動機</strong>：今晚差點交出一份<strong>假的正式站 bug 報告</strong>。第一次產出時第二頁只有 28 檔，看起來像程式壞了，<br />
 追下去才發現是本機 <code>episodes.json</code> 停在 8/2。記憶正本裡早就有<br />
@@ -179,9 +237,9 @@ DB 裡的集數本機查不查得到上架日／<code>transcripts/</code> 有沒
 <tbody>
 <tr>
 <td><strong>靜態搜尋索引</strong></td>
-<td>正式導入：<code>notifier.py</code> 產 <code>search_index.json.gz</code>，前端優先用索引縮小候選再精確比對</td>
+<td>正式導入：<code>notifier.py</code> 產 <code>search_index.json.gz</code>（<strong>6.16 MB，必須全站、必須 2-gram</strong>），前端用索引縮小候選再精確比對</td>
 <td>維持現狀（按鈕觸發＋進度＋可取消），索引留作研究筆記</td>
-<td>折衷：只對<strong>最近 100 集</strong>建索引（多數搜尋落在近期），大小可降到 1 MB 量級——這個變體我還沒量</td>
+<td>~~只索引最近 100 集~~ <strong>已量測後撤回</strong>：1.14 MB 但涵蓋率只有 18%，且畫面不會告訴使用者漏了（trial9）</td>
 </tr>
 <tr>
 <td><strong>pre-flight</strong></td>
