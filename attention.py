@@ -130,6 +130,26 @@ def compute_attention(signals: list[dict], today: date | None = None) -> list[di
     下架規則排除 age_last > 60 的標的（歷史頁另外查，這次不做）。"""
     today = today or date.today()
 
+    # 2026-08-11 新增：episodes.json 查不到上架日時的第二來源。
+    #
+    # 起因：本機 episodes.json 停在 8/2（680集），DB 裡已經有 EP681–685 共 23 筆訊號，
+    # 結果整批被下面的 `ep_date is None` 分支**完全靜默地丟掉**——第二頁標題寫「目前
+    # 關注度」，實際上停在一個月前，而且沒有任何 log、CI 也照樣綠燈。這跟 2026-08-01
+    # signals_id_seq 撞號那次是同一種型態（綠燈掩蓋真實失敗）。
+    #
+    # 用 `signals.entry_date` 當第二來源是安全的：它是 performance.py::_fill_entry_prices()
+    # 依 episodes.json 的**真實上架日**回填進 DB 的，本質上是同一個時間基準的快照，
+    # **不是** analysis_date（那是 AI 處理當天，任務檔明文禁止拿來當時間基準，這條沒有放寬）。
+    # 實查：266 集裡 248 集至少有一筆帶 entry_date，且同集的值一致。
+    _entry_date_fallback: dict[str, str] = {}
+    for s in signals:
+        ep_id = s.get("episode_id") or ""
+        ed = s.get("entry_date")
+        if ep_id and ed and ep_id not in _entry_date_fallback:
+            _entry_date_fallback[ep_id] = str(ed)
+
+    dropped: dict[str, int] = {}   # 真的連第二來源都查不到而被丟棄的，最後要出聲
+
     # 去重規則（計畫檔定案）：(episode_number, stock_code, action) 三元組，
     # 同集同標的同方向只算一次，避免同集重述虛增次數。
     dedup: dict[tuple, dict] = {}
@@ -144,12 +164,13 @@ def compute_attention(signals: list[dict], today: date | None = None) -> list[di
         if key in dedup:
             continue
 
-        ep_date_str = _episode_date(ep_id)
+        ep_date_str = _episode_date(ep_id) or _entry_date_fallback.get(ep_id)
         try:
             ep_date = date.fromisoformat(ep_date_str) if ep_date_str else None
         except ValueError:
             ep_date = None
         if ep_date is None:
+            dropped[ep_id] = dropped.get(ep_id, 0) + 1
             continue  # 沒有可用日期就無法算 age，不用猜測值硬湊
 
         age = (today - ep_date).days
@@ -157,6 +178,16 @@ def compute_attention(signals: list[dict], today: date | None = None) -> list[di
             age = 0  # 保險絲：理論上不會有未來日期，防禦負值讓衰減公式爆炸（>1)
 
         dedup[key] = {**s, "_ep_num": ep_num, "_ep_date": ep_date_str, "_age": age}
+
+    if dropped:
+        total_dropped = sum(dropped.values())
+        worst = sorted(dropped.items(), key=lambda kv: _ep_num(kv[0]), reverse=True)[:5]
+        logging.warning(
+            f"[attention] 有 {total_dropped} 筆訊號查不到上架日（episodes.json 與 "
+            f"signals.entry_date 都沒有），已排除在關注度計算外；最新的幾集："
+            + "、".join(f"{ep}({n}筆)" for ep, n in worst)
+            + "　→ 若這裡出現的是最近集數，代表 episodes.json 沒更新到，第二頁會少掉那幾集。"
+        )
 
     by_code: dict[str, list[dict]] = {}
     for item in dedup.values():
