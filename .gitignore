@@ -37,3 +37,6 @@ backups/
 
 # 所有 .env 變體（.env.neon、.env.bak_* 等，一律不進 public repo）
 .env*
+
+# canary 的本機 state（每次執行覆寫，不需要進版控）
+canary_state.json

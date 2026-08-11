@@ -115,3 +115,51 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  # 2026-08-12 新增：部署後 canary。
+  # 在這之前，週四／週日 08:00 的排程失敗是**無聲的**——沒有人會收到任何通知，
+  # 網站就停在舊資料。這個 job 用 `if: always()` 確保「上游整個掛掉」時它照樣會跑，
+  # 並且不只看 job 的 exit code，而是回頭 curl 正式站、比對頁面自己印出來的資料日期，
+  # 因為這個專案的失敗型態多半是「CI 綠燈但東西沒更新」（signals_id_seq 撞號、
+  # attention.py 整批靜默丟棄，都是綠燈事故）。
+  # 🔴 只有失敗才寄信，成功不寄——每週兩封「一切正常」會把真正的告警訓練成雜訊。
+  canary:
+    needs: [update, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: 等 Pages CDN 傳播
+        # deploy-pages 回報成功之後，邊緣節點還要一段時間才會提供新內容；
+        # 不等就檢查會抓到舊快取，變成假告警。canary.py 本身另外還有重試。
+        if: needs.deploy.result == 'success'
+        run: sleep 90
+
+      - name: 部署後健康檢查（未通過才寄告警信）
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          REPORT_TO: ${{ secrets.REPORT_TO }}
+        run: |
+          UP="${{ needs.update.result }}"
+          DP="${{ needs.deploy.result }}"
+          if [ "$UP" = "success" ] && [ "$DP" = "success" ]; then
+            ST="success"
+          else
+            ST="failure (update=$UP, deploy=$DP)"
+          fi
+          python -X utf8 canary.py \
+            --upstream-status "$ST" \
+            --max-age-days 1 \
+            --retries 4 --retry-wait 45
