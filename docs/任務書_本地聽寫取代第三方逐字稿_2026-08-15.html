@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>任務書_本地聽寫取代第三方逐字稿_2026-08-15</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+  line-height: 1.75; max-width: 860px; margin: 0 auto; padding: 2.5rem 1.25rem 6rem;
+  color: #1a1a1a; background: #fff; word-wrap: break-word;
+}
+h1, h2, h3, h4 { line-height: 1.35; margin: 2.2em 0 .8em; font-weight: 650; }
+h1 { font-size: 1.9rem; border-bottom: 2px solid #e5e5e5; padding-bottom: .4em; margin-top: 0; }
+h2 { font-size: 1.45rem; border-bottom: 1px solid #ececec; padding-bottom: .3em; }
+h3 { font-size: 1.18rem; }
+code {
+  font-family: "Cascadia Code", Consolas, monospace; font-size: .88em;
+  background: #f2f2f2; padding: .15em .4em; border-radius: 4px;
+}
+pre {
+  background: #f6f6f6; border: 1px solid #e5e5e5; border-radius: 8px;
+  padding: 1rem; overflow-x: auto;
+}
+pre code { background: none; padding: 0; font-size: .85rem; line-height: 1.6; }
+blockquote {
+  margin: 1.2em 0; padding: .6em 1.1em; border-left: 4px solid #c8c8c8;
+  background: #fafafa; color: #444;
+}
+table { border-collapse: collapse; width: 100%; margin: 1.4em 0; font-size: .93rem; display: block; overflow-x: auto; }
+th, td { border: 1px solid #ddd; padding: .55em .8em; text-align: left; vertical-align: top; }
+th { background: #f4f4f4; font-weight: 600; }
+tr:nth-child(even) td { background: #fbfbfb; }
+hr { border: 0; border-top: 1px solid #e0e0e0; margin: 2.5em 0; }
+a { color: #0b62c4; }
+ul, ol { padding-left: 1.6em; }
+li { margin: .3em 0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #e3e3e3; background: #16181c; }
+  h1 { border-bottom-color: #33373d; } h2 { border-bottom-color: #2a2d33; }
+  code { background: #24272c; }
+  pre { background: #1c1f24; border-color: #33373d; }
+  blockquote { background: #1c1f24; border-left-color: #4a4f57; color: #b8bcc4; }
+  th, td { border-color: #33373d; } th { background: #22252a; }
+  tr:nth-child(even) td { background: #1a1d21; }
+  hr { border-top-color: #33373d; } a { color: #66aaff; }
+}
+</style>
+</head>
+<body>
+<h1 id="_1">任務書：本地聽寫取代第三方逐字稿</h1>
+<blockquote>
+<p><strong>這份怎麼用</strong>：新 session <code>/clear</code> 後直接讀這份就能動手，不用回頭問丹尼爾要不要做。<br />
+只有在「做法有分岔且影響後續架構」或「要花錢」時才停下來問他。<br />
+建立於 2026-08-15。來源＝當日實測 ＋ Codex(high) ＋ DeepSeek 雙審（兩家意見已歸納，<strong>不要重跑審查</strong>）。</p>
+</blockquote>
+<hr />
+<h2 id="_2">一、目標（丹尼爾原話與拍板事項）</h2>
+<p>原話：「<strong>下次你分析你之前的然後跟官方逐字稿比，把專有名詞的弱點修正，之後取代他</strong>。」</p>
+<ol>
+<li>逐字稿目前唯一來源是第三方站 <code>whatmkreallysaid.com</code>，對方停更／關站就斷炊。</li>
+<li>本地已有聽寫管線（yt-dlp + faster-whisper <code>large-v3-turbo</code>, CUDA），<strong>內容完整但專有名詞會錯</strong>。</li>
+<li>拿官方稿當<strong>對照答案</strong>，系統性找出並修正專有名詞弱點。</li>
+<li><strong>終點是取代官方站</strong>，不是永久混合。混合只是過渡手段。</li>
+</ol>
+<p><strong>已拍板、不用再問</strong>：走這條路、混合是過渡、順序照本任務書。<br />
+<strong>必須問他才能定的</strong>：P6 的取代門檻數字（下方有雙審建議值，但要他點頭）。</p>
+<hr />
+<h2 id="_3">二、已完成，不要重做</h2>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>狀態</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>本地聽寫管線</td>
+<td>已通，端到端實測過。<code>independent_transcribe.py</code> ＋ <code>sync_independent_transcripts.py</code></td>
+</tr>
+<tr>
+<td>video-transcribe 編碼 bug</td>
+<td>已修 <code>a461c89</code>（yt-dlp 用 gbk 寫 stdout、中文路徑變亂碼，8/12 起壞三天）</td>
+</tr>
+<tr>
+<td>工作目錄路徑不相容</td>
+<td>已修 <code>587ae81</code>（新版收進 <code>_工作檔/&lt;name&gt;/</code>，改成新舊都找）</td>
+</tr>
+<tr>
+<td>配對素材保全</td>
+<td><strong><code>docs/pairing_samples/</code>（已進版控）</strong>：EP681–684、EP687 的 <strong>原始 .srt（含時間軸）</strong> ＋ EP687 聽寫版 .md。對應的官方版在 <code>transcripts/</code>（EP681–684 各兩份，另一份就是我方版）</td>
+</tr>
+<tr>
+<td>測試影片清理</td>
+<td>766MB 已刪（丹尼爾授權），字幕原始檔全數保留</td>
+</tr>
+<tr>
+<td>雙審</td>
+<td>Codex US$0.21 級距 ＋ DeepSeek US$0.008，原文已存 docs/，<strong>不要重跑</strong></td>
+</tr>
+</tbody>
+</table>
+<p>⚠️ <strong><code>transcripts/</code> 裡 EP681–684 各有兩份 .md（官方版＋我方聽寫版），那是配對素材，不准當重複檔刪掉。</strong><br />
+官方版檔名以 <code>episodes.json</code> 的 <code>filename</code> 為準，另一份就是我方聽寫版。</p>
+<hr />
+<h2 id="_4">三、已查證的事實（引用前不用重查）</h2>
+<ul>
+<li><strong>官方稿是 silver label 不是 gold</strong>：來源站自己聲明逐字稿「透過人工智慧轉譯、<strong>人工修正</strong>與格式化整理而成」。<br />
+  → 專有名詞可當對照答案，但<strong>逐字差異不能全算成我方聽錯</strong>（對方也潤稿、可能刪業配）。這決定了 P2 必須先做前提驗證。</li>
+<li><strong>聽寫效能</strong>：EP687 實測 <strong>261 秒/集</strong>（RTX 5070 Ti，large-v3-turbo, cuda），下載 77MB。</li>
+<li><strong>內容完整度沒問題</strong>：去標點後我方 19,837 字 vs 官方 19,607 字（我方還多 1.2%），開頭結尾都對得上，無漏段。</li>
+<li><strong>弱點在專有名詞</strong>（EP687 訊號最密集那段，主持人一次點名 5 檔）：</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>正確</th>
+<th>我方聽成</th>
+<th>類型</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>台積電 / 台達電</td>
+<td><strong>臺</strong>積電 / <strong>臺</strong>達電</td>
+<td>異體字</td>
+</tr>
+<tr>
+<td>奇鋐</td>
+<td>奇虹</td>
+<td>同音誤聽</td>
+</tr>
+<tr>
+<td>貿聯-KY</td>
+<td>茂林KY</td>
+<td>誤聽＋格式</td>
+</tr>
+<tr>
+<td>載板</td>
+<td>載版</td>
+<td>同音錯字</td>
+</tr>
+<tr>
+<td>股癌 / 謝孟恭</td>
+<td>古來 / 聖夢公</td>
+<td>節目名、人名</td>
+</tr>
+</tbody>
+</table>
+<p>該段 5 檔只有 <code>0050</code>、<code>智邦</code> 會被正確識別。<br />
+- <strong>段落級 difflib 粒度就是錯的</strong>：<code>compare_paragraphs()</code> 對 EP687 給 88.34% 相似度卻<strong>只回報 1 個 diff block</strong>。雙審一致：段落級只能當「哪裡大範圍不同」的粗篩，抽錯誤詞對必須做到詞／字元層級。<br />
+- <strong>標準答案不限量</strong>：官方站有 687 集，任一集都能自己聽寫產生配對，成本只有 GPU 時間。<br />
+- <code>stock_dict.py</code> 只 export <code>resolve()</code> / <code>resolve_code()</code>，<strong>沒有可列舉的股票名稱清單</strong>，要 refactor 才能導出。<br />
+- <code>video-transcribe/transcribe.py</code> <strong>沒有</strong> <code>initial_prompt</code> / hotwords 支援，要加得自己改。</p>
+<hr />
+<h2 id="_5">四、絕對紅線（派分身時必須原文轉貼這一節）</h2>
+<ol>
+<li><strong>不准刪檔</strong>：任何刪除一律先列清單給丹尼爾。<code>transcripts/</code>、<code>cross_validated_raw/</code>、<code>episodes.json</code> 尤其不准動。<br />
+   （2026-08-14 有分身用 <code>rm -rf</code> 刪掉跨 session 的資料夾未列清單，教訓在此。）</li>
+<li><strong>不准動 <code>signals</code> 表既有資料</strong>。新增欄位／新表可以（純附加），UPDATE／DELETE 一律先唯讀 dry-run 給丹尼爾看。</li>
+<li><strong>付費 API 先報用途與費用</strong>。P0–P4 完全不需要付費 API；P5、P6 要用 Gemini，動手前先報。</li>
+<li><strong>不准用 <code>str.replace()</code> 做全域錯字替換</strong>（雙審共同點名的最大風險）。</li>
+<li><strong>不准把 withheld／locked test 的集數拿去挖規則、調門檻或調 prompt</strong>。第一天就鎖死。</li>
+</ol>
+<hr />
+<h2 id="_6">五、執行階段</h2>
+<h3 id="p0-687">🔴 P0：先把官方站 687 集整包備份下來（<strong>最先做，今天就做</strong>）</h3>
+<p><strong>DeepSeek 判定 critical，理由是整個計畫都靠「官方稿拿得到」，站倒了所有驗證同時斷炊。</strong><br />
+這件事跟演算法無關、幾十分鐘就能做完，<strong>不要排在任何開發工作後面</strong>。</p>
+<ol>
+<li>抓 <code>whatmkreallysaid.com</code> 全部 687 集逐字稿 ＋ metadata（集數／日期／標題／檔名）。<br />
+   既有的 <code>download_transcripts.py</code> 已經在做這件事（本機 <code>transcripts/</code> 已有 687 集），<strong>確認完整性即可，不用重造輪子</strong>。</li>
+<li>另存一份原始 HTML/JSONL 快照（含抓取時間、來源 URL、內容 hash），與清洗後版本分開放。</li>
+<li>之後每週增量抓新集。</li>
+</ol>
+<p><strong>DoD</strong>：687 篇全數在案且字數落在合理區間、標題日期可核對；<strong>官方站明天消失也不影響後續所有階段</strong>。</p>
+<hr />
+<h3 id="p1">P1：把時間軸救回來（其他階段都靠它）</h3>
+<p><strong>為什麼</strong>：<code>srt_to_md()</code> 產出的 .md 沒有時間軸，等於丟掉「回頭聽音訊消歧」的唯一證據。Codex 判定這是目前最該補的結構缺陷。</p>
+<ol>
+<li>改 <code>independent_transcribe.py</code>：<code>.md</code> 保留，但<strong>額外輸出 <code>segments.json</code></strong>（每段 <code>segment_id</code> / <code>start</code> / <code>end</code> / <code>text</code>，有的話含 word timestamp）。</li>
+<li>新增 <code>asr_run_metadata.json</code>：模型、版本、語言、beam、VAD、prompt、設定 hash。<br />
+<strong>理由</strong>：ASR 設定一變，之前挖到的錯字規則就可能失效，沒這份 metadata 事後分不清。</li>
+<li>既有 5 份 <code>*_raw.srt</code> 已有時間軸，補做成同格式即可，不用重新聽寫。</li>
+<li><strong>順手做</strong>：yt-dlp 下載音檔時加 <code>--write-auto-sub</code> 抓 YouTube 自動字幕當<strong>第三來源</strong>。零成本，之後可做三方多數決消歧（DeepSeek 建議，划算）。</li>
+</ol>
+<p><strong>DoD</strong>：任一段本地文字都能回查到對應音訊時間範圍。</p>
+<hr />
+<h3 id="p2">P2：驗證「官方稿能不能當標準答案」（便宜，先做完再開發對齊器）</h3>
+<p>官方稿是 AI 轉譯＋人工修正，<strong>不是無條件真值</strong>。先用最便宜的方式驗前提：</p>
+<ol>
+<li><strong>抽 3–5 集，把官方稿裡的股票／ETF 名稱逐一比對證交所／櫃買中心正式掛牌名</strong>（公開資料可批次取得）。股票名是有限集合，一天內可做完，而且正好是下游最在乎的類別。<br />
+   - 官方實體準確率 <strong>≥ 99%</strong> → 放心當標準答案。<br />
+   - 只有 <strong>90–95%</strong> → 把「跨集複現」門檻提高到 ≥3 次，且只信任同音配對。</li>
+<li>抽樣人工聽音建小型 gold set，優先抽：股票密集段落 ＞ 官方／我方差異最大段落 ＞ 已知同音誤聽段落。跨不同年份抽，不要都抽最近的。</li>
+<li>統計官方稿的：股票實體正確率、人名／節目名正確率、<strong>潤稿比例、有沒有整段刪掉業配</strong>。</li>
+</ol>
+<p><strong>DoD</strong>：有一份能回答「官方稿可不可以當 silver label」的審計報告。<strong>沒做完之前，不准把官方稿當無條件訓練真值。</strong></p>
+<p>⚠️ <strong>若查出官方會刪業配段落</strong>：我方稿會多出官方沒有的整段，<code>phantom rate</code> 會被贊助商名字灌爆。對齊輸出必須把「疑似官方刪減段落」標記並排除，否則後面所有指標都是髒的。</p>
+<hr />
+<h3 id="p3poc-5">P3：對齊器（PoC 用現有 5 組配對）</h3>
+<p><strong>不要改</strong> <code>compare_paragraphs()</code> 的行為，<strong>新增</strong>一支 episode 級對齊器。雙審都給了同一個方向：</p>
+<ol>
+<li><strong>正規化</strong>只做低風險處理：全半形、空白換行、標點、<code>KY</code>／<code>-KY</code> 格式、<code>台</code>／<code>臺</code> 建立<strong>比對用等價規則</strong>。<br />
+   ⚠️ 原文一律保留；正規化函式要保留「正規化後索引 → 原文位置」映射，否則找到差異也回報不了位置。<br />
+   ⚠️ <strong>不要</strong>一開始就把所有同音字轉成同一字，會把不相干片段硬對上。</li>
+<li><strong>分層對齊</strong>，不要對兩萬字裸跑 difflib：<br />
+   - 先找共同的長字串 n-gram 當錨點（8～15 字，忽略出現太多次的，只採順序單調的錨點鏈）<br />
+   - 錨點之間切成局部窗，窗內用字元／詞級全域動態規劃（Needleman-Wunsch／edit distance，支援增刪改）<br />
+   - 標點空白成本設低或 0，一般中文字成本 1</li>
+<li>每個差異 span 輸出：官方原文、我方原文、前後 20～50 字上下文、對齊信心、<strong>對應的 SRT segment ID 與時間範圍</strong>。</li>
+<li>產出人看得懂的 HTML/Markdown 差異報告。</li>
+</ol>
+<p><strong>DoD（要有鑑別度，不是跑得動就算）</strong>：<br />
+- 已知案例必須各自成為獨立 span，不再是一個巨大 diff block：<code>台/臺積電</code>、<code>奇鋐/奇虹</code>、<code>貿聯-KY/茂林KY</code>、<code>載板/載版</code>、<code>股癌/古來</code>、<code>謝孟恭/聖夢公</code><br />
+- 每個 span 有對齊信心與音訊時間範圍<br />
+- 對不上的區段標記 uncertain，不准硬配對</p>
+<hr />
+<h3 id="p4">P4：股票實體詞典 ＋ 候選誤聽規則庫（<strong>不做全域替換</strong>）</h3>
+<p><strong>4a 詞典</strong><br />
+1. 擴充 <code>stock_dict.py</code> 或新增 <code>stock_entities.py</code>，提供可列舉的實體集合（canonical 名稱／代碼／別名／格式別名如 <code>-KY</code>／<code>台</code>≡<code>臺</code>）。<br />
+2. 股票、人名、節目名、產業術語<strong>分開存</strong>，不要混成一張表。<br />
+3. 新增 <code>resolve_text_to_candidates()</code>：回傳<strong>零到多個</strong>候選，一個別名對到多檔時不准任選一檔。</p>
+<p><strong>DoD</strong>：可列出完整股票實體集合；別名衝突會回多候選；詞典有版本號與測試案例。</p>
+<p><strong>4b 規則庫</strong></p>
+<p>雙審共同警告：<strong>全域「錯→對」字串替換必然誤傷</strong>——看到「奇虹」時，光憑文字無法知道該不該改成「奇鋐」（可能某集真的講奇虹）。<strong>誤傷造成的假訊號比漏訊號更嚴重</strong>（漏一筆只是少算，假訊號會把不存在的交易算進勝率）。</p>
+<p>規則分四級，預設從嚴：</p>
+<table>
+<thead>
+<tr>
+<th>級別</th>
+<th>意思</th>
+<th>例子</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>safe_normalize</code></td>
+<td>可無條件自動修</td>
+<td>臺→台 等異體字、<code>-KY</code> 格式</td>
+</tr>
+<tr>
+<td><code>entity_link_only</code></td>
+<td><strong>不改原文</strong>，只在實體連結時視為同一檔</td>
+<td>奇虹 → 連到 奇鋐</td>
+</tr>
+<tr>
+<td><code>candidate_only</code></td>
+<td>只標記候選，<strong>交給下游 Gemini 在既有呼叫內消歧</strong>（不額外花錢，DeepSeek 建議）</td>
+<td>高風險同音詞</td>
+</tr>
+<tr>
+<td><code>rejected</code></td>
+<td>驗證後判定不可用</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>每條規則要有 rule ID、證據（出現在幾集／幾次／對齊品質／人工驗證數）、<strong>適用的 ASR 設定</strong>。<br />
+<strong>跨集複現是防線中的防線</strong>：只出現一次的配對不得升級成 <code>safe_normalize</code>。</p>
+<p><strong>DoD</strong>：程式碼裡不存在任何全域 <code>str.replace()</code> 形式的錯字替換；每次校正都可追溯到 rule ID。</p>
+<hr />
+<h3 id="p5">P5：評估器與抽樣（本地為主，先不花錢）</h3>
+<p><strong>5a 本地評估器（零 API，每集都能跑）</strong><br />
+- <strong>entity recall</strong>（mention 層級，模糊匹配後）：官方稿每個實體 mention，我方稿能對到的比例。<br />
+- 🔴 <strong>phantom entity rate</strong>：我方稿有、官方稿沒有的實體 mention 比例。<strong>這是最重要也最危險的數字。</strong><br />
+- <strong>episode-level agreement</strong>：單集「官方實體代碼集合」與「我方實體代碼集合」完全一致的集數比例。<br />
+- 另計：canonical 連結正確率、校正誤傷率。<br />
+- 報告要能分開看：原始 ASR ／ 只做安全正規化 ／ 加候選校正 ／ 加 prompt ／ 局部重解碼。</p>
+<p>⚠️ <strong>不要用字元或詞相似度當 gate</strong>——已經證明沒鑑別度（88% 相似卻 5 個專有名詞全錯）。<br />
+⚠️ <strong>不要用「差異數」當門檻</strong>——不同集語速與口語密度差很多。</p>
+<p><strong>5b 抽樣策略</strong></p>
+<table>
+<thead>
+<tr>
+<th>階段</th>
+<th>集數</th>
+<th>選法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>建表</td>
+<td>現有 5 集 seed ＋ 再抽 <strong>25–30 集</strong></td>
+<td>687 集分層（每 50 集一層約 14 層），每層隨機 1–2 集；實體 mention 數 Top 20% 的訊號密集集加權多抽；<strong>有來賓的集數要多抽</strong>（會帶進不同領域的公司與人名）</td>
+</tr>
+<tr>
+<td><strong>withheld 驗證</strong></td>
+<td><strong>10–15 集</strong>，建表期間完全不看</td>
+<td>5 集來自最新 100 集、5 集來自其他層。<strong>不得用來調任何門檻</strong></td>
+</tr>
+<tr>
+<td>rolling 監控</td>
+<td>每 20 集新增 1 集</td>
+<td>新公司／新 ETF 一直出現，校正表要持續更新</td>
+</tr>
+</tbody>
+</table>
+<p><strong>停止條件</strong>（不是拍腦袋定集數）：每新增一集，新出現的「前所未見錯→對配對型別」數 &lt; 1，且 Top 500 實體的逐實體錯誤率變動 &lt; 1%。<br />
+粗估 <strong>建表 30 集 + 驗證 10 集 ≈ 40 集 ≈ 3 小時 GPU</strong>。</p>
+<p><strong>5c prompt / hotwords A/B</strong><br />
+四組對照：baseline ／ 只餵節目名人名 ／ 小型高頻股票詞典 ／ 局部候選詞重解碼。<br />
+⚠️ <strong>不要一次把完整股票清單塞進 <code>initial_prompt</code></strong> ——會增加幻覺（憑空生出沒講的股票）。<br />
+⚠️ <strong>若 prompt 提升 recall 卻讓 precision 或 phantom rate 變差，禁止上線。</strong></p>
+<hr />
+<h3 id="p6-gemini">P6：取代決策（要花 Gemini，動手前先報丹尼爾）</h3>
+<p><strong>雙審建議的門檻值（保守，最終要丹尼爾拍板）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th>建議門檻</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>entity recall（mention 層級、模糊匹配後）</td>
+<td>≥ 98%</td>
+</tr>
+<tr>
+<td><strong>phantom entity rate</strong></td>
+<td><strong>≤ 0.2%</strong>（每 1000 個 mention 最多 2 個）</td>
+</tr>
+<tr>
+<td>episode-level agreement</td>
+<td>≥ 95%，且在<strong>最近連續 30 集 rolling window</strong> 上維持</td>
+</tr>
+<tr>
+<td>L1 訊號層方向一致率</td>
+<td>≥ 97%，且<strong>零「我方獨有假訊號」</strong></td>
+</tr>
+</tbody>
+</table>
+<p>phantom 門檻比 recall 嚴的理由：<strong>傷害不對稱</strong>——漏一個訊號只是少算一筆，假訊號會把不存在的交易算進勝率。</p>
+<p><strong>訊號層驗收做法</strong>：同一集，官方稿與我方校正稿各跑一次 Gemini，比對「股票代碼→多/空方向」pair 的一致率。每月抽 10 集即可。<br />
+⚠️ <strong>Gemini 對 Gemini 的一致性不是正確性證明</strong>，不一致的個案要人工聽音裁決。</p>
+<p><strong>四個條件同時滿足才能宣告可取代</strong>：實體 precision/recall 達標、無高風險自動校正誤傷、訊號一致率達標、人工 gold set 驗證通過。</p>
+<hr />
+<h2 id="_7">六、雙審沒解決、但要記得的事</h2>
+<ul>
+<li>🔴 <strong>取代官方站 ≠ 完全自主</strong>：我們仍然依賴 YouTube（yt-dlp 抓音檔），只是把單點依賴換一家。要真正自主得自己存音檔。<br />
+<strong>這點要主動跟丹尼爾講清楚</strong>，他可能以為做完就沒有外部依賴了。</li>
+<li><strong>模型或設定一變，既有錯字規則可能全部失效</strong> → P1 的 metadata 是必要的，不是可有可無。</li>
+<li><strong>long-tail 補不完</strong>：只出現一兩次的新公司名學不到，只能靠下游消歧 ＋ rolling 更新。「取代」的承諾會卡在長尾，先講清楚別過度承諾。</li>
+<li>錯字表與 prompt <strong>不等於</strong>訓練模型，別對外講成「訓練我們自己的模型」。</li>
+</ul>
+<hr />
+<h2 id="_8">七、順帶待辦（跟本任務書無關但別忘）</h2>
+<ul>
+<li><strong>686、687 官方稿已下載到本機，但正式站仍停在 EP685</strong>。要更新得跑一次 <code>update.yml</code>，<strong>會順帶寄週報信</strong>給 <code>REPORT_TO</code> ＋ <code>extra_recipients.txt</code>（含丹尼爾同事）。丹尼爾一直沒回要不要手動觸發，<strong>不要自己按</strong>。</li>
+<li><code>video-transcribe/review4_codex_run.log</code>（53KB，8/12 外審紀錄）去留未定，等丹尼爾決定。</li>
+</ul>
+<hr />
+<h2 id="_9">八、外部審查原文</h2>
+<ul>
+<li>Codex（gpt-5.6-terra, effort=high）：<code>docs/外審_Codex_本地聽寫取代方案_2026-08-15.md</code></li>
+<li>DeepSeek（deepseek-v4-flash，US$0.008，28,162 completion tokens）：<code>docs/外審_DeepSeek_本地聽寫取代方案_2026-08-15.md</code></li>
+<li>送審題目：<code>docs/送審題目_本地聽寫取代方案_2026-08-15.md</code></li>
+</ul>
+<p><strong>兩家都是非盲測</strong>（都看得到我的診斷與傾向），依制度只能說「在我提供的背景下，其結論與我一致」，<strong>不得稱獨立證實</strong>。<br />
+兩家分歧不大，主要差別：DeepSeek 把「備份官方站」列為 critical 且要求最先做（已採納為 P0），Codex 對評估指標與 train/test 隔離講得更細（已採納進 P5/P6）。</p>
+</body>
+</html>
