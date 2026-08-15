@@ -85,9 +85,17 @@ jobs:
           if [ -f report_transcripts.html ]; then
             cp report_transcripts.html _site/transcripts.html
           fi
+          # 2026-08-15 索羅門：這一行是「整包複製」。transcripts_data/ 底下若多出
+          # 任何東西（例如 independent_transcribe.py 的影音中間產物），會一起出門。
+          # 下一步的出門檢查就是為了擋這個，**不要拿掉那一步**。
           if [ -d transcripts_data ]; then
             cp -r transcripts_data _site/transcripts_data
           fi
+
+      # 2026-08-15 索羅門新增（丹尼爾裁決：逐字稿維持公開，但只有名單上的東西能出門）
+      # 白名單比對，不合規就中止部署。理由與白名單內容見 check_site_payload.py 檔頭。
+      - name: 出門檢查（白名單，不合規中止部署）
+        run: python -X utf8 check_site_payload.py _site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

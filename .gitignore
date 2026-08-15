@@ -17,6 +17,13 @@ transcripts/
 # 可隨時重新產生，不需要進 repo（比照 transcripts/ 本身也不進 repo 的既有慣例）。
 transcripts_data/
 
+# 2026-08-15 索羅門：獨立轉錄的影音中間產物（yt-dlp 下載的影片/聲音、.srt/.mkv）。
+# 原本放在 transcripts_data/independent_media/，但那個目錄整包會被 `cp -r` 進 _site
+# 公開發佈——已搬到這裡（見 independent_transcribe.py 的 INDEPENDENT_MEDIA_ROOT 註解）。
+# 這一行擋的是「進 public repo」，擋不到「進 Pages」——後者由 check_site_payload.py
+# 的白名單負責。**兩個是不同的門，各擋各的，不要以為 gitignore 有寫就安全了。**
+media_work/
+
 # 資料庫（本機用，不進 repo）
 *.db
 *.db-wal

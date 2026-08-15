@@ -9,9 +9,12 @@ metadata header），作為第二條逐字稿來源的地基。
 
 範圍界線（任務檔第 3 節）：只能把 video-transcribe 的 transcribe.py 當外部 CLI 呼叫
 （subprocess），不 import 該專案任何模組、不編輯該專案任何檔案。轉錄的中間產物
-（下載的影片、.srt/.ass/.mkv）一律輸出到 stock-signal 自己的
-transcripts_data/independent_media/ 底下（用 --output-root 導向），不寫進
-video-transcribe/media/。
+（下載的影片、.srt/.ass/.mkv）一律輸出到 stock-signal 自己的 media_work/ 底下
+（用 --output-root 導向），不寫進 video-transcribe/media/。
+
+⚠️ 2026-08-15：中間產物的位置從 transcripts_data/independent_media/ 搬到 media_work/
+——原位置在部署腳本 `cp -r transcripts_data _site/` 的整包複製路徑上，等於讓下載回來
+的影音檔走在通往公開網站的輸送帶上。詳見 INDEPENDENT_MEDIA_ROOT 的註解。
 """
 import os
 import re
@@ -27,7 +30,23 @@ TRANSCRIBE_SCRIPT = VIDEO_TRANSCRIBE_DIR / "transcribe.py"
 TRANSCRIPTS_DIR = HERE / "transcripts"
 # 獨立轉錄的中間產物（下載的影片、.srt/.ass/.mkv）：不寫進 video-transcribe/media/，
 # 維持「只能動 stock-signal 目錄底下」的範圍界線。
-INDEPENDENT_MEDIA_ROOT = HERE / "transcripts_data" / "independent_media"
+#
+# 🔴 2026-08-15 搬家（原本是 transcripts_data/independent_media/）：
+# 部署腳本有一行 `cp -r transcripts_data _site/transcripts_data`——**整包複製**。
+# 把影音中間產物放在 transcripts_data/ 底下，等於讓「下載回來的影片與聲音檔」
+# 走在通往公開網站的同一條輸送帶上。兩件事單獨看都合理，湊在一起就是外洩路徑。
+# 目前 CI 跑在 GitHub runner、transcripts_data/ 是重新生成的，所以還沒真的漏過；
+# 但丹尼爾 2026-08-15 定案的做法正是「本機當執行機、把結果推上去」，改成從本機
+# 發佈的那一刻這條路就會通。
+# 搬到 media_work/（不在任何會被複製進 _site 的目錄底下）。**這只是第一道**，
+# 第二道是 check_site_payload.py 的白名單出門檢查——搬家防的是「這一個」錯誤，
+# 白名單防的是「下一個我還沒想到的」。
+INDEPENDENT_MEDIA_ROOT = HERE / "media_work"
+
+#: 舊位置。**只讀不寫**：既有的 EP681 等中間產物還在那裡（self_improvement_試做/
+#: 底下的三支試做腳本仍指向它），搬家不動既有檔案——移動使用者的資料是使用者的決定，
+#: 不是我的。新產出一律進上面的新位置。
+LEGACY_MEDIA_ROOT = HERE / "transcripts_data" / "independent_media"
 
 DEFAULT_MODEL = "large-v3-turbo"
 DEFAULT_TIMEOUT_SECONDS = 5400  # 90 分鐘：長節目下載+轉錄的保守上限，避免無限期卡住

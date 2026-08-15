@@ -60,9 +60,15 @@ jobs:
           if [ -f report_transcripts.html ]; then
             cp report_transcripts.html _site/transcripts.html
           fi
+          # 2026-08-15 索羅門：整包複製，見 update.yml 同一段註解。
           if [ -d transcripts_data ]; then
             cp -r transcripts_data _site/transcripts_data
           fi
+
+      # 2026-08-15 索羅門新增，與 update.yml 同一道檢查——**兩支 workflow 都要有**，
+      # 只擋一支等於沒擋（手動觸發那支正好是最可能從非預期環境跑的那一支）。
+      - name: 出門檢查（白名單，不合規中止部署）
+        run: python -X utf8 check_site_payload.py _site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
