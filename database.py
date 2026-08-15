@@ -14,6 +14,22 @@ from stock_dict import resolve_code
 _pool: psycopg2.pool.ThreadedConnectionPool | None = None
 _initialized = False
 
+
+def _current_rule_version() -> str | None:
+    """2026-08-15（ai-trader ④組規格 7.6.5）：寫入訊號時標記產生它的規則版本。
+
+    刻意做成「取不到就回 None、不擋寫入」——版本追蹤是**稽核用的附加資訊**，
+    不該因為它壞掉就讓整條分析管線寫不進訊號。這是本專案的主線功能，
+    ④組只是它的下游消費者，下游的需求不該有能力弄停上游。
+    """
+    try:
+        from prompt import rule_version  # noqa: PLC0415 -- 延遲 import，避免循環相依
+
+        return rule_version()
+    except Exception:  # noqa: BLE001 -- 見 docstring：取不到就留 NULL，不擋寫入
+        logging.warning("[rule_version] 取不到規則版本，本次訊號的 rule_version 留空")
+        return None
+
 _TW_PAT = re.compile(r"^\d{4,5}\.(TW|TWO)$")
 _US_PAT = re.compile(r"^[A-Z]{1,5}(\.[A-Z])?$")
 _KNOWN_PRIVATE = {"BYTEDANCE", "STRIPE", "SHEIN"}  # SpaceX 已於 2026-06-12 IPO（SPCX），移出名單
@@ -93,6 +109,15 @@ def init_db():
                     cache_date TEXT NOT NULL,
                     PRIMARY KEY (ticker, ref_date)
                 )
+            """)
+            # 2026-08-15 新增（來源：ai-trader ④組規格 7.6.5，丹尼爾裁決「要補」）：
+            # 記錄「這筆訊號是哪一版分析規則產生的」。純新增、可為 NULL、不回填——
+            # 既有 973 筆訊號的版本資訊已無法回溯取得，強行填值等於製造假資料。
+            # NULL 的語意是「此列產生時尚未有版本追蹤」，這個分界會寫進 ④組已知限制。
+            # 值的來源是 prompt.rule_version()（SYSTEM_PROMPT 內容雜湊前 12 碼）。
+            cur.execute("""
+                ALTER TABLE signals
+                ADD COLUMN IF NOT EXISTS rule_version TEXT
             """)
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_signals_episode
@@ -218,8 +243,8 @@ def save_result(result: dict) -> int:
                     INSERT INTO signals
                         (episode_id, analysis_date, stock_name, stock_code, action,
                          confidence_level, reasoning, exact_quote, raw_reason,
-                         primary_tag, secondary_tags)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                         primary_tag, secondary_tags, rule_version)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """, (
                     episode_id, analysis_date,
                     s.get("stock_name"), code, action,
@@ -227,6 +252,7 @@ def save_result(result: dict) -> int:
                     s.get("exact_quote"), s.get("raw_reason"),
                     s.get("primary_tag"),
                     json.dumps(s.get("secondary_tags", []), ensure_ascii=False),
+                    _current_rule_version(),
                 ))
                 saved += 1
 
