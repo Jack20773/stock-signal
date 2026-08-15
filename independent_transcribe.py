@@ -216,14 +216,24 @@ def run_independent_transcription(source: str, name: str, *, model: str = DEFAUL
         raise IndependentTranscribeError(f"找不到 video-transcribe 的 transcribe.py: {TRANSCRIBE_SCRIPT}")
 
     INDEPENDENT_MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
-    job_dir = INDEPENDENT_MEDIA_ROOT / name
+    # 2026-08-15：video-transcribe 在 760a1c2 之後把工作檔收進 <output-root>/_工作檔/<name>/，
+    # 舊版是直接放 <output-root>/<name>/。兩個位置都找，找不到才報錯，這樣跟新舊版
+    # video-transcribe 都相容（該專案的輸出配置不歸我們管，只能容納它的兩種擺法）。
+    job_dir_candidates = [INDEPENDENT_MEDIA_ROOT / "_工作檔" / name,
+                          INDEPENDENT_MEDIA_ROOT / name]
     cmd = [sys.executable, str(TRANSCRIBE_SCRIPT), source,
            "--model", model, "--lang", lang,
            "--name", name, "--output-root", str(INDEPENDENT_MEDIA_ROOT)]
     print(f"[independent_transcribe] 執行: {' '.join(cmd)}", flush=True)
+    # 2026-08-15：子程序鏈（transcribe.py → yt-dlp）在 Windows 上預設用 gbk 寫 stdout，
+    # 接收端一律以 utf-8 解讀，因此路徑裡的中文會變成 U+FFFD。video-transcribe 在
+    # 2026-08-12（commit 760a1c2）把工作目錄改名成中文的 `_工作檔` 之後，yt-dlp 回報的
+    # 下載路徑就解不回來，transcribe.py 的 `video.exists()` 判定失敗、整支中止。
+    # PYTHONIOENCODING 會被子孫程序一起繼承，是不改動 video-transcribe 的最小修法。
+    child_env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
-                               errors="replace", timeout=timeout)
+                               errors="replace", timeout=timeout, env=child_env)
     except subprocess.TimeoutExpired as e:
         raise IndependentTranscribeError(
             f"transcribe.py 逾時（超過 {timeout}s），來源: {source}") from e
@@ -234,12 +244,14 @@ def run_independent_transcription(source: str, name: str, *, model: str = DEFAUL
             f"--- stdout 尾段 ---\n{proc.stdout[-3000:]}\n"
             f"--- stderr 尾段 ---\n{proc.stderr[-2000:]}")
 
-    srt_path = job_dir / "source.srt"
-    if not srt_path.exists():
-        raise IndependentTranscribeError(
-            f"transcribe.py 回報成功但找不到預期的逐字稿檔案: {srt_path}\n"
-            f"stdout 尾段: {proc.stdout[-2000:]}")
-    return srt_path
+    for candidate in job_dir_candidates:
+        srt_path = candidate / "source.srt"
+        if srt_path.exists():
+            return srt_path
+    raise IndependentTranscribeError(
+        "transcribe.py 回報成功但找不到預期的逐字稿檔案，找過："
+        + "、".join(str(c / "source.srt") for c in job_dir_candidates)
+        + f"\nstdout 尾段: {proc.stdout[-2000:]}")
 
 
 def atomic_write_text(path: Path, text: str):
