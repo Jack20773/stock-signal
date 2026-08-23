@@ -79,6 +79,62 @@ def test_no_fake_ticker_survives_validation():
     assert _valid_ticker("P") is True
 
 
+# --- _valid_ticker 放行範圍（2026-08-24 放寬，正例）-------------------------
+# 台股長代號與 .KS/.T 外國掛牌原本會被 `\d{4,5}` + 純字母的舊規則整筆丟掉。
+# DB 唯讀實測：984 列裡有 9 列（8 個相異代號）因此進不了下游。
+VALID_TICKERS = [
+    # 台股 4 碼（原本就過，保護不要改壞）
+    "2330.TW", "2317.TW", "8299.TWO", "3105.TWO",
+    # 台股 ETF：4/5/6 碼都存在（0050 元大台灣50、00878 國泰永續高股息、
+    # 006208 富邦台50、006201 元大富櫃50 —— 後兩者 6 碼，舊規則擋掉）
+    "0050.TW", "00878.TW", "006208.TW", "006201.TWO",
+    # 債券 ETF：5 碼數字 + 1 大寫字母（官方名單 tw_listing_map.json 內確有此形狀）
+    "00679B.TWO", "00687C.TWO",
+    # 美股純字母 + 單字母級別後綴
+    "AAPL", "P", "NVDA", "BRK.B",
+    # 日本東證 4 碼 + .T（DB 實測：6324/6787/6857/6981）
+    "6324.T", "6857.T",
+    # 韓國 KOSPI 6 碼 + .KS（DB 實測：005930 三星、000660 海力士、009150 三星電機）
+    "005930.KS", "000660.KS", "009150.KS",
+]
+
+# --- 必須被擋下（反例）-----------------------------------------------------
+INVALID_TICKERS = [
+    "6elf.TW",      # 把公司英文名塞進代號欄的假代號（2026-08-24 DB 實際抓到）
+    "Unknown",      # 解析失敗的哨兵值
+    "BYTEDANCE",    # 未上市（_KNOWN_PRIVATE）
+    "STRIPE",
+    "台積電.TW",     # 中文名塞進代號欄
+    "123.TW",       # 台股不足 4 碼
+    "1234567.TW",   # 台股超過 6 碼
+    "2330.TWX",     # 不存在的後綴
+    "2330",         # 台股缺後綴
+    "2330.tw",      # 小寫後綴
+    "aapl",         # 小寫美股代號
+    "TOOLONG",      # 超過 5 碼字母
+    "005930.KQ",    # KOSDAQ：語料沒出現過，刻意不放行（避免放寬過頭）
+    "0700.HK",      # 港股：同上
+    "12345.KS",     # 韓股位數不對
+    "63241.T",      # 日股位數不對
+    "",             # 空字串
+    None,           # 非字串
+]
+
+
+def test_valid_ticker_accepts_every_market_seen_in_corpus():
+    from database import _valid_ticker
+    bad = [t for t in VALID_TICKERS if _valid_ticker(t) is not True]
+    assert not bad, f"這些合法代號被誤擋：{bad}"
+    print(f"[POP] 正例 {len(VALID_TICKERS)} 筆全數放行")
+
+
+def test_valid_ticker_still_blocks_fakes():
+    from database import _valid_ticker
+    bad = [t for t in INVALID_TICKERS if _valid_ticker(t) is not False]
+    assert not bad, f"這些假／畸形代號沒被擋下：{bad}"
+    print(f"[POP] 反例 {len(INVALID_TICKERS)} 筆全數攔截")
+
+
 def test_dict_entries_agree_with_official_registry():
     """人工字典 `_TW` 的每一筆都要通得過官方名單（後綴正確）。
 

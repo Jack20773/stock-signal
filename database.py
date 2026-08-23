@@ -30,15 +30,39 @@ def _current_rule_version() -> str | None:
         logging.warning("[rule_version] 取不到規則版本，本次訊號的 rule_version 留空")
         return None
 
-_TW_PAT = re.compile(r"^\d{4,5}\.(TW|TWO)$")
-_US_PAT = re.compile(r"^[A-Z]{1,5}(\.[A-Z])?$")
+# 台股：形狀取自本專案自己的官方白名單 `tw_listing_map.json`（證交所＋櫃買中心
+# open API，2026-08-24 產生）。該檔 2326 筆代號的形狀只有兩種：
+#   * 純數字 4~6 碼——一般股 `2330`、ETF `0050` / `00878`（5 碼）/ `006208`（6 碼）
+#   * 5 碼數字＋1 個大寫字母——債券 ETF，例 `00679B`、`00687C`
+# 舊版寫死 `\d{4,5}`，6 碼 ETF（DB 實測有 `006208.TW`）會被判無效整筆丟掉。
+_TW_PAT = re.compile(r"^(?:\d{4,6}|\d{5}[A-Z])\.(?:TW|TWO)$")
+
+# 美股：純大寫字母 1~5 碼，可帶一個單字母級別後綴（`BRK.B`）。維持原樣。
+_US_PAT = re.compile(r"^[A-Z]{1,5}(?:\.[A-Z])?$")
+
+# 外國掛牌：**只放行語料裡實際出現過的市場**（2026-08-24 唯讀查 signals 表得到）：
+#   * `.T`  日本東證，4 碼數字——`6324.T`、`6787.T`、`6857.T`、`6981.T`
+#   * `.KS` 韓國 KOSPI，6 碼數字——`005930.KS`、`000660.KS`、`009150.KS`
+# 刻意不順手開放 `.KQ`/`.HK`/`.L` 等沒出現過的後綴：這個函式存在的目的就是擋掉
+# Gemini 憑空拼出來的假代號（實例 `6elf.TW`），放寬過頭等於把守門員撤掉。
+_JP_PAT = re.compile(r"^\d{4}\.T$")
+_KR_PAT = re.compile(r"^\d{6}\.KS$")
+
 _KNOWN_PRIVATE = {"BYTEDANCE", "STRIPE", "SHEIN"}  # SpaceX 已於 2026-06-12 IPO（SPCX），移出名單
 
 
 def _valid_ticker(code: str) -> bool:
+    """代號格式守門員：不符合任一已知市場形狀就不寫進 DB（見 save_result()）。"""
+    if not isinstance(code, str):
+        return False
     if code in _KNOWN_PRIVATE:
         return False
-    return bool(_TW_PAT.match(code) or _US_PAT.match(code))
+    return bool(
+        _TW_PAT.match(code)
+        or _US_PAT.match(code)
+        or _JP_PAT.match(code)
+        or _KR_PAT.match(code)
+    )
 
 
 def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
