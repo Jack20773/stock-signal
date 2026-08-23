@@ -1,7 +1,21 @@
 """
 台股常見公司名稱 → yfinance 代號對照表。
 字典裡有的公司一律以此為準（蓋掉 Gemini 猜測的代號），沒有才 fallback 用 Gemini 給的值。
+
+2026-08-24 索羅門分身增修（來源：serenity-clone 回測實測抓到的資料 bug）：
+1. 新增 `normalize_tw_suffix()`——用官方上市/上櫃名單校正 `.TW` / `.TWO` 後綴。
+   根因：`prompt.py` 舊版的 schema 說明只寫「台股請附帶 .TW」，Gemini 因此把上櫃股
+   一律標成 `.TW`，yfinance 一根 K 棒都抓不到（DB 實測：105 個 .TW 代號裡 19 個是上櫃）。
+2. 新增 `resolve_by_official_name()`——本字典查不到時，先拿公司中文全名去官方名單反查，
+   再退回 Gemini 猜的代號。
+3. 刪掉 5 筆**指向別家公司**的錯誤條目（見下方 `# [2026-08-24 移除]` 註記）。
+   這類錯誤比「查不到」危險得多：抓得到價、不會報錯，但算的是另一家公司。
+白名單資料檔：`tw_listing_map.json`（由 `refresh_tw_listing_map.py` 從證交所／櫃買中心
+open API 產生）。
 """
+import json
+import logging
+from pathlib import Path
 
 _TW: dict[str, str] = {
     # 晶圓代工
@@ -16,18 +30,24 @@ _TW: dict[str, str] = {
     "奇力新": "2327.TW", # 2022-01 下市，併入國巨 100% 子公司
     # IC 設計
     "聯發科": "2454.TW", "MediaTek": "2454.TW", "MTK": "2454.TW",
-    "聯詠": "3034.TW", "瑞昱": "2379.TW", "奇景": "3533.TW",
+    "聯詠": "3034.TW", "瑞昱": "2379.TW",
     "矽統": "2363.TW", "立積": "4968.TW",
+    # [2026-08-24 移除] "奇景": "3533.TW" —— 3533 是「嘉澤」(Lotes)，不是奇景。
+    # 奇景光電只有美國 ADR，已改列 _US 的 "奇景": "HIMX"。
     # 被動元件
     "國巨": "2327.TW", "華新科": "2492.TW", "信昌電": "6173.TWO",
     # 伺服器 / 網通
     "廣達": "2382.TW", "緯創": "3231.TW", "英業達": "2356.TW",
     "仁寶": "2324.TW", "和碩": "4938.TW", "鴻海": "2317.TW",
-    "緯穎": "6669.TW", "雲達": "6441.TWO",
+    "緯穎": "6669.TW",
+    # [2026-08-24 移除] "雲達": "6441.TWO" —— 6441 是「廣錠」(iBase Solution)，
+    # 不是雲達；雲達科技(QCT)是廣達 100% 子公司，本身沒有單獨掛牌。
     # 散熱 / 機構
     "奇鋐": "3017.TW", "雙鴻": "3324.TWO", "超眾": "6230.TW",
     # 光通訊
-    "源傑": "6664.TWO", "波若威": "3163.TWO",
+    "波若威": "3163.TWO",
+    # [2026-08-24 移除] "源傑": "6664.TWO" —— 6664 是「群翊」(Group Up Industrial)，
+    # 不是源傑；源杰科技掛在上海科創板 688498，yfinance 的 .TW/.TWO 名稱空間裡沒有它。
     # AI 伺服器相關
     "緯穎科技": "6669.TW",
     # 電源 / 離散元件
@@ -41,7 +61,8 @@ _TW: dict[str, str] = {
     "穩懋": "3105.TWO", "穩懋半導體": "3105.TWO",
     "精材": "3374.TWO",
     "萬潤": "6187.TWO", "萬潤科技": "6187.TWO",
-    "微創軟體": "7725.TWO",
+    # [2026-08-24 移除] "微創軟體": "7725.TWO" —— 7725.TWO 在 yfinance 是
+    # LabTurbo Biotech，且 7725 不在證交所/櫃買中心的名單裡；微創軟體未上市櫃。
     "信驊": "5274.TWO",
     "原相": "3227.TWO",
     "91APP": "6741.TWO",
@@ -57,9 +78,10 @@ _TW: dict[str, str] = {
     "昇達科": "3491.TWO",
     "合晶": "6182.TWO",
     "博智電子": "8155.TWO", "博智電子（ACCL）": "8155.TWO",
-    "MACO": "6613.TWO",
+    # [2026-08-24 移除] "MACO": "6613.TWO" —— 6613 是「朋億」(Nova Technology)，
+    # 與 MACO 對不上；MACO 的正確標的未查證出來，寧可讓它落回 Unknown 也不掛錯家。
     "金山電": "8042.TWO",
-    "加弘": "6538.TWO",
+    # [2026-08-24 移除] "加弘": "6538.TWO" —— 6538 是「倉和」(Brave C&H Supply)，不是加弘。
     "笙泉": "3122.TWO",
 }
 
@@ -99,6 +121,7 @@ _US: dict[str, str] = {
     "SpaceX": "SPCX",       # 2026-06-12 IPO
     "Pure Storage": "P",    # 2026 改名 Everpure，代號原為 PSTG
     "Square": "XYZ", "Block": "XYZ",  # 原代號 SQ
+    "奇景": "HIMX", "奇景光電": "HIMX", "Himax": "HIMX",  # 2026-08-24 從 _TW 誤植的 3533.TW 移正
 }
 
 _ALL = {**_TW, **_US}
@@ -108,6 +131,72 @@ _ALL = {**_TW, **_US}
 # 前後空白（例如 "台積電 "），完全比對會直接跳過字典、退回不可靠的 Gemini 猜測
 # 代號——2026-08-01 Codex 審查發現，索羅門本地修正。
 _ALL_STRIPPED = {name.strip(): code for name, code in _ALL.items() if name.strip() != name}
+
+
+# ---------------------------------------------------------------------------
+# 官方上市/上櫃白名單（2026-08-24 新增）
+# ---------------------------------------------------------------------------
+# 資料檔由 refresh_tw_listing_map.py 從證交所 + 櫃買中心 open API 產生。
+# 讀不到就退化成「什麼都不校正」——白名單是**加分項**，不該因為檔案缺席就讓
+# 整條分析管線寫不進訊號（與 database._current_rule_version() 同一個設計原則）。
+_LISTING_PATH = Path(__file__).with_name("tw_listing_map.json")
+
+
+def _load_listing() -> tuple[dict[str, str], dict[str, str]]:
+    try:
+        raw = json.loads(_LISTING_PATH.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 -- 見上方註解：缺檔就不校正，不擋寫入
+        logging.warning("[stock_dict] 讀不到 %s，本次不做上市/上櫃後綴校正", _LISTING_PATH.name)
+        return {}, {}
+    listing: dict[str, str] = raw.get("listing", {})
+    # 官方名稱 → 代號的反查表。名稱帶 `*`（處置股註記）先剝掉。
+    # 同名對到兩個以上代號的一律丟棄——寧可查不到，也不要在兩家公司之間亂猜。
+    buckets: dict[str, set[str]] = {}
+    for num, name in raw.get("names", {}).items():
+        key = name.replace("*", "").strip()
+        if key:
+            buckets.setdefault(key, set()).add(num)
+    by_name = {
+        key: f"{next(iter(nums))}.{listing.get(next(iter(nums)), 'TW')}"
+        for key, nums in buckets.items() if len(nums) == 1
+    }
+    return listing, by_name
+
+
+_LISTING, _OFFICIAL_BY_NAME = _load_listing()
+
+
+def normalize_tw_suffix(code: str) -> str:
+    """把台股代號的 `.TW` / `.TWO` 後綴校正成官方歸屬（上市 .TW／上櫃 .TWO）。
+
+    這是本次 bug 的正面攔截點：Gemini 標代號時傾向一律用 `.TW`，上櫃股因此
+    yfinance 一根 K 棒都抓不到（DB 實測 105 個 .TW 代號裡 19 個其實是上櫃）。
+
+    **白名單沒收錄的代號一律原樣回傳，不猜。** 這條是實測換來的：`6176`（瑞儀）
+    當天在證交所的收盤行情檔裡沒有出現（無成交/暫停交易之類），但它確實是上市股，
+    yfinance `6176.TW` 抓得到 59 根 K 棒。若把「名單裡沒有」當成「後綴錯」去翻面，
+    就會把一個對的代號改壞。興櫃股、剛掛牌的股同理。
+    """
+    if not isinstance(code, str) or "." not in code:
+        return code
+    num, _, suf = code.rpartition(".")
+    if suf not in ("TW", "TWO"):
+        return code
+    official = _LISTING.get(num)
+    if official is None or official == suf:
+        return code
+    return f"{num}.{official}"
+
+
+def resolve_by_official_name(name: str) -> str | None:
+    """拿公司中文全名去官方上市/上櫃名單反查代號；查不到或同名多筆回 None。
+
+    只做**完全比對**（去頭尾空白、剝掉處置股的 `*`）。不做模糊比對——
+    「立隆電」vs「資通」、「昇達科」vs「矽瑪」這種錯配，正是模糊猜測會製造的災難。
+    """
+    if not isinstance(name, str) or not name:
+        return None
+    return _OFFICIAL_BY_NAME.get(name.replace("*", "").strip())
 
 
 def _lookup(name: str) -> str | None:
@@ -131,11 +220,21 @@ def resolve(name: str, fallback: str = "Unknown") -> str:
 
 
 def resolve_code(stock_name: str, current_code: str) -> str:
-    """字典有紀錄的公司一律信字典（蓋掉 Gemini 猜測的代號，常見上市/上櫃尾綴搞混）；
-    字典沒有才在 current_code 是 Unknown 時嘗試用名稱補齊。"""
+    """決定一筆訊號最終要寫進 DB 的代號。優先序（2026-08-24 重寫）：
+
+    1. 人工字典 `_TW`/`_US`——最高信任度，但仍過一次後綴校正（字典也可能寫錯尾綴）。
+    2. 官方上市/上櫃名單的**公司全名完全比對**——這一層是新加的，用來接住
+       「人工字典沒收錄、Gemini 又把代號猜錯家」的情況（實例：語料裡「昇達科」被
+       標成 3511.TW，而 3511 是矽瑪；官方名單反查「昇達科」得到 3491.TWO）。
+    3. Gemini 給的代號，但**強制過一次上市/上櫃後綴校正**。
+    4. 都沒有 → Unknown（`database.save_result()` 會跳過，不寫進 DB）。
+    """
     known = _lookup(stock_name)
     if known:
-        return known
+        return normalize_tw_suffix(known)
+    official = resolve_by_official_name(stock_name)
+    if official:
+        return official
     if current_code and current_code != "Unknown":
-        return current_code
+        return normalize_tw_suffix(current_code)
     return resolve(stock_name, "Unknown")

@@ -1,0 +1,408 @@
+{
+ "created_at_utc": "2026-08-23T21:50:50+00:00",
+ "purpose": "signals.stock_code 代號修正前的原始值備份（回溯用）",
+ "table": "signals",
+ "key_column": "id",
+ "changed_column": "stock_code",
+ "population_total_rows": 984,
+ "affected_rows": 32,
+ "plan": {
+  "1785.TW": "1785.TWO",
+  "1815.TW": "1815.TWO",
+  "3105.TW": "3105.TWO",
+  "3227.TW": "3227.TWO",
+  "3529.TW": "3529.TWO",
+  "3548.TW": "3548.TWO",
+  "3664.TW": "3664.TWO",
+  "3707.TW": "3707.TWO",
+  "5274.TW": "5274.TWO",
+  "5425.TW": "5425.TWO",
+  "5478.TW": "5478.TWO",
+  "5530.TW": "5530.TWO",
+  "6138.TW": "6138.TWO",
+  "6187.TW": "6187.TWO",
+  "6245.TW": "6245.TWO",
+  "6488.TW": "6488.TWO",
+  "8069.TW": "8069.TWO",
+  "8299.TW": "8299.TWO",
+  "3511.TW": "3491.TWO",
+  "6elf.TW": "Unknown"
+ },
+ "rows_before": [
+  {
+   "id": 568,
+   "episode_id": "EP481",
+   "analysis_date": "2026-07-01",
+   "stock_name": "光洋科",
+   "stock_code": "1785.TW",
+   "action": "0",
+   "stock_code_new": "1785.TWO"
+  },
+  {
+   "id": 821,
+   "episode_id": "EP584",
+   "analysis_date": "2026-07-01",
+   "stock_name": "富喬",
+   "stock_code": "1815.TW",
+   "action": "0",
+   "stock_code_new": "1815.TWO"
+  },
+  {
+   "id": 129,
+   "episode_id": "EP641",
+   "analysis_date": "2026-06-29",
+   "stock_name": "穩懋",
+   "stock_code": "3105.TW",
+   "action": "0",
+   "stock_code_new": "3105.TWO"
+  },
+  {
+   "id": 385,
+   "episode_id": "EP420",
+   "analysis_date": "2026-07-01",
+   "stock_name": "穩懋",
+   "stock_code": "3105.TW",
+   "action": "0",
+   "stock_code_new": "3105.TWO"
+  },
+  {
+   "id": 555,
+   "episode_id": "EP478",
+   "analysis_date": "2026-07-01",
+   "stock_name": "穩懋",
+   "stock_code": "3105.TW",
+   "action": "0",
+   "stock_code_new": "3105.TWO"
+  },
+  {
+   "id": 627,
+   "episode_id": "EP504",
+   "analysis_date": "2026-07-01",
+   "stock_name": "穩懋",
+   "stock_code": "3105.TW",
+   "action": "0",
+   "stock_code_new": "3105.TWO"
+  },
+  {
+   "id": 536,
+   "episode_id": "EP471",
+   "analysis_date": "2026-07-01",
+   "stock_name": "原相",
+   "stock_code": "3227.TW",
+   "action": "0",
+   "stock_code_new": "3227.TWO"
+  },
+  {
+   "id": 883,
+   "episode_id": "EP605",
+   "analysis_date": "2026-07-01",
+   "stock_name": "原相",
+   "stock_code": "3227.TW",
+   "action": "0",
+   "stock_code_new": "3227.TWO"
+  },
+  {
+   "id": 57,
+   "episode_id": "EP630",
+   "analysis_date": "2026-06-29",
+   "stock_name": "昇達科",
+   "stock_code": "3511.TW",
+   "action": "0",
+   "stock_code_new": "3491.TWO"
+  },
+  {
+   "id": 885,
+   "episode_id": "EP606",
+   "analysis_date": "2026-07-01",
+   "stock_name": "力旺",
+   "stock_code": "3529.TW",
+   "action": "0",
+   "stock_code_new": "3529.TWO"
+  },
+  {
+   "id": 901,
+   "episode_id": "EP611",
+   "analysis_date": "2026-07-01",
+   "stock_name": "力旺",
+   "stock_code": "3529.TW",
+   "action": "0",
+   "stock_code_new": "3529.TWO"
+  },
+  {
+   "id": 329,
+   "episode_id": "EP400",
+   "analysis_date": "2026-07-01",
+   "stock_name": "兆利",
+   "stock_code": "3548.TW",
+   "action": "0",
+   "stock_code_new": "3548.TWO"
+  },
+  {
+   "id": 453,
+   "episode_id": "EP444",
+   "analysis_date": "2026-07-01",
+   "stock_name": "安瑞-KY",
+   "stock_code": "3664.TW",
+   "action": "0",
+   "stock_code_new": "3664.TWO"
+  },
+  {
+   "id": 284,
+   "episode_id": "EP661",
+   "analysis_date": "2026-06-29",
+   "stock_name": "漢磊",
+   "stock_code": "3707.TW",
+   "action": "0",
+   "stock_code_new": "3707.TWO"
+  },
+  {
+   "id": 581,
+   "episode_id": "EP489",
+   "analysis_date": "2026-07-01",
+   "stock_name": "信驊",
+   "stock_code": "5274.TW",
+   "action": "0",
+   "stock_code_new": "5274.TWO"
+  },
+  {
+   "id": 387,
+   "episode_id": "EP421",
+   "analysis_date": "2026-07-01",
+   "stock_name": "台半",
+   "stock_code": "5425.TW",
+   "action": "0",
+   "stock_code_new": "5425.TWO"
+  },
+  {
+   "id": 353,
+   "episode_id": "EP412",
+   "analysis_date": "2026-07-01",
+   "stock_name": "智冠",
+   "stock_code": "5478.TW",
+   "action": "0",
+   "stock_code_new": "5478.TWO"
+  },
+  {
+   "id": 722,
+   "episode_id": "EP547",
+   "analysis_date": "2026-07-01",
+   "stock_name": "龍巖",
+   "stock_code": "5530.TW",
+   "action": "0",
+   "stock_code_new": "5530.TWO"
+  },
+  {
+   "id": 594,
+   "episode_id": "EP494",
+   "analysis_date": "2026-07-01",
+   "stock_name": "茂達",
+   "stock_code": "6138.TW",
+   "action": "0",
+   "stock_code_new": "6138.TWO"
+  },
+  {
+   "id": 654,
+   "episode_id": "EP518",
+   "analysis_date": "2026-07-01",
+   "stock_name": "茂達",
+   "stock_code": "6138.TW",
+   "action": "0",
+   "stock_code_new": "6138.TWO"
+  },
+  {
+   "id": 603,
+   "episode_id": "EP496",
+   "analysis_date": "2026-07-01",
+   "stock_name": "萬潤",
+   "stock_code": "6187.TW",
+   "action": "0",
+   "stock_code_new": "6187.TWO"
+  },
+  {
+   "id": 338,
+   "episode_id": "EP404",
+   "analysis_date": "2026-07-01",
+   "stock_name": "立端",
+   "stock_code": "6245.TW",
+   "action": "0",
+   "stock_code_new": "6245.TWO"
+  },
+  {
+   "id": 340,
+   "episode_id": "EP405",
+   "analysis_date": "2026-07-01",
+   "stock_name": "立端",
+   "stock_code": "6245.TW",
+   "action": "0",
+   "stock_code_new": "6245.TWO"
+  },
+  {
+   "id": 267,
+   "episode_id": "EP660",
+   "analysis_date": "2026-06-29",
+   "stock_name": "環球晶",
+   "stock_code": "6488.TW",
+   "action": "0",
+   "stock_code_new": "6488.TWO"
+  },
+  {
+   "id": 900,
+   "episode_id": "EP611",
+   "analysis_date": "2026-07-01",
+   "stock_name": "環球晶",
+   "stock_code": "6488.TW",
+   "action": "0",
+   "stock_code_new": "6488.TWO"
+  },
+  {
+   "id": 237,
+   "episode_id": "EP657",
+   "analysis_date": "2026-06-29",
+   "stock_name": "EPI Memory（伊必艾）",
+   "stock_code": "6elf.TW",
+   "action": "0",
+   "stock_code_new": "Unknown"
+  },
+  {
+   "id": 133,
+   "episode_id": "EP641",
+   "analysis_date": "2026-06-29",
+   "stock_name": "元太科技",
+   "stock_code": "8069.TW",
+   "action": "0",
+   "stock_code_new": "8069.TWO"
+  },
+  {
+   "id": 116,
+   "episode_id": "EP639",
+   "analysis_date": "2026-06-29",
+   "stock_name": "群聯電子",
+   "stock_code": "8299.TW",
+   "action": "0",
+   "stock_code_new": "8299.TWO"
+  },
+  {
+   "id": 123,
+   "episode_id": "EP640",
+   "analysis_date": "2026-06-29",
+   "stock_name": "群聯",
+   "stock_code": "8299.TW",
+   "action": "0",
+   "stock_code_new": "8299.TWO"
+  },
+  {
+   "id": 471,
+   "episode_id": "EP452",
+   "analysis_date": "2026-07-01",
+   "stock_name": "群聯",
+   "stock_code": "8299.TW",
+   "action": "0",
+   "stock_code_new": "8299.TWO"
+  },
+  {
+   "id": 665,
+   "episode_id": "EP521",
+   "analysis_date": "2026-07-01",
+   "stock_name": "群聯",
+   "stock_code": "8299.TW",
+   "action": "0",
+   "stock_code_new": "8299.TWO"
+  },
+  {
+   "id": 889,
+   "episode_id": "EP609",
+   "analysis_date": "2026-07-01",
+   "stock_name": "群聯",
+   "stock_code": "8299.TW",
+   "action": "0",
+   "stock_code_new": "8299.TWO"
+  }
+ ],
+ "rollback_hint": "把 rows_before 裡每一列的 stock_code 依 id 寫回即可還原。",
+ "proposed_not_applied": {
+  "_note": "本輪新發現、但不在派工範圍內、未執行的候選修正。每筆都已用『官方上市櫃名單 + yfinance 公司名』兩路查證；需索羅門/丹尼爾裁決後再套用。",
+  "_verified_at": "2026-08-24",
+  "wrong_company_high_confidence": [
+   {
+    "id": 275,
+    "episode": "EP661",
+    "stock_name": "立隆電",
+    "now": "2471.TW",
+    "now_is": "資通 Ares International",
+    "should_be": "2472.TW",
+    "evidence": "官方名單 立隆電=2472；yfinance 2472.TW=Lelon Electronics Corp（立隆電子）"
+   },
+   {
+    "id": 549,
+    "episode": "EP477",
+    "stock_name": "阜爾運通",
+    "now": "6585.TW",
+    "now_is": "鼎基 DingZing Advanced Materials",
+    "should_be": "6914.TW",
+    "evidence": "官方名單 阜爾運通=6914；yfinance 6914.TW=PSS Co.,Ltd.（引文在講停車場業者，語意相符）"
+   }
+  ],
+  "wrong_company_no_correct_ticker_found": [
+   {
+    "id": 282,
+    "episode": "EP661",
+    "stock_name": "加弘",
+    "now": "6538.TWO",
+    "now_is": "倉和 Brave C&H Supply",
+    "should_be": "Unknown（加弘不在上市/上櫃名單）"
+   },
+   {
+    "id": 89,
+    "episode": "EP635",
+    "stock_name": "MACO",
+    "now": "6613.TWO",
+    "now_is": "朋億 Nova Technology",
+    "should_be": "Unknown（MACO 對不到任何台股代號）"
+   },
+   {
+    "id": 70,
+    "episode": "EP631",
+    "stock_name": "致盛科技",
+    "now": "6957.TW",
+    "now_is": "裕慶-KY",
+    "should_be": "Unknown（致盛不在上市/上櫃名單）"
+   },
+   {
+    "id": 515,
+    "episode": "EP464",
+    "stock_name": "微創軟體",
+    "now": "7725.TWO",
+    "now_is": "LabTurbo Biotech",
+    "should_be": "Unknown（微創軟體不在上市/上櫃名單）"
+   }
+  ],
+  "speaker_or_transcript_error_code_left_as_is": [
+   {
+    "id": 767,
+    "episode": "EP567",
+    "stock_name": "兆利",
+    "now": "3376.TW",
+    "note": "引文原話就是「兆利（3376）」，但官方 兆利=3548、3376=新日興。講者/逐字稿本身講錯，非標註器 bug，未動。"
+   },
+   {
+    "id": 210,
+    "episode": "EP653",
+    "stock_name": "啟基",
+    "now": "6285.TW",
+    "note": "引文原話「6285 啟基」；6285 官方名為啟碁，代號正確、只是名字寫成同音錯字，未動。"
+   },
+   {
+    "id": 2367,
+    "episode": "-",
+    "stock_name": "耀華",
+    "now": "2367.TW",
+    "note": "官方名為燿華，同音錯字，代號正確，未動。"
+   }
+  ],
+  "false_positive_from_serenity_clone": {
+   "claim": "serenity-clone PROGRESS.md 04:49 稱『P 是 Everpure，不是 Pure Storage，回測用到別家公司股價』",
+   "verdict": "查無此 bug。Pure Storage 已更名 Everpure，並於 2026-04-17 把代號由 PSTG 改為 P（Nasdaq 新聞稿）。yfinance `P` 的歷史從 2023-01-03 連續到 2026-08-21 共 912 根，2026-04-16→04-17 收盤 67.80→66.97 無跳空，longBusinessSummary 描述的正是 Pure Storage 的 Purity 軟體。`P` 是正確代號，DB 那 5 筆不需修改。",
+   "action": "未做任何變更"
+  }
+ }
+}

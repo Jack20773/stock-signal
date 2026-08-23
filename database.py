@@ -219,7 +219,15 @@ def save_result(result: dict) -> int:
                 code   = s.get("stock_code") or "Unknown"
                 action = s.get("action", "0")
 
+                raw_code = code
                 code = resolve_code(name, code)
+                if raw_code != code:
+                    # 2026-08-24 新增：代號被校正過就留一行紀錄。校正本身是靜默的
+                    # （見 stock_dict.resolve_code），沒有這行日誌就無從得知
+                    # 「Gemini 這一版到底把幾個代號標錯」，也就無從判斷 prompt 改得有沒有效。
+                    logging.info(
+                        f"[代號校正] {episode_id} {name!r}：{raw_code!r} -> {code!r}"
+                    )
 
                 if code == "Unknown":
                     logging.debug(f"[跳過] {episode_id} {name!r}：無法解析代號")
