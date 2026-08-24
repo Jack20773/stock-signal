@@ -46,6 +46,9 @@ from independent_transcribe import (
 HERE = Path(__file__).parent
 CHANNEL_URL = "https://www.youtube.com/@Gooaye/videos"
 EPISODES_LOCAL = HERE / "episodes.json"
+# 轉錄旗標（由 main() 依 CLI 填入）。空 dict＝完全沿用 2026-08-24 改動之前的行為。
+TRANSCRIBE_OPTS: dict = {}
+
 MANIFEST_DIR = HERE / "transcripts_data" / "independent_transcribe"
 MANIFEST_PATH = MANIFEST_DIR / "manifest.json"
 DIFF_REPORT_PATH = HERE / "docs" / "independent_transcript_diffs.md"
@@ -341,7 +344,8 @@ def process_episode(ep_num: int, yt_info: dict, remote_map: dict[int, dict],
 
     video_id = yt_info["video_id"]
     try:
-        srt_path = run_independent_transcription(yt_info["url"], name=ep_id)
+        srt_path = run_independent_transcription(
+            yt_info["url"], name=ep_id, **TRANSCRIBE_OPTS)
     except IndependentTranscribeError as e:
         print(f"{prefix} FAIL   {ep_id}  獨立轉錄失敗：{e}")
         return "FAIL"
@@ -417,8 +421,34 @@ def process_episode(ep_num: int, yt_info: dict, remote_map: dict[int, dict],
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--check-only", action="store_true", help="只做 1b 偵測，不下載不轉錄")
+    # 2026-08-24：以下四個旗標全部預設維持舊行為，不加就跟改動之前一模一樣。
+    parser.add_argument("--model", default=None,
+                        help="覆寫 whisper 模型（預設沿用 independent_transcribe.DEFAULT_MODEL"
+                             "＝large-v3-turbo；專有名詞精準度優先請用 large-v3）")
+    parser.add_argument("--asr-guard", default="off", choices=("off", "on", "lite"),
+                        dest="asr_guard",
+                        help="關掉跨窗上下文傳染（condition_on_previous_text=False），"
+                             "避免同一個專有名詞聽錯一次後整集都錯。預設 off。"
+                             "on＝連逐字時間對齊＋空窗重掃一起開（貴，給對白稀疏的影片）；"
+                             "lite＝只關跨窗上下文（幾乎不加錢，給連續講話的 podcast）")
+    parser.add_argument("--hotwords-file", default=None, dest="hotwords_file",
+                        help="熱詞檔（UTF-8，空白分隔），灌進每個解碼窗的 prompt。預設不灌")
+    parser.add_argument("--use-raw-srt", action="store_true", dest="use_raw_srt",
+                        help="下游改吃 source.raw.srt（Whisper 原始輸出），繞過 OpenCC s2twp "
+                             "的台灣用詞替換（支持→支援那類）。預設 off")
     parser.add_argument("--limit", type=int, default=0, help="這次最多處理幾集（0=不限制）")
     args = parser.parse_args()
+
+    if args.model:
+        TRANSCRIBE_OPTS["model"] = args.model
+    if args.asr_guard != "off":
+        TRANSCRIBE_OPTS["asr_guard"] = args.asr_guard
+    if args.hotwords_file:
+        TRANSCRIBE_OPTS["hotwords_file"] = args.hotwords_file
+    if args.use_raw_srt:
+        TRANSCRIBE_OPTS["prefer_raw_srt"] = True
+    if TRANSCRIBE_OPTS:
+        print(f"[轉錄設定] 非預設旗標：{TRANSCRIBE_OPTS}")
 
     print("=== 步驟 1：抓 YouTube 頻道集數清單 ===")
     yt_map = fetch_youtube_episodes()

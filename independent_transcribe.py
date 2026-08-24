@@ -211,7 +211,10 @@ class IndependentTranscribeError(RuntimeError):
 
 def run_independent_transcription(source: str, name: str, *, model: str = DEFAULT_MODEL,
                                    lang: str = "zh",
-                                   timeout: int = DEFAULT_TIMEOUT_SECONDS) -> Path:
+                                   timeout: int = DEFAULT_TIMEOUT_SECONDS,
+                                   asr_guard: bool | str = False,
+                                   hotwords_file: str | Path | None = None,
+                                   prefer_raw_srt: bool = False) -> Path:
     """呼叫 video-transcribe/transcribe.py 做本地下載+轉錄，回傳繁體 .srt 的路徑。
 
     只把 transcribe.py 當外部 CLI 呼叫（subprocess.run），不 import 該專案任何模組、
@@ -230,6 +233,18 @@ def run_independent_transcription(source: str, name: str, *, model: str = DEFAUL
     轉錄真的失敗，會被誤判為成功並回傳一份不是這次產生的舊資料。已移除這個寬容處理，
     改成嚴格要求 exit code 為 0 才算成功；若未來真的又出現類似的封裝驗證步驟誤判，
     應該先去 video-transcribe 那邊確認、修正 verify() 本身，不應該在呼叫端矇混過去。
+
+    2026-08-24 新增三個旗標，**全部預設關閉、不加就跟改動之前一模一樣**：
+      asr_guard=True/"on"/"lite"
+                          → 加 `--asr-guard <模式>`，把 condition_on_previous_text 關掉，
+                            斷開「同一集裡某個專有名詞聽錯一次、被當上下文餵給下一窗、
+                            整集跟著錯」的傳染鏈（EP684 的「力積電」5 次全錯就是這樣滾出來的）。
+      hotwords_file=路徑  → 加 `--hotwords-file`，把常出現的公司名灌進每個解碼窗的 prompt。
+                            這是解碼期引導，不是事後全域字串取代。
+      prefer_raw_srt=True → 回傳 `source.raw.srt`（Whisper 原始輸出）而不是 `source.srt`
+                            （OpenCC s2twp 之後）。s2twp 是「簡→繁 ＋ 台灣慣用詞替換」，
+                            會把逐字稿裡的「支持」改寫成「支援」這類詞，下游要拿原文引用
+                            比對站方版本時就對不上。要原汁原味就開這個。
     """
     if not TRANSCRIBE_SCRIPT.exists():
         raise IndependentTranscribeError(f"找不到 video-transcribe 的 transcribe.py: {TRANSCRIBE_SCRIPT}")
@@ -243,6 +258,19 @@ def run_independent_transcription(source: str, name: str, *, model: str = DEFAUL
     cmd = [sys.executable, str(TRANSCRIBE_SCRIPT), source,
            "--model", model, "--lang", lang,
            "--name", name, "--output-root", str(INDEPENDENT_MEDIA_ROOT)]
+    if asr_guard:
+        # True/"on" → 完整 guard；"lite" → 只關跨窗上下文，不做逐字時間對齊與空窗重掃
+        # （2026-08-24 EP684 A/B：那兩項才是 8 倍成本的來源，對 podcast 買不到東西）
+        guard_mode = asr_guard if isinstance(asr_guard, str) else "on"
+        if guard_mode not in ("on", "lite"):
+            raise IndependentTranscribeError(
+                f"asr_guard 只接受 True / 'on' / 'lite'，收到: {asr_guard!r}")
+        cmd += ["--asr-guard", guard_mode]
+    if hotwords_file:
+        hw = Path(hotwords_file).expanduser()
+        if not hw.exists():
+            raise IndependentTranscribeError(f"hotwords 檔案不存在: {hw}")
+        cmd += ["--hotwords-file", str(hw)]
     print(f"[independent_transcribe] 執行: {' '.join(cmd)}", flush=True)
     # 2026-08-15：子程序鏈（transcribe.py → yt-dlp）在 Windows 上預設用 gbk 寫 stdout，
     # 接收端一律以 utf-8 解讀，因此路徑裡的中文會變成 U+FFFD。video-transcribe 在
@@ -263,13 +291,15 @@ def run_independent_transcription(source: str, name: str, *, model: str = DEFAUL
             f"--- stdout 尾段 ---\n{proc.stdout[-3000:]}\n"
             f"--- stderr 尾段 ---\n{proc.stderr[-2000:]}")
 
+    # prefer_raw_srt=True 時回傳未經 OpenCC s2twp 的原始輸出（見函式說明）。
+    srt_name = "source.raw.srt" if prefer_raw_srt else "source.srt"
     for candidate in job_dir_candidates:
-        srt_path = candidate / "source.srt"
+        srt_path = candidate / srt_name
         if srt_path.exists():
             return srt_path
     raise IndependentTranscribeError(
         "transcribe.py 回報成功但找不到預期的逐字稿檔案，找過："
-        + "、".join(str(c / "source.srt") for c in job_dir_candidates)
+        + "、".join(str(c / srt_name) for c in job_dir_candidates)
         + f"\nstdout 尾段: {proc.stdout[-2000:]}")
 
 
