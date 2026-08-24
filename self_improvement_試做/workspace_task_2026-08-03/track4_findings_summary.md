@@ -59,6 +59,17 @@
 搭配 stale-while-revalidate（先回舊值給使用者、背景重算更新快取）取代單純TTL，
 會比純時間到期更穩定準確。
 
+> 🔴 **事後稽核註記（2026-08-24 加，原句未改）——照抄這條會直接撞 SQL 錯誤。**
+> **`signals` 表沒有 `updated_at` 欄位。**實查 `database.py:104-126` 該表定義共 21 欄，時間類只有
+> **`perf_updated_at TEXT`**（第 124 行）與 `created_at TIMESTAMPTZ DEFAULT NOW()`（第 125 行）。
+> `updated_at` 這個欄名出現在 `database.py:173`，但那是**另一張 `latest_report` 表**的欄位。
+> **要落實這條建議的話**，可用的替代鍵是 `max(created_at)`（訊號寫入時間）或 `max(perf_updated_at)`（績效重算時間），
+> 兩者語意不同，取決於你要讓快取對「新訊號」還是對「績效更新」失效——**請先想清楚再選，不要直接改個欄名了事。**
+
+> 📌 **另一則註記**：本檔第 20 行與第 71 行提到的 `stock_handler.py` **不在本專案**，實際位於
+> `300_Projects/linebot/stock_handler.py`。這是有紀錄的跨專案引用（`line_query.py:2` 的 docstring 已載明
+> 「由 linebot/stock_handler.py 以 subprocess 呼叫」），內容級查核全部正確，**不是假引用**，只是缺路徑前綴容易誤導。
+
 ## 給使用者的建議與延伸選項（不是索羅門能自己拍板的範圍，這輪不修改任何正式檔案）
 
 **索羅門推薦方案**：不要只做純TTL快取，改成比照現有「/股癌分析」的「立即回覆+背景
