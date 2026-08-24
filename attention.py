@@ -138,7 +138,7 @@ def compute_attention(signals: list[dict], today: date | None = None) -> list[di
     # signals_id_seq 撞號那次是同一種型態（綠燈掩蓋真實失敗）。
     #
     # ⚠️ 這裡有一個**必須守住的陷阱**（2026-08-11 完工前 Codex 挑戰式審查抓到，經複查屬實）：
-    # `signals.entry_date` **不保證**是真實上架日。`performance.py:89` 是
+    # `signals.entry_date` **不保證**是真實上架日。`performance.py:90`（原註解寫 :89，2026-08-24 實查差一行）是
     #     entry_d = _episode_date(ep_id, r["analysis_date"])
     # ——episodes.json 查不到時，它的 fallback **就是 analysis_date**，而且會被寫進
     # `entry_date` 欄位（`performance.py:134`）。所以「無條件信任 entry_date」等於偷偷

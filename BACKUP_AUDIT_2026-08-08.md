@@ -98,5 +98,5 @@ Drive 那頭還在忠實同步一個 7 天前就凍結的快照。
 
 ## 附：本次未處理
 
-- `migrate_to_neon.py`、`email_subscriber_preview.html` 仍未進版控（使用者裁決先留著不動）
+- ~~`migrate_to_neon.py`、`email_subscriber_preview.html` 仍未進版控（使用者裁決先留著不動）~~ → **2026-08-24 實查：兩個檔案皆已被 git 追蹤，本條已不成立**
 - 記憶檔與計畫看板未更新（避免與索羅門 session 撞檔）

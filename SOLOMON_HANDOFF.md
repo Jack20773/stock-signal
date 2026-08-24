@@ -40,7 +40,7 @@ self_improvement_this_round: 已完成一輪，正本 `self_improvement_試做/R
     ②成本盤點：這輪 Codex 2.01 點、DeepSeek ~US$0.02。通用省錢手法（prompt caching 30–90%）**對我們幫助有限**
     ——一次性長 prompt 沒有可重用前綴；真正的成本是「重跑」，所以省錢正解是一次問對，不是壓 token。
     已採用：第二三頁合併成一份素材問一次，省掉一次背景重述。
-  Part B（3 個試做，全部隔離、未接進正式流程）：
+  Part B（**3 個新想法／4 支試做腳本**，全部隔離、未接進正式流程；本檔第 94 行寫「4 個試做」數的是腳本數 trial7/7b/8/9，兩處不衝突——2026-08-24 稽核釐清）：
     - trial7/7b 靜態搜尋索引可行性：把我原本「工程量不小」的空話換成數字。兩個非直覺發現——
       ①壓縮索引最有效的一刀剛好砍死最熱門查詢（台積電/NVIDIA/AI 召回 0%）②整詞索引跟現行 substring
       語意不等價會靜默漏搜；改 ASCII 2-gram 才 12/12 全 100% 召回，gzip 6.16 MB（原始 35.9 MB 的 17.2%）。
@@ -51,7 +51,7 @@ self_improvement_this_round: 已完成一輪，正本 `self_improvement_試做/R
 
 final_review: 完工前 Codex 挑戰式審查結論原文「**不建議直接合併**」，抓到 5 項，逐條回原始碼複查**全部屬實**，
   已全部修正並各自用打到失敗路徑的方式重測（commit `3850815`）。其中 2 項**推翻我自己在 commit message
-  裡的宣稱**：①`entry_date` 第二來源可能偷渡 `analysis_date`（`performance.py:89` 的 fallback 就是它）
+  裡的宣稱**：①`entry_date` 第二來源可能偷渡 `analysis_date`（`performance.py:90` 的 fallback 就是它；原寫 :89，2026-08-24 實查差一行）
   ②「網路失敗可再點一次重試」是假的（快取寫成 null 讓重試不發請求）。第 3 項是我今晚自己加出來的顯示錯誤
   （「歷史累計 128 次（102 多／2 空）」加起來不等於 128，33 檔裡 27 檔對不起來）。詳見 T2/T3 報告第 4b 節。
 
