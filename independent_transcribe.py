@@ -182,17 +182,56 @@ def cues_to_paragraphs(cues: list[tuple[float, float, str]],
     return paragraphs
 
 
+# ---------------------------------------------------------------- 文字正規化
+
+#: 產稿階段的異體字正規化對照表。目前只有一條：「臺」→「台」。
+#:
+#: 為什麼需要：ASR 本身輸出的就是「台」——實測 EP681~EP684、EP687 五份
+#: `source.raw.srt`（Whisper 原始輸出），「臺」出現 0 次、「台」共 106 次。是
+#: video-transcribe 的 OpenCC `s2twp` 把「台」當簡體字轉成「臺」（該專案
+#: transcribe.py 自己的註解也寫了這件事），繁化後的 `source.srt` 才變成清一色的
+#: 「臺灣／臺股／臺積電」。下游閱讀與引用比對一律用「台」，所以在產稿這一步轉回來。
+#:
+#: 為什麼修在這裡而不是修 OpenCC 那一步：本模組的範圍界線是「不編輯 video-transcribe
+#: 任何檔案」（見檔頭），而且那一步是所有使用者共用的繁化階段，改了副作用跨專案。
+#: 2026-08-26 丹尼爾裁決：只改 stock-signal 的產稿階段。
+#:
+#: ⚠️ **刻意不做例外白名單（取捨，下一個維護者請先讀這段）**：本專案查無任何既有的
+#: 專有名詞白名單機制，這裡也不自行發明一份。代價是**正式名稱會被一併轉掉**——
+#: 「臺灣銀行」→「台灣銀行」、「國立臺灣大學」→「國立台灣大學」、「臺灣證券交易所」
+#: 亦同。在口語逐字稿的情境可接受（節目本來就唸「台」，且 ASR 原始輸出也是「台」），
+#: 但若日後出現「必須保留正式名稱原字」的需求，正確做法是在這張表旁邊加白名單，
+#: 不是回頭改下游。
+TRANSCRIPT_CHAR_NORMALIZATION = {"臺": "台"}
+
+
+def normalize_transcript_text(text: str) -> str:
+    """把產稿輸出的異體字統一成下游慣用寫法（目前只做「臺」→「台」）。
+
+    只做字元層級的等長取代：不碰標點、不做簡繁轉換、不增刪任何字，維持本模組既有的
+    忠實度原則（見 cues_to_paragraphs()：不插入原文沒有的字元）。
+    """
+    for src_ch, dst_ch in TRANSCRIPT_CHAR_NORMALIZATION.items():
+        text = text.replace(src_ch, dst_ch)
+    return text
+
+
 def build_markdown(ep_id: str, title: str, cues: list[tuple[float, float, str]]) -> str:
     """組出符合 transcripts/*.md 既有格式的純文字內容：`# EPxxx 標題` + 段落，用空行分隔。
 
     刻意不產生 `## 小節標題`——那是 whatmkreallysaid.com 人工/編輯過的主題分節，獨立轉錄
     沒有主題偵測能力，勉強硬套會是假資訊。batch.py 不需要小節結構（見任務檔 DoD 1a 說明：
     只要求 analyzer.py 能正常解析成純文字，不需要格式完全一致）。
+
+    2026-08-26：輸出前會過一次 normalize_transcript_text()（目前是「臺」→「台」），
+    標題與內文都算在內。既有的 transcripts/*.md **不回填**，本函式只影響之後新產的稿。
     """
     paragraphs = cues_to_paragraphs(cues)
     header = f"# {ep_id} {title}".rstrip()
     body = "\n\n".join(paragraphs)
-    return f"{header}\n\n{body}\n"
+    # 產稿的最後一步：標題與內文一起過異體字正規化（臺→台）。放在收口而不是散在
+    # 各處，是為了讓「產稿輸出過哪些正規化」只有一個地方要看。
+    return normalize_transcript_text(f"{header}\n\n{body}\n")
 
 
 def srt_to_md(srt_path: Path, ep_id: str, title: str) -> str:
