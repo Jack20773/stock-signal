@@ -39,6 +39,17 @@ CASES_FIXED = [
     ("台積電", "2330.TWO", "2330.TW"),
 ]
 
+# ④ 2026-08-28 新增：日股代號撞台股 6000-6999 號段，字典沒收錄時 resolve_code()
+# 會盲信 Gemini 猜的 current_code，結果被 normalize_tw_suffix() 或官方名單「校正」
+# 得更像真的，全流程零告警但算的是別家公司。
+# 實跑重現（修前）：resolve_code('DISCO','6146.TW') -> '6146.TWO'（耕興 Sporton）
+#                  resolve_code('Keyence','6861.TW') -> '6861.TW'（睿生光電，本身就是
+#                  真台股，連後綴校正都不用做，靜默程度更高）
+CASES_FOREIGN_COLLISION = [
+    ("DISCO", "6146.TW", "6146.T"),
+    ("Keyence", "6861.TW", "6861.T"),
+]
+
 # 這些**必須原樣通過**，不准被「校正」壞掉
 CASES_UNCHANGED = [
     ("台積電", "2330.TW", "2330.TW"),
@@ -69,6 +80,21 @@ def test_correct_codes_are_left_alone():
         if got != want:
             bad.append((name, given, want, got))
     assert not bad, f"不該被動的代號被改壞：{bad}"
+
+
+def test_foreign_stock_names_not_miscorrected_to_tw_collision():
+    """日股名字撞台股號段時，字典要先攔住，不能讓 fallback 把代號『校正』成別家公司。
+
+    這是資料正確性 bug（2026-08-28 台帳）的直接回歸測試：
+    resolve_code('DISCO', '6146.TW') 修前會靜默指到耕興（6146.TWO），
+    修後必須回傳 DISCO 自己的正確代號 6146.T。
+    """
+    bad = []
+    for name, given, want in CASES_FOREIGN_COLLISION:
+        got = resolve_code(name, given)
+        if got != want:
+            bad.append((name, given, want, got))
+    assert not bad, f"日股撞號沒被字典攔住，算成別家公司了：{bad}"
 
 
 def test_no_fake_ticker_survives_validation():
