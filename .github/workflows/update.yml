@@ -1,11 +1,14 @@
 name: 定期分析與寄信
 
 on:
-  schedule:
-    # 週日 UTC 00:00 = 台灣時間週日早上 08:00
-    - cron: "0 0 * * 0"
-    # 週四 UTC 00:00 = 台灣時間週四早上 08:00
-    - cron: "0 0 * * 4"
+  # 2026-08-30 丹尼爾指示停用：Gemini 額度用完（連三次被拒），這條 cron 每週日／四
+  # 08:00 會自動觸發 update.py → analyzer.py 打 GEMINI_API_KEY，今天起不再自動叫。
+  # 要恢復請找丹尼爾裁決，把下面兩行 cron 取消註解即可。
+  # schedule:
+  #   # 週日 UTC 00:00 = 台灣時間週日早上 08:00
+  #   - cron: "0 0 * * 0"
+  #   # 週四 UTC 00:00 = 台灣時間週四早上 08:00
+  #   - cron: "0 0 * * 4"
   workflow_dispatch:
     inputs:
       from_ep:
