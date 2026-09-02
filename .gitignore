@@ -47,3 +47,6 @@ backups/
 
 # canary 的本機 state（每次執行覆寫，不需要進版控）
 canary_state.json
+
+# 抓下來的 YouTube 留言：第三方使用者產生的內容，本 repo 是 PUBLIC，不入版控
+comments_data/
