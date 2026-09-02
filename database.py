@@ -177,6 +177,24 @@ def init_db():
                 ALTER TABLE signals
                 ADD COLUMN IF NOT EXISTS claim_type TEXT
             """)
+            # 2026-09-02 補建（schema 漂移修補，非新功能）：
+            # 這兩欄 2026-08-29 就已經直接加在正式庫上（見 backups/ 當日之後的備份），
+            # 但一直沒寫進 init_db()。正式庫因此看不出問題，全新建立的資料庫卻會炸——
+            # list_signals()、performance._fill_entry_prices()、performance.calc_performance()
+            # 都以 `invalid_reason IS NULL` 當「這筆訊號還算數」的判準，欄位不存在時
+            # 直接 UndefinedColumn。restore_db.py 從備份 JSON 還原時也會帶著這兩個欄名
+            # INSERT，缺欄一樣還原失敗。
+            # 語意：invalid_reason NULL = 有效；非 NULL = 作廢原因（例：業配被誤判成訊號）。
+            #       invalidated_at 是作廢時間，跟著 invalid_reason 一起填。
+            # 純附加、可為 NULL、不回填；IF NOT EXISTS 對已有這兩欄的正式庫是 no-op。
+            cur.execute("""
+                ALTER TABLE signals
+                ADD COLUMN IF NOT EXISTS invalid_reason TEXT
+            """)
+            cur.execute("""
+                ALTER TABLE signals
+                ADD COLUMN IF NOT EXISTS invalidated_at TIMESTAMPTZ
+            """)
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_signals_episode
                 ON signals(episode_id)
