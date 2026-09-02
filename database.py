@@ -30,6 +30,29 @@ def _current_rule_version() -> str | None:
         logging.warning("[rule_version] 取不到規則版本，本次訊號的 rule_version 留空")
         return None
 
+
+def _clean_claim_type(value, episode_id: str = "", code: str = "") -> str | None:
+    """把模型回傳的 claim_type 收斂成 prompt.CLAIM_TYPES 之一，否則回 None（留 NULL）。
+
+    跟 _current_rule_version() 同一個設計原則：這是**稽核用的附加欄位**，
+    值不合法就留空並記一行日誌，不擋寫入、不猜一個值填進去——
+    猜值等於製造假資料，而這一欄存在的理由正是「不要讓假的方向混進勝率分母」。
+    """
+    if value is None:
+        return None
+    v = str(value).strip().lower()
+    try:
+        from prompt import CLAIM_TYPES  # noqa: PLC0415 -- 延遲 import，避免循環相依
+    except Exception:  # noqa: BLE001
+        return None
+    if v in CLAIM_TYPES:
+        return v
+    logging.warning(
+        f"[claim_type] {episode_id} {code}：非法值 {value!r}（合法值 {CLAIM_TYPES}），本筆留空"
+    )
+    return None
+
+
 # 台股：形狀取自本專案自己的官方白名單 `tw_listing_map.json`（證交所＋櫃買中心
 # open API，2026-08-24 產生）。該檔 2326 筆代號的形狀只有兩種：
 #   * 純數字 4~6 碼——一般股 `2330`、ETF `0050` / `00878`（5 碼）/ `006208`（6 碼）
@@ -142,6 +165,17 @@ def init_db():
             cur.execute("""
                 ALTER TABLE signals
                 ADD COLUMN IF NOT EXISTS rule_version TEXT
+            """)
+            # 2026-09-02 新增（來源：serenity-clone/remodel266_model_bakeoff_2026-08-27.md
+            # 第 7 節第 1 件）：記錄「這句話到底是不是在猜未來」。
+            # 值域見 prompt.CLAIM_TYPES（forward / notfwd / unclear）。
+            # 純新增、可為 NULL、不回填——既有訊號沒有這個判定，強行填值等於製造假資料；
+            # NULL 的語意是「此列產生時 schema 還沒有這一欄」。
+            # 🔴 這一欄只記錄、不過濾：action 的填法、寄信與回測的母體都沒有因此改變
+            #    （要不要拿它當過濾條件是丹尼爾的決定，不是這次改的範圍）。
+            cur.execute("""
+                ALTER TABLE signals
+                ADD COLUMN IF NOT EXISTS claim_type TEXT
             """)
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_signals_episode
@@ -275,8 +309,8 @@ def save_result(result: dict) -> int:
                     INSERT INTO signals
                         (episode_id, analysis_date, stock_name, stock_code, action,
                          confidence_level, reasoning, exact_quote, raw_reason,
-                         primary_tag, secondary_tags, rule_version)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                         primary_tag, secondary_tags, rule_version, claim_type)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """, (
                     episode_id, analysis_date,
                     s.get("stock_name"), code, action,
@@ -285,6 +319,7 @@ def save_result(result: dict) -> int:
                     s.get("primary_tag"),
                     json.dumps(s.get("secondary_tags", []), ensure_ascii=False),
                     _current_rule_version(),
+                    _clean_claim_type(s.get("claim_type"), episode_id, code),
                 ))
                 saved += 1
 
@@ -332,9 +367,9 @@ def list_signals(episode_id: str = None) -> list[dict]:
         with conn.cursor() as cur:
             if episode_id:
                 cur.execute(
-                    "SELECT * FROM signals WHERE episode_id=%s ORDER BY created_at DESC",
+                    "SELECT * FROM signals WHERE episode_id=%s AND invalid_reason IS NULL ORDER BY created_at DESC",
                     (episode_id,)
                 )
             else:
-                cur.execute("SELECT * FROM signals ORDER BY created_at DESC")
+                cur.execute("SELECT * FROM signals WHERE invalid_reason IS NULL ORDER BY created_at DESC")
             return [dict(r) for r in cur.fetchall()]
