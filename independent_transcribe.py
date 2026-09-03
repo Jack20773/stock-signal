@@ -16,11 +16,13 @@ metadata header），作為第二條逐字稿來源的地基。
 ——原位置在部署腳本 `cp -r transcripts_data _site/` 的整包複製路徑上，等於讓下載回來
 的影音檔走在通往公開網站的輸送帶上。詳見 INDEPENDENT_MEDIA_ROOT 的註解。
 """
+import json
 import os
 import re
 import subprocess
 import sys
 import tempfile
+import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -216,7 +218,125 @@ def normalize_transcript_text(text: str) -> str:
     return text
 
 
-def build_markdown(ep_id: str, title: str, cues: list[tuple[float, float, str]]) -> str:
+# ---------------------------------------------------------------- 標點復原（選用，可關）
+#
+# 背景：faster-whisper 對中文口語幾乎只產生逗號，不產生句號/問號，獨立轉錄出來的段落
+# 讀起來比 whatmkreallysaid.com 版本生硬。這裡把 self_improvement_試做/
+# trial1_punctuation_restore.py 的可行性試做（本機 Ollama qwen2.5:14b-instruct，
+# video-transcribe 本來就用它做翻譯，零花費）併進生產線，接在 cues_to_paragraphs() 之後、
+# normalize_transcript_text() 之前，逐段落呼叫。
+#
+# 三個設計要求（2026-09-03 任務書）都在這裡落地：
+#   ①可關：環境變數 STOCK_SIGNAL_PUNCT_RESTORE=off（或 0/false/no）一鍵關掉，預設開；
+#     另外開放函式參數 restore_punctuation 給程式化呼叫端（含測試）覆寫。
+#   ②Ollama 連不上/逾時就退回原文，不准讓整條產稿流程掛掉：_call_ollama_for_punctuation()
+#     把所有例外收斂成 PunctuationRestoreUnavailable，restore_paragraph_punctuation() 接住
+#     後印 log「標點復原失敗，已退回原文」，回傳原段落文字，呼叫端完全不用處理例外。
+#   ③不准改動時間碼、不准增刪任何字：本模組的 .md 輸出從頭到尾就不含時間碼（見
+#     build_markdown()），時間碼這件事在格式層級就滿足了；增刪字元則由
+#     _is_punctuation_only_change() 做程式化比對——去掉雙方的標點字元後，剩下的字元序列
+#     必須完全相同，不同就整段丟棄、退回原文，不是註解，是真的會跑的檢查。
+
+
+def _punct_restore_env_enabled() -> bool:
+    v = os.environ.get("STOCK_SIGNAL_PUNCT_RESTORE", "on").strip().lower()
+    return v not in ("off", "0", "false", "no")
+
+
+#: 本機 Ollama 位置與模型：跟 video-transcribe 翻譯功能共用同一顆常駐模型，零花費、
+#: 無次數上限。可用環境變數覆寫（例如指到測試用的假 port，見「退路實測」）。
+PUNCT_OLLAMA_HOST = os.environ.get("STOCK_SIGNAL_PUNCT_OLLAMA_HOST", "http://localhost:11434")
+PUNCT_MODEL = os.environ.get("STOCK_SIGNAL_PUNCT_MODEL", "qwen2.5:14b-instruct")
+PUNCT_TIMEOUT_SECONDS = 120  # 對齊 trial1_punctuation_restore.py 的逾時值
+
+PUNCT_PROMPT_TEMPLATE = """以下是語音辨識(ASR)產出的中文逐字稿片段，幾乎沒有句號，只有零星逗號。
+請幫這段文字加上恰當的標點符號（句號、逗號、問號等），**不要改動任何文字內容、
+不要增刪字詞、不要意譯**，只加標點與適當分段。直接輸出結果，不要加任何說明。
+
+原文：
+{text}"""
+
+#: 判斷「這個字元算不算標點」用的白名單（全形/半形標點 + 空白/換行）。刻意用白名單
+#: 而不是黑名單：白名單判斷錯了頂多把某個真標點誤判成內容字元、導致比對失敗、整段被
+#: 丟棄退回原文（安全的失敗方向）；黑名單判斷錯了則可能把 LLM 真的改掉的內容字元
+#: 誤認成標點而放行，違反硬要求③，方向是危險的。
+_PUNCT_CHARS = set(
+    "，,。.！!？?；;：:、~～…—-‐‑–－ 　\t\r\n"
+    "「」『』（）()《》〈〉“”\"''‘’＂＇·•∙"
+)
+
+
+def _strip_punct(text: str) -> str:
+    """去掉所有標點/空白，只留下要比對的字元序列。"""
+    return "".join(ch for ch in text if ch not in _PUNCT_CHARS)
+
+
+def _is_punctuation_only_change(original: str, restored: str) -> bool:
+    """硬要求③的實際比對函式：去掉標點後兩邊字元序列必須完全相同。
+
+    不相同代表 LLM 動到了非標點字元（增字/刪字/改字/意譯），這段輸出不可採用。
+    這是程式化檢查，不是註解——build_markdown() 真的會呼叫這個函式，沒過就丟棄。
+    """
+    return _strip_punct(original) == _strip_punct(restored)
+
+
+class PunctuationRestoreUnavailable(RuntimeError):
+    """Ollama 連不上/逾時/回應格式不對。呼叫端一律接住這個例外，退回原文，不中斷主流程。"""
+
+
+def _call_ollama_for_punctuation(text: str, *, host: str, model: str, timeout: int) -> str:
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": PUNCT_PROMPT_TEMPLATE.format(text=text)}],
+        "stream": False,
+        "options": {"temperature": 0.1},
+    }
+    req = urllib.request.Request(
+        f"{host}/api/chat",
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return data["message"]["content"].strip()
+    except Exception as e:  # noqa: BLE001 - 連不上/逾時/JSON壞掉/欄位缺失，任何失敗都要能退回原文
+        raise PunctuationRestoreUnavailable(f"{type(e).__name__}: {e}") from e
+
+
+def restore_paragraph_punctuation(paragraph: str, *, host: str | None = None,
+                                   model: str | None = None, timeout: int | None = None) -> str:
+    """幫單一段落補標點；任何失敗（連不上/逾時/驗證沒過）都退回原段落文字並印 log，
+    絕不讓標點復原失敗中斷產稿流程（硬要求②）。
+
+    host/model/timeout 三個參數只給程式化呼叫端（測試、手動實驗）覆寫用，正常生產路徑
+    走 build_markdown()/srt_to_md() 傳下來的預設值即可。
+    """
+    if not paragraph.strip():
+        return paragraph
+    host = host or PUNCT_OLLAMA_HOST
+    model = model or PUNCT_MODEL
+    timeout = timeout or PUNCT_TIMEOUT_SECONDS
+    try:
+        restored = _call_ollama_for_punctuation(paragraph, host=host, model=model, timeout=timeout)
+    except PunctuationRestoreUnavailable as e:
+        print(f"[標點復原] 標點復原失敗，已退回原文：{e}", file=sys.stderr)
+        return paragraph
+    if not restored.strip():
+        print("[標點復原] 標點復原失敗（Ollama 回傳空字串），已退回原文", file=sys.stderr)
+        return paragraph
+    if not _is_punctuation_only_change(paragraph, restored):
+        print("[標點復原] 標點復原失敗（去標點後與原文不同，疑似增刪改字），已退回原文",
+              file=sys.stderr)
+        return paragraph
+    return restored
+
+
+def build_markdown(ep_id: str, title: str, cues: list[tuple[float, float, str]], *,
+                    restore_punctuation: bool | None = None,
+                    punct_host: str | None = None, punct_model: str | None = None,
+                    punct_timeout: int | None = None) -> str:
     """組出符合 transcripts/*.md 既有格式的純文字內容：`# EPxxx 標題` + 段落，用空行分隔。
 
     刻意不產生 `## 小節標題`——那是 whatmkreallysaid.com 人工/編輯過的主題分節，獨立轉錄
@@ -225,8 +345,18 @@ def build_markdown(ep_id: str, title: str, cues: list[tuple[float, float, str]])
 
     2026-08-26：輸出前會過一次 normalize_transcript_text()（目前是「臺」→「台」），
     標題與內文都算在內。既有的 transcripts/*.md **不回填**，本函式只影響之後新產的稿。
+
+    2026-09-03：段落切好之後、正規化之前，加一道選用的標點復原（見上方區塊）。
+    restore_punctuation 為 None 時看環境變數 STOCK_SIGNAL_PUNCT_RESTORE（預設開）；
+    傳 True/False 會直接覆寫環境變數，給測試與手動呼叫用。
     """
     paragraphs = cues_to_paragraphs(cues)
+    do_restore = _punct_restore_env_enabled() if restore_punctuation is None else restore_punctuation
+    if do_restore:
+        paragraphs = [
+            restore_paragraph_punctuation(p, host=punct_host, model=punct_model, timeout=punct_timeout)
+            for p in paragraphs
+        ]
     header = f"# {ep_id} {title}".rstrip()
     body = "\n\n".join(paragraphs)
     # 產稿的最後一步：標題與內文一起過異體字正規化（臺→台）。放在收口而不是散在
@@ -234,11 +364,16 @@ def build_markdown(ep_id: str, title: str, cues: list[tuple[float, float, str]])
     return normalize_transcript_text(f"{header}\n\n{body}\n")
 
 
-def srt_to_md(srt_path: Path, ep_id: str, title: str) -> str:
+def srt_to_md(srt_path: Path, ep_id: str, title: str, *,
+              restore_punctuation: bool | None = None,
+              punct_host: str | None = None, punct_model: str | None = None,
+              punct_timeout: int | None = None) -> str:
     cues = parse_srt(srt_path)
     if not cues:
         raise ValueError(f"從 {srt_path} 解析不出任何字幕 cue，檔案可能是空的或格式不符預期")
-    return build_markdown(ep_id, title, cues)
+    return build_markdown(ep_id, title, cues, restore_punctuation=restore_punctuation,
+                           punct_host=punct_host, punct_model=punct_model,
+                           punct_timeout=punct_timeout)
 
 
 # ---------------------------------------------------------------- 呼叫 video-transcribe

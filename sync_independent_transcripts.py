@@ -46,8 +46,36 @@ from independent_transcribe import (
 HERE = Path(__file__).parent
 CHANNEL_URL = "https://www.youtube.com/@Gooaye/videos"
 EPISODES_LOCAL = HERE / "episodes.json"
-# 轉錄旗標（由 main() 依 CLI 填入）。空 dict＝完全沿用 2026-08-24 改動之前的行為。
-TRANSCRIBE_OPTS: dict = {}
+
+#: 組態 D 的熱詞檔（2026-09-03 產生）：來源是 tw_listing_map.json 的 2,326 筆台股名冊，
+#: 只留長度 >= 3 的名稱（濾掉「全家」「幸福」「地心引力」這類會跟一般用語同名的兩字詞，
+#: 見產生時的實測：兩字詞誤命中率高），再依既有 transcripts/*.md 語料庫的出現次數排序、
+#: 「股癌」「謝孟恭」放最前面（節目名/主持人名不在台股名冊裡，但幾乎每集都會出現）。
+#: 正本與精確參數見 000_Agent/001_memory/feedback_transcription_model_policy.md 的「組態 D」。
+#: ⚠️ transcribe.py 的 hotwords 有 224 token 硬上限（超過截尾），這份檔案有 1,072 個詞，
+#: 實際生效的只有排在最前面的一小段——排序依語料庫出現頻率是盡力而為的啟發式，不是
+#: 語意分析，仍可能有雜訊（見產生時附帶的高頻詞清單）。
+DEFAULT_HOTWORDS_FILE = HERE / "asr" / "hotwords_gooaye.txt"
+
+# 轉錄旗標（由 main() 依 CLI 填入／覆寫）。
+# 2026-09-03 丹尼爾裁決：預設值改為「組態 D」（large-v3 + 熱詞 + asr_guard=lite）——
+# 2026-08-25 單因子拆解實測顯示三者缺一不可，只換模型或只開 guard 或只灌熱詞都停在
+# 12.5% 命中率，三者同時開才跳到 75%（母體僅 8 次，不得只憑這個數字直接推論全體，
+# 但已是目前查得到的最佳組態，見 feedback_transcription_model_policy.md）。
+# --model / --asr-guard / --hotwords-file / --no-hotwords 四個 CLI 旗標仍可覆寫，
+# 見 main() 的 argparse 區塊；不加任何旗標就是跑組態 D，不再是「完全沿用 2026-08-24
+# 改動之前的行為」（那個舊預設是 large-v3-turbo/無熱詞/guard off，已被組態 D 的實測結果
+# 取代——舊行為仍可用 `--model large-v3-turbo --asr-guard off --no-hotwords` 手動叫回來）。
+TRANSCRIBE_OPTS: dict = {
+    "model": "large-v3",
+    "asr_guard": "lite",
+}
+if DEFAULT_HOTWORDS_FILE.exists():
+    TRANSCRIBE_OPTS["hotwords_file"] = str(DEFAULT_HOTWORDS_FILE)
+
+#: 標點復原開關的 CLI 覆寫（由 main() 的 --punct-restore 填入）。None＝不覆寫，交給
+#: independent_transcribe.srt_to_md() 自己看環境變數 STOCK_SIGNAL_PUNCT_RESTORE（預設 on）。
+PUNCT_RESTORE_OVERRIDE: bool | None = None
 
 MANIFEST_DIR = HERE / "transcripts_data" / "independent_transcribe"
 MANIFEST_PATH = MANIFEST_DIR / "manifest.json"
@@ -352,7 +380,7 @@ def process_episode(ep_num: int, yt_info: dict, remote_map: dict[int, dict],
 
     title = _title_from_description(video_id)
     try:
-        md_text = srt_to_md(srt_path, ep_id, title)
+        md_text = srt_to_md(srt_path, ep_id, title, restore_punctuation=PUNCT_RESTORE_OVERRIDE)
     except ValueError as e:
         print(f"{prefix} FAIL   {ep_id}  格式轉換失敗：{e}")
         return "FAIL"
@@ -405,6 +433,19 @@ def process_episode(ep_num: int, yt_info: dict, remote_map: dict[int, dict],
               f"{existing_now[0].name}，獨立轉錄結果不寫入，避免同集雙檔）")
         return "SKIP"
 
+    # 2026-09-03 新增（任務書「修雙檔衝突」要求②：站方已有的集數就不寫入自建版）：
+    # main() 開頭讀的 remote_map 是這次執行一開始的快照，轉錄可能長達 90 分鐘，
+    # 這段期間 download_transcripts.py 若重新整份覆寫 episodes.json（見
+    # load_remote_episode_map() docstring：本腳本只讀不寫，權威來源是那支腳本），
+    # 快照就會過期。寫入前重新讀一次檔案（成本只是一次檔案 I/O），比對到站方現在
+    # 已經有這集就不寫，避免又造出一組 EP681-684 那樣的雙檔衝突。
+    fresh_remote_map = load_remote_episode_map()
+    if ep_num in fresh_remote_map:
+        print(f"{prefix} SKIP   {ep_id}（重新讀 episodes.json 發現站方現在已有這集："
+              f"{fresh_remote_map[ep_num].get('filename', '?')}，獨立轉錄結果不寫入，"
+              f"避免同集雙檔；這集若要交叉驗證請等下次執行）")
+        return "SKIP"
+
     filename = safe_filename(f"{ep_id}_{title}.md")
     out_path = TRANSCRIPTS_DIR / filename
     atomic_write_text(out_path, md_text)
@@ -419,36 +460,53 @@ def process_episode(ep_num: int, yt_info: dict, remote_map: dict[int, dict],
 
 
 def main():
+    global PUNCT_RESTORE_OVERRIDE
     parser = argparse.ArgumentParser()
     parser.add_argument("--check-only", action="store_true", help="只做 1b 偵測，不下載不轉錄")
-    # 2026-08-24：以下四個旗標全部預設維持舊行為，不加就跟改動之前一模一樣。
+    # 2026-09-03：不加任何旗標＝跑組態 D（見上方 TRANSCRIBE_OPTS 的說明），以下旗標用來
+    # 覆寫組態 D 的個別項目，或整組退回 2026-08-24 之前的舊行為。
     parser.add_argument("--model", default=None,
-                        help="覆寫 whisper 模型（預設沿用 independent_transcribe.DEFAULT_MODEL"
-                             "＝large-v3-turbo；專有名詞精準度優先請用 large-v3）")
-    parser.add_argument("--asr-guard", default="off", choices=("off", "on", "lite"),
+                        help="覆寫 whisper 模型（不加＝組態 D 的 large-v3；退回舊行為請用 "
+                             "large-v3-turbo）")
+    parser.add_argument("--asr-guard", default=None, choices=("off", "on", "lite"),
                         dest="asr_guard",
                         help="關掉跨窗上下文傳染（condition_on_previous_text=False），"
-                             "避免同一個專有名詞聽錯一次後整集都錯。預設 off。"
+                             "避免同一個專有名詞聽錯一次後整集都錯。不加＝組態 D 的 lite。"
                              "on＝連逐字時間對齊＋空窗重掃一起開（貴，給對白稀疏的影片）；"
-                             "lite＝只關跨窗上下文（幾乎不加錢，給連續講話的 podcast）")
+                             "off＝完全不開（退回舊行為）")
     parser.add_argument("--hotwords-file", default=None, dest="hotwords_file",
-                        help="熱詞檔（UTF-8，空白分隔），灌進每個解碼窗的 prompt。預設不灌")
+                        help="覆寫熱詞檔路徑（UTF-8，空白分隔）。不加＝組態 D 的 "
+                             f"{DEFAULT_HOTWORDS_FILE.name}")
+    parser.add_argument("--no-hotwords", action="store_true", dest="no_hotwords",
+                        help="關掉組態 D 預設灌的熱詞檔，跑無熱詞版本")
     parser.add_argument("--use-raw-srt", action="store_true", dest="use_raw_srt",
                         help="下游改吃 source.raw.srt（Whisper 原始輸出），繞過 OpenCC s2twp "
                              "的台灣用詞替換（支持→支援那類）。預設 off")
+    parser.add_argument("--punct-restore", default=None, choices=("on", "off"),
+                        dest="punct_restore",
+                        help="覆寫標點復原開關（本機 Ollama 補標點）。不加＝看環境變數 "
+                             "STOCK_SIGNAL_PUNCT_RESTORE（預設 on）")
     parser.add_argument("--limit", type=int, default=0, help="這次最多處理幾集（0=不限制）")
     args = parser.parse_args()
 
     if args.model:
         TRANSCRIBE_OPTS["model"] = args.model
-    if args.asr_guard != "off":
-        TRANSCRIBE_OPTS["asr_guard"] = args.asr_guard
+    if args.asr_guard is not None:
+        if args.asr_guard == "off":
+            TRANSCRIBE_OPTS.pop("asr_guard", None)
+        else:
+            TRANSCRIBE_OPTS["asr_guard"] = args.asr_guard
     if args.hotwords_file:
         TRANSCRIBE_OPTS["hotwords_file"] = args.hotwords_file
+    elif args.no_hotwords:
+        TRANSCRIBE_OPTS.pop("hotwords_file", None)
     if args.use_raw_srt:
         TRANSCRIBE_OPTS["prefer_raw_srt"] = True
-    if TRANSCRIBE_OPTS:
-        print(f"[轉錄設定] 非預設旗標：{TRANSCRIBE_OPTS}")
+    if args.punct_restore is not None:
+        PUNCT_RESTORE_OVERRIDE = args.punct_restore == "on"
+    print(f"[轉錄設定] 目前套用（不加旗標即組態 D）：{TRANSCRIBE_OPTS}"
+          f"；標點復原覆寫：{PUNCT_RESTORE_OVERRIDE}"
+          "（None＝看環境變數 STOCK_SIGNAL_PUNCT_RESTORE，預設 on）")
 
     print("=== 步驟 1：抓 YouTube 頻道集數清單 ===")
     yt_map = fetch_youtube_episodes()
