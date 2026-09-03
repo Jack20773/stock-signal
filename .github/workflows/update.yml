@@ -2,8 +2,17 @@ name: 定期分析與寄信
 
 on:
   # 2026-08-30 丹尼爾指示停用：Gemini 額度用完（連三次被拒），這條 cron 每週日／四
-  # 08:00 會自動觸發 update.py → analyzer.py 打 GEMINI_API_KEY，今天起不再自動叫。
-  # 要恢復請找丹尼爾裁決，把下面兩行 cron 取消註解即可。
+  # 08:00 會自動觸發 update.py → analyzer.py 打 GEMINI_API_KEY，當時起不再自動叫。
+  #
+  # ── 2026-09-03 進度：裁決是「改用 Claude，而且是訂閱制」，但 cron 仍然不能在這裡開回來 ──
+  # 程式端已經改好了（config.LLM_PROVIDER 預設 "claude"，analyzer.py 走本機
+  # `claude -p` 訂閱制路徑，實跑 EP690 驗證通過）。**卡住的是「排程要跑在哪裡」**：
+  #   GitHub Actions 的 runner 是 GitHub 的雲端機器，上面沒有丹尼爾登入的 Claude Code
+  #   OAuth 憑證，也沒有 `claude` 這支 CLI。要在這裡跑 Claude 只有兩條路，兩條都不行：
+  #     (a) 放 ANTHROPIC_API_KEY 進 secrets → 那是**按次計費的 API**，丹尼爾沒同意花這筆錢；
+  #     (b) 把本機的 OAuth 憑證塞進 secrets → 把長期憑證放進 CI，安全上不該做。
+  #   所以「排程跑在哪裡」是要丹尼爾裁決的題目（本機 Windows 排程 vs 其他），
+  #   **不由 AI 自己選**。裁決之前這兩行 cron 維持註解。
   # schedule:
   #   # 週日 UTC 00:00 = 台灣時間週日早上 08:00
   #   - cron: "0 0 * * 0"
@@ -46,6 +55,13 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # 2026-09-03：config.py 的預設已改成 LLM_PROVIDER=claude（走本機訂閱制
+          # `claude -p`）。雲端 runner 上沒有 `claude` 這支 CLI、也沒有丹尼爾的
+          # OAuth 憑證，所以這裡**明確釘回 gemini**——不是偏好，是讓 workflow_dispatch
+          # 手動補跑時「失敗得清楚」（Gemini 額度不足 → 明確的 API 錯誤），
+          # 而不是變成「找不到 claude 指令」這種看不出根因的錯。
+          # 等丹尼爾裁決排程落腳處之後，這一行要跟著改。
+          LLM_PROVIDER: gemini
         run: |
           FROM_EP="${{ github.event.inputs.from_ep || '0' }}"
           if [ "$FROM_EP" != "0" ]; then

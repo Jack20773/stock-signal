@@ -50,3 +50,10 @@ canary_state.json
 
 # 抓下來的 YouTube 留言：第三方使用者產生的內容，本 repo 是 PUBLIC，不入版控
 comments_data/
+
+# 業配關卡的稽核檔與本機排程狀態（2026-09-03）：
+# ad_blocked_signals.jsonl 內含逐字稿原句，transcripts/ 本來就不入版控，
+# 它的節錄自然也不該進這個 PUBLIC repo；last_run_status.json 是本機執行狀態。
+ops/*.jsonl
+ops/last_run_status.json
+ops/_smoke_request.txt

@@ -38,6 +38,8 @@ from report_html import (
 )
 from database import list_active_subscribers, save_latest_report, list_signals
 from attention import compute_attention
+# 業配關卡（第二道，確定性關鍵字比對）——見 ad_guard.py 的檔頭與 2026-08-28 事故。
+from ad_guard import screen_signals
 
 # ── 寄信 ────────────────────────────────────────────────────────────────────
 
@@ -177,7 +179,10 @@ def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
     results.sort(key=lambda r: (r.get("entry_date") or "", r.get("episode_id") or ""))
 
     if not results:
-        logging.warning("無符合條件的訊號資料")
+        # 母體 0 不得被讀成「檢查通過」：這裡直接 return，業配關卡根本沒機會跑。
+        # 講清楚是「沒東西可檢查」而不是「檢查過都乾淨」（見 ad_guard 檔頭）。
+        logging.warning("無符合條件的訊號資料——母體 0 筆，本次不寄信，"
+                        "且業配關卡沒有執行（沒有東西可以檢查，不等於檢查通過）")
         return
 
     subject = f"【股癌訊號追蹤】{title}  勝率 {stats['win_rate']}%  Win {stats['wins']}/{stats['decided']}"
@@ -229,8 +234,32 @@ def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
             logging.error(f"生成 report_transcripts.html 失敗（不影響主報告）：{e}")
 
         if not no_send:
+            # ── 業配關卡（2026-09-03 新增，攔在寄信之前）────────────────────
+            # 事故：2026-08-28 EP689 保險套業配裡的「誠心推薦特斯拉」被判成 TSLA
+            # 看多訊號，從這一行寄給了 8 個人。prompt.py 的 Rule 1-B 是第一道，
+            # 但它跟出事的那一步同樣是「模型自己判斷」；這裡是第二道、原理不同
+            # 的關卡：確定性關鍵字比對，不問模型。
+            # 位置刻意選在 generate_html_email() 之前——email 的內容本身就不該
+            # 包含被擋的訊號，而不是寄完再說。
+            # ⚠ 已知涵蓋範圍：只擋 email（含 save_latest_report 存給 linebot 補寄
+            #   的那一份）。上面已經寫好的 report_detail.html 仍然包含全部訊號，
+            #   那是公開頁面不是主動推送，這次不改它的行為。
+            screened = screen_signals(results)
+            for _line in screened["lines"]:
+                logging.info(_line)
+            email_results = screened["passed"]
+
+            if screened["population"] > 0 and not email_results:
+                # 全部被擋還硬寄一封空報告，等於把「今天全被擋下」偽裝成「今天沒
+                # 訊號」。寧可不寄，讓人來看稽核檔。
+                logging.error(
+                    f"業配關卡把全部 {screened['population']} 筆訊號都擋下了，本次不寄信。"
+                    f"請看 {screened['log_path']} 逐筆判讀後再決定。"
+                )
+                return
+
             # 寄送簡要版 email
-            html_email = generate_html_email(results, title, stats, detail_url)
+            html_email = generate_html_email(email_results, title, stats, detail_url)
             send_email(subject, html_email, override_to=override_to)
             if not override_to:
                 # 手動指定收件人時視為一次性測試/單獨寄送，不連帶寄給全體訂閱者
