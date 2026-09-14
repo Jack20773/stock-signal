@@ -64,6 +64,13 @@ jobs:
           if [ -d transcripts_data ]; then
             cp -r transcripts_data _site/transcripts_data
           fi
+          # 2026-09-15：回測頁（丹尼爾裁決「併進原本網站」）。頁面由另一個專案
+          # gooaye-site 產生，本機排程 ops/run_daily_analysis.ps1 把它以
+          # backtest.html 之名 commit 進本 repo，這裡只負責搬進 _site。同
+          # update.yml 同一段；沒有就跳過，不讓部署失敗。
+          if [ -f backtest.html ]; then
+            cp backtest.html _site/backtest.html
+          fi
 
       # 2026-08-15 索羅門新增，與 update.yml 同一道檢查——**兩支 workflow 都要有**，
       # 只擋一支等於沒擋（手動觸發那支正好是最可能從非預期環境跑的那一支）。

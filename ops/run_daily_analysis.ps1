@@ -27,6 +27,8 @@
 #   NO --send. Mail stays a deliberate manual act; see notifier.py's ad gate.
 #
 #   Then, ONLY if update.py exited 0:
+#     (2026-09-15) gooaye-site build.py -> backtest.html, commit+push if changed
+#       (see the BACKTEST block; cannot fail the run)
 #     gh workflow run publish-pages.yml
 #     The database is what update.py writes; the PUBLIC SITE is built by GitHub
 #     Actions. Disabling the Actions cron (10b91dd) killed the publish half too,
@@ -235,6 +237,95 @@ try {
         Write-Log ('RUN OK: {0} of {1} considered episode(s) analysed by Claude this run' -f $anal, $pop)
     }
 
+    # ---- backtest page (2026-09-15) ----------------------------------------
+    # Daniel ruled "merge it into the existing site" on 2026-09-15. The
+    # backtest page is built by a SEPARATE project, 300_Projects\gooaye-site
+    # (python -X utf8 build.py -> site\index.html). It reads the same database;
+    # build.py resolves DATABASE_URL by itself (env var, else the dotenv file
+    # named in its config.json). NOTHING here touches or prints that value.
+    #
+    # The public site is built by GitHub Actions from THIS repo, so the page
+    # has to be inside this repo: site\index.html is copied to backtest.html
+    # at the repo root, and publish-pages.yml / update.yml copy it into
+    # _site\backtest.html (check_site_payload.py whitelists that name). It is
+    # committed and pushed ONLY when the bytes actually changed, and the commit
+    # names backtest.html explicitly so nobody else's uncommitted work in this
+    # working tree gets swept in.
+    #
+    # Same rule as publish and mail below: by now the analysis has succeeded
+    # and is in the database. A backtest failure (build.py non-zero, git
+    # conflict, no network) is logged and carried into last_run_status.json as
+    # backtest=FAILED, but it must NOT stop the publish dispatch or the mail.
+    # Status values: BUILT (new bytes committed+pushed) / UNCHANGED / FAILED.
+    #
+    # This block runs BEFORE the publish dispatch on purpose: the dispatch
+    # checks out origin/master, so the push has to land first.
+    $backtest = 'FAILED'
+    $btProj   = Join-Path (Split-Path -Parent $Proj) 'gooaye-site'
+    $btSrc    = Join-Path $btProj 'site\index.html'
+    $btDst    = Join-Path $Proj 'backtest.html'
+    $savedEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        if (-not (Test-Path (Join-Path $btProj 'build.py'))) {
+            throw ('gooaye-site not found at ' + $btProj)
+        }
+        Write-Log 'BACKTEST START: gooaye-site build.py'
+        Push-Location $btProj
+        try {
+            $bout  = Invoke-Py @((Join-Path $btProj 'build.py'))
+            $bcode = $script:PyExit
+        }
+        finally { Pop-Location }
+        foreach ($l in $bout) { Write-Log ('  bt| ' + $l) }
+        if ($bcode -ne 0) { throw ('build.py exit ' + $bcode) }
+        if (-not (Test-Path $btSrc)) { throw ('build.py exit 0 but ' + $btSrc + ' is missing') }
+
+        $newHash = (Get-FileHash -Path $btSrc -Algorithm SHA256).Hash
+        $oldHash = ''
+        if (Test-Path $btDst) { $oldHash = (Get-FileHash -Path $btDst -Algorithm SHA256).Hash }
+        if ($newHash -eq $oldHash) {
+            $backtest = 'UNCHANGED'
+            Write-Log 'BACKTEST UNCHANGED: site\index.html is byte-identical to backtest.html, nothing to commit'
+        } else {
+            Copy-Item -Path $btSrc -Destination $btDst -Force
+            # Another session may hold .git\index.lock (a sibling agent
+            # committing transcripts); wait 10 s and retry, up to 6 times.
+            $gitOk = $false
+            $stamp = Get-Date -Format 'yyyy-MM-dd'
+            $msg   = ('backtest.html: daily refresh ' + $stamp + ' (auto, run_daily_analysis.ps1)')
+            for ($i = 1; $i -le 6; $i++) {
+                $gout = & git add -- backtest.html 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    $gout = & git commit -m $msg -- backtest.html 2>&1
+                    if ($LASTEXITCODE -eq 0) { $gitOk = $true; break }
+                }
+                if (($gout -join ' ') -match 'index\.lock') {
+                    Write-Log ('BACKTEST: git index.lock busy (try {0}/6), waiting 10 s' -f $i)
+                    Start-Sleep -Seconds 10
+                } else {
+                    break
+                }
+            }
+            if (-not $gitOk) {
+                foreach ($l in $gout) { Write-Log ('  git| ' + $l) }
+                throw 'git add/commit of backtest.html failed'
+            }
+            $pout = & git push origin HEAD:master 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                foreach ($l in $pout) { Write-Log ('  git| ' + $l) }
+                throw 'git push failed (commit is local; next run will push it together with that day''s refresh)'
+            }
+            $backtest = 'BUILT'
+            Write-Log 'BACKTEST OK: backtest.html committed and pushed; publish-pages.yml below will ship it'
+        }
+    }
+    catch {
+        $backtest = 'FAILED'
+        Write-Log ('BACKTEST FAILED: {0}. Analysis, publish and mail are unaffected - only the backtest page was not refreshed.' -f $_.Exception.Message)
+    }
+    finally { $ErrorActionPreference = $savedEap }
+
     # ---- publish the public site (2026-09-09) -----------------------------
     # Reached only when update.py exited 0 and no episode failed, i.e. the
     # database is in a good state. A half-finished analysis must never be
@@ -313,7 +404,7 @@ try {
         }
     }
 
-    Write-Status 'OK' ('considered=' + $pop + ' analysed=' + $anal + ' skipped=' + $skip + ' publish=' + $publish + ' mail=' + $mail) $true
+    Write-Status 'OK' ('considered=' + $pop + ' analysed=' + $anal + ' skipped=' + $skip + ' backtest=' + $backtest + ' publish=' + $publish + ' mail=' + $mail) $true
     exit 0
 }
 catch {

@@ -57,6 +57,10 @@ _NAV_TABS = (
     ("report",      "index.html",       "📊 訊號報告"),
     ("attention",   "attention.html",   "🔥 目前關注度"),
     ("transcripts", "transcripts.html", "📄 逐字稿"),
+    # 2026-09-15：回測頁由另一個專案 gooaye-site 產生、以 backtest.html 進站
+    # （丹尼爾裁決「併進原本網站」）。本檔只負責導覽連結；那一頁自己沒有
+    # 這排 tab，所以 key 永遠不會是 active。
+    ("backtest",    "backtest.html",    "📈 回測"),
 )
 
 

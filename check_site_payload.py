@@ -39,6 +39,8 @@ ALLOWED = [
     ("attention.html", "關注度頁"),
     ("transcripts.html", "逐字稿瀏覽頁（頁面本身只含集數 metadata）"),
     ("transcripts_data/*.txt", "逐字稿純文字全文——丹尼爾 2026-08-15 明確裁決維持公開"),
+    ("backtest.html", "回測頁（gooaye-site 產出，丹尼爾 2026-09-15 裁決併進原本網站）；"
+                      "內容只有聚合後的勝率統計與 HTML，不含憑證"),
 ]
 
 #: 就算副檔名對，這些也一律不准出門（第二層，防「.txt 裡塞了不該有的東西」的粗略

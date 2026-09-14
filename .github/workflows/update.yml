@@ -110,6 +110,10 @@ jobs:
           if [ -d transcripts_data ]; then
             cp -r transcripts_data _site/transcripts_data
           fi
+          # 2026-09-15：回測頁，見 publish-pages.yml 同一段註解（兩支都要有）。
+          if [ -f backtest.html ]; then
+            cp backtest.html _site/backtest.html
+          fi
 
       # 2026-08-15 索羅門新增（丹尼爾裁決：逐字稿維持公開，但只有名單上的東西能出門）
       # 白名單比對，不合規就中止部署。理由與白名單內容見 check_site_payload.py 檔頭。
