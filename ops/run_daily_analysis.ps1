@@ -26,6 +26,14 @@
 #     Step 4 regenerate the HTML reports
 #   NO --send. Mail stays a deliberate manual act; see notifier.py's ad gate.
 #
+#   Then, ONLY if update.py exited 0:
+#     gh workflow run publish-pages.yml
+#     The database is what update.py writes; the PUBLIC SITE is built by GitHub
+#     Actions. Disabling the Actions cron (10b91dd) killed the publish half too,
+#     so from 2026-08-30 to 2026-09-09 the database kept updating daily while
+#     the site sat frozen. Nobody noticed for 10 days. This dispatch is the
+#     missing half. It is fire-and-forget and CANNOT fail the run.
+#
 # SMOKE MODE (how to prove the Claude leg really runs without burning quota)
 #   Put an episode id (e.g. EP689) in ops\_smoke_request.txt. The next run
 #   analyses that ONE episode through the real analyzer, then blanks the sentinel
@@ -57,6 +65,13 @@
 # OAuth subscription"). The first run of this script died on exactly that line.
 # Child-process failure is judged by exit code and by the population line, never
 # by "stderr was non-empty".
+param(
+    # 2026-09-15: mail normally goes out only on Sunday/Thursday (see the MAIL
+    # block near the end). -ForceSend mails today regardless - for a manual
+    # catch-up or for proving the mail leg works. The scheduled task does NOT
+    # pass this.
+    [switch]$ForceSend
+)
 $ErrorActionPreference = 'Stop'
 
 $ScriptPath = $MyInvocation.MyCommand.Path
@@ -219,7 +234,86 @@ try {
     } else {
         Write-Log ('RUN OK: {0} of {1} considered episode(s) analysed by Claude this run' -f $anal, $pop)
     }
-    Write-Status 'OK' ('considered=' + $pop + ' analysed=' + $anal + ' skipped=' + $skip) $true
+
+    # ---- publish the public site (2026-09-09) -----------------------------
+    # Reached only when update.py exited 0 and no episode failed, i.e. the
+    # database is in a good state. A half-finished analysis must never be
+    # published, which is why this sits after every failure exit above.
+    #
+    # WHY IT CANNOT FAIL THE RUN: by this point the analysis has already
+    # succeeded and is already committed to the database. A failed dispatch (no
+    # network, gh logged out, token scope revoked, gh not on PATH) must not turn
+    # a successful analysis into a red run. It is logged, and carried into
+    # last_run_status.json as publish=..., so a silent publish outage is still
+    # VISIBLE - which is exactly the failure mode that hid for 10 days.
+    #
+    # ErrorActionPreference is forced to Continue around the call for the same
+    # reason Invoke-Py does it: under 'Stop' every stderr LINE from a child
+    # process becomes a terminating error, and gh writes progress to stderr.
+    #
+    # COST: repo Jack20773/stock-signal is PUBLIC, so Actions minutes are free.
+    # This is not a metered API call.
+    #
+    # ASYNC: `gh workflow run` only DISPATCHES - it returns as soon as GitHub
+    # accepts the request and does NOT wait for the ~9 minute build. To check
+    # what actually happened:
+    #   gh run list --workflow=publish-pages.yml --limit 3
+    $publish = 'UNKNOWN'
+    $savedEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $ghOut  = & gh workflow run publish-pages.yml --repo Jack20773/stock-signal 2>&1
+        $ghExit = $LASTEXITCODE
+        if ($ghExit -eq 0) {
+            $publish = 'DISPATCHED'
+            Write-Log 'PUBLISH: dispatched publish-pages.yml (async, build takes ~9 min). Verify with: gh run list --workflow=publish-pages.yml --limit 3'
+        } else {
+            $publish = ('FAILED_EXIT_' + $ghExit)
+            Write-Log ('PUBLISH FAILED: gh exit={0}. The ANALYSIS DID SUCCEED and is in the database - only the site publish did not fire. gh output follows.' -f $ghExit)
+            foreach ($l in $ghOut) { Write-Log ('  gh| ' + $l) }
+        }
+    }
+    catch {
+        $publish = 'FAILED_EXCEPTION'
+        Write-Log ('PUBLISH FAILED (exception): {0}. Analysis unaffected; only the site publish did not fire.' -f $_.Exception.Message)
+    }
+    finally { $ErrorActionPreference = $savedEap }
+
+    # ---- mail the report (2026-09-15) ---------------------------------------
+    # Daniel ruled "turn it on" on 2026-09-15 00:28 (Discord 1549094513316864043).
+    # When the Actions cron was disabled on 8/30, analysis and mail were switched
+    # off together. On 9/3 analysis came back on this machine but mail was left
+    # as a manual act; he was asked whether to automate it, never answered, and
+    # nobody asked again - 12 days, 4 issues never sent.
+    #
+    # Cadence = the old cron: Sunday and Thursday ("0 0 * * 0" / "0 0 * * 4" UTC
+    # = 08:00 Taipei). The command is verbatim the old workflow's mail step:
+    #   notifier.py --no-fill --detail-url ...
+    # The ad gate (2026-09-03) lives inside notifier.py right before send_email;
+    # nothing is re-judged here. Population 0 (nothing to mail) makes notifier
+    # return without sending, by itself.
+    #
+    # Same rule as publish: by now the analysis has succeeded and is in the
+    # database, so a mail failure must not paint the run red - but it is logged
+    # and carried into last_run_status.json as mail=, so "never went out" stays
+    # VISIBLE. Manual catch-up on any day: run this script with -ForceSend.
+    $mail = 'SKIPPED_NOT_MAIL_DAY'
+    $dow  = (Get-Date).DayOfWeek
+    if ($ForceSend -or $dow -eq 'Sunday' -or $dow -eq 'Thursday') {
+        Write-Log ('MAIL START: notifier.py --no-fill --detail-url (day={0}, force={1})' -f $dow, [bool]$ForceSend)
+        $mout  = Invoke-Py @((Join-Path $Proj 'notifier.py'), '--no-fill', '--detail-url', 'https://Jack20773.github.io/stock-signal/')
+        $mcode = $script:PyExit
+        foreach ($l in $mout) { Write-Log ('  mail| ' + $l) }
+        if ($mcode -eq 0) {
+            $mail = 'SENT_OR_GATED'
+            Write-Log 'MAIL OK: notifier.py exit 0 (read the mail| lines above - the ad gate may have held it back; exit 0 does not by itself mean a mail left the building).'
+        } else {
+            $mail = ('FAILED_EXIT_' + $mcode)
+            Write-Log ('MAIL FAILED: notifier.py exit={0}. Analysis and publish are unaffected - only the mail did not go out.' -f $mcode)
+        }
+    }
+
+    Write-Status 'OK' ('considered=' + $pop + ' analysed=' + $anal + ' skipped=' + $skip + ' publish=' + $publish + ' mail=' + $mail) $true
     exit 0
 }
 catch {
