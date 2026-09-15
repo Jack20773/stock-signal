@@ -267,6 +267,15 @@ try {
     $savedEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
+        # (2026-09-16) hold flag: while ops\backtest_hold.flag exists the page is
+        # NOT rebuilt/pushed (Daniel 09-15: demo first, go live only after he
+        # replies). Delete the flag to resume the daily refresh.
+        $btHold = Join-Path $PSScriptRoot 'backtest_hold.flag'
+        if (Test-Path $btHold) {
+            $backtest = 'HELD'
+            Write-Log 'BACKTEST HELD: ops\backtest_hold.flag present, page not rebuilt or pushed (delete the flag to resume)'
+            throw 'HELD'
+        }
         if (-not (Test-Path (Join-Path $btProj 'build.py'))) {
             throw ('gooaye-site not found at ' + $btProj)
         }
@@ -321,8 +330,10 @@ try {
         }
     }
     catch {
-        $backtest = 'FAILED'
-        Write-Log ('BACKTEST FAILED: {0}. Analysis, publish and mail are unaffected - only the backtest page was not refreshed.' -f $_.Exception.Message)
+        if ($_.Exception.Message -ne 'HELD') {
+            $backtest = 'FAILED'
+            Write-Log ('BACKTEST FAILED: {0}. Analysis, publish and mail are unaffected - only the backtest page was not refreshed.' -f $_.Exception.Message)
+        }
     }
     finally { $ErrorActionPreference = $savedEap }
 
