@@ -8,7 +8,7 @@ import psycopg2
 import psycopg2.extras
 import psycopg2.pool
 
-from config import DATABASE_URL
+from config import DATABASE_URL, LLM_PROVIDER
 from stock_dict import resolve_code
 
 _pool: psycopg2.pool.ThreadedConnectionPool | None = None
@@ -51,6 +51,30 @@ def _clean_claim_type(value, episode_id: str = "", code: str = "") -> str | None
         f"[claim_type] {episode_id} {code}：非法值 {value!r}（合法值 {CLAIM_TYPES}），本筆留空"
     )
     return None
+
+
+def _clean_notes(s: dict) -> tuple:
+    """2026-09-17：把模型回傳的人話重點四欄（prompt.py Rule 9）收斂成 DB 可存的值。
+    跟 _clean_claim_type 同一個原則：這是**附加資訊**，缺就留 NULL，不擋寫入、不猜值。
+    回傳 (summary, oneliner, context, substantive, notes_source, has_any)：
+    四欄全空時 notes_source 也留 NULL（代表「這集沒有人話重點」，頁面顯示只有一句原話）。"""
+    def _txt(v, limit):
+        if v is None:
+            return None
+        v = str(v).strip()
+        return v[:limit] if v else None
+
+    summary = _txt(s.get("summary"), 600)
+    oneliner = _txt(s.get("oneliner"), 80)
+    context = _txt(s.get("context"), 60)
+    sub = s.get("substantive")
+    if isinstance(sub, str):
+        sub = {"true": True, "false": False}.get(sub.strip().lower())
+    elif not isinstance(sub, bool):
+        sub = None
+    has_any = any(v is not None for v in (summary, oneliner, context, sub))
+    source = (LLM_PROVIDER or "llm") if has_any else None
+    return summary, oneliner, context, sub, source, has_any
 
 
 # 台股：形狀取自本專案自己的官方白名單 `tw_listing_map.json`（證交所＋櫃買中心
@@ -195,6 +219,25 @@ def init_db():
                 ALTER TABLE signals
                 ADD COLUMN IF NOT EXISTS invalidated_at TIMESTAMPTZ
             """)
+            # 2026-09-17 新增（任務檔 STOCKSIGNAL_TASK_2026-09-17_attention_company_notes.md，
+            # 丹尼爾 21:05 裁決「按公司病歷卡加在熱度那一頁」）：
+            # 「這一集他對這家公司講了什麼」的人話重點，給 attention.html 的病歷時間軸用。
+            #   summary      2～3 句人話重點（只寫他講的，不下看好看壞）
+            #   oneliner     ≤25 字一句話（時間軸／「本週他怎麼講」）
+            #   context      這段在節目裡屬於什麼段落（≤20 字）
+            #   substantive  有一段論述（true）還是順口帶過（false）
+            #   quote_long   原話備查（比 exact_quote 長、修過同音錯字）
+            #   notes_source 'claude-backfill'（2026-09-17 一次性回填）／config.LLM_PROVIDER 的值（之後每集順便寫）
+            #   notes_at     寫入時間
+            # 全部純附加、可為 NULL、不動任何既有值。NULL 的語意是「這集沒有人話重點」，
+            # 頁面顯示「這集只有一句原話」，不編一句頂上去。
+            # 同集同標的多筆時（實查 2026-09-17 只有 EP658/2454.TW 一組）存在 id 最小那筆。
+            for _col, _typ in (
+                ("summary", "TEXT"), ("oneliner", "TEXT"), ("context", "TEXT"),
+                ("substantive", "BOOLEAN"), ("quote_long", "TEXT"),
+                ("notes_source", "TEXT"), ("notes_at", "TIMESTAMPTZ"),
+            ):
+                cur.execute(f"ALTER TABLE signals ADD COLUMN IF NOT EXISTS {_col} {_typ}")
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_signals_episode
                 ON signals(episode_id)
@@ -323,12 +366,15 @@ def save_result(result: dict) -> int:
 
                 seen[code] = action
 
+                n_sum, n_one, n_ctx, n_sub, n_src, n_has = _clean_notes(s)
                 cur.execute("""
                     INSERT INTO signals
                         (episode_id, analysis_date, stock_name, stock_code, action,
                          confidence_level, reasoning, exact_quote, raw_reason,
-                         primary_tag, secondary_tags, rule_version, claim_type)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                         primary_tag, secondary_tags, rule_version, claim_type,
+                         summary, oneliner, context, substantive, notes_source, notes_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                            %s,%s,%s,%s,%s, CASE WHEN %s THEN NOW() ELSE NULL END)
                 """, (
                     episode_id, analysis_date,
                     s.get("stock_name"), code, action,
@@ -338,6 +384,10 @@ def save_result(result: dict) -> int:
                     json.dumps(s.get("secondary_tags", []), ensure_ascii=False),
                     _current_rule_version(),
                     _clean_claim_type(s.get("claim_type"), episode_id, code),
+                    # 2026-09-17 人話重點四欄（prompt.py Rule 9）；notes_source 記是哪個
+                    # LLM 供應商順便寫的（config.LLM_PROVIDER：claude／gemini），
+                    # 跟 2026-09-17 一次性回填的 'claude-backfill' 區分開。
+                    n_sum, n_one, n_ctx, n_sub, n_src, n_has,
                 ))
                 saved += 1
 

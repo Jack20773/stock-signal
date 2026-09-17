@@ -1574,6 +1574,89 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
 # 資料量遠小於主報告的全部訊號，不需要 client-side 大量互動式篩選，只留搜尋
 # +市場兩個輕量 JS 篩選（跟1c簡化篩選列同一個產品判斷：夠用就好，不過度設計）。
 
+# ── 病歷時間軸（2026-09-17，任務檔 STOCKSIGNAL_TASK_2026-09-17_attention_company_notes.md）──
+# 版型抄 demo B（100_Todo/drafts/daniel-demos/gooaye_v2_by_company.html 的 .hist／
+# .weekline／details.q），顏色換成本站配色（#2b6cb0 藍、#1a252f 深）。
+# 資料由 company_notes.attach_history() 掛在 rows[i]["history"]；這裡只渲染、不查 DB。
+_HIST_CSS = """
+  .weekline{font-size:13.5px;line-height:1.6;margin:10px 0 0;padding:7px 10px;border-left:3px solid #2b6cb0;background:#f1f6fc;border-radius:0 6px 6px 0;color:#1a252f;}
+  details.tl{margin-top:8px;border-top:1px dashed #e3e6ea;padding-top:6px;}
+  details.tl summary{cursor:pointer;font-size:13px;color:#2b6cb0;font-weight:600;list-style:none;}
+  details.tl summary::-webkit-details-marker{display:none;}
+  details.tl summary::before{content:"▸ ";font-size:11px;}
+  details.tl[open] summary::before{content:"▾ ";}
+  .hist{margin:8px 0 0;padding:0;list-style:none;}
+  .hist li{position:relative;padding:8px 0 10px 18px;border-left:2px solid #e3e6ea;margin-left:5px;font-size:13px;line-height:1.65;color:#333;}
+  .hist li::before{content:"";position:absolute;left:-6px;top:14px;width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid #2b6cb0;}
+  .hist li.now::before{background:#2b6cb0;}
+  .hist .when{font-size:12px;color:#888;}
+  .hist .when b{color:#2b6cb0;font-size:13.5px;}
+  .hist .ttl{font-size:12px;color:#999;}
+  .hist .sum{margin:3px 0 5px;}
+  .hist .sum.empty{color:#999;font-style:italic;}
+  .hist .px{font-size:12.5px;background:#f1f6fc;border-radius:6px;padding:4px 8px;margin:4px 0;display:inline-block;max-width:100%;}
+  .hist .px.na{background:#f1f3f5;color:#999;}
+  .hist .px .lbl{color:#888;font-size:11.5px;}
+  .hist .chg.up{color:#c0392b;font-weight:700;} .hist .chg.down{color:#1e8449;font-weight:700;}
+  .hist .pxnote{display:block;color:#aaa;font-size:11px;}
+  .hist .tag{display:inline-block;background:#f1f3f5;color:#667;font-size:11px;padding:0 7px;border-radius:999px;vertical-align:middle;margin-left:4px;}
+  .hist details.q{margin:2px 0 0;} .hist details.q summary{cursor:pointer;color:#999;font-size:12px;}
+  .hist details.q blockquote{margin:4px 0 0;padding:2px 0 2px 10px;border-left:3px solid #ccc;font-size:12.5px;color:#666;font-style:italic;}
+"""
+
+
+def _history_block(items: list[dict], ep_link) -> str:
+    """把一檔標的最近幾集的病歷（company_notes 組好的 dict）畫成 <details class="tl">。
+    每集：EP・日期（星期）＋集名＋「順帶提到」標籤 → 2～3 句人話 summary（NULL 就寫
+    「這集只有一句原話」）→ 提到當天 X → 今天 Y (+Z%)（抓不到就「股價暫無」）→ 原話備查。"""
+    lis = []
+    for i, h in enumerate(items):
+        ep = h.get("ep") or ""
+        when = f"<b>{ep_link(ep)}</b>"
+        if h.get("date"):
+            when += f"・{_esc(h['date'])}"
+            if h.get("weekday"):
+                when += f"（{_esc(h['weekday'])}）"
+        else:
+            when += "・日期不明"
+        if h.get("substantive") is False:
+            when += '<span class="tag">順帶提到</span>'
+        ttl = ""
+        if h.get("title") or h.get("context"):
+            bits = [b for b in (h.get("title"), h.get("context")) if b]
+            ttl = f'<div class="ttl">{_esc("・".join(bits))}</div>'
+        if (h.get("summary") or "").strip():
+            summ = f'<p class="sum">{_esc(h["summary"])}</p>'
+        else:
+            summ = '<p class="sum empty">這集只有一句原話（還沒有人話重點）</p>'
+
+        px_on, px_now = h.get("px_on_txt"), h.get("px_now_txt")
+        if px_on and px_now:
+            chg = h.get("chg_pct")
+            if chg is None:
+                chg_html = ""
+            else:
+                cls = "up" if chg > 0 else ("down" if chg < 0 else "")
+                chg_html = f' <span class="chg {cls}">{"+" if chg > 0 else ""}{chg}%</span>'
+            note = f'<span class="pxnote">{_esc(h["px_note"])}</span>' if h.get("px_note") else ""
+            px = (f'<div class="px"><span class="lbl">提到當天</span> {_esc(px_on)} → '
+                  f'<span class="lbl">今天</span> {_esc(px_now)}{chg_html}{note}</div>')
+        elif px_on and not px_now:
+            px = f'<div class="px"><span class="lbl">提到當天</span> {_esc(px_on)} → <span class="lbl">今天</span> 股價暫無</div>'
+        else:
+            px = '<div class="px na">股價暫無</div>'
+
+        q = (h.get("quote_long") or "").strip() or (h.get("quote") or "").strip()
+        q_html = (f'<details class="q"><summary>原話備查</summary><blockquote>{_esc(q)}</blockquote></details>'
+                  if q else "")
+        lis.append(
+            f'<li class="{"now" if i == 0 else ""}"><div class="when">{when}</div>{ttl}{summ}{px}{q_html}</li>'
+        )
+    n = len(items)
+    return (f'<details class="tl"><summary>病歷時間軸：最近 {n} 集他怎麼講（點開）</summary>'
+            f'<ul class="hist">{"".join(lis)}</ul></details>')
+
+
 def generate_html_attention(rows: list[dict], title: str = "目前節目關注度") -> str:
     """rows：attention.compute_attention() 的回傳值（已依 Attention 降冪排列、
     已排除60天下架的標的）。文字欄位一律套用 _esc()（比照1a的escapeHtml防護
@@ -1637,7 +1720,21 @@ def generate_html_attention(rows: list[dict], title: str = "目前節目關注�
             )
 
         # 搜尋範圍原本只有名稱＋代號，打「漲價」「AI」這類內容關鍵字一定落空。
-        search_blob = _esc((r["name"] + r["code"] + " " + (r.get("quote") or "")).lower())
+        # 2026-09-17：病歷卡的人話重點也納入搜尋（summary／oneliner），不然「摺疊機」這種
+        # 只出現在重點裡、沒出現在那一句原話裡的詞會搜不到。
+        hist_items = r.get("history") or []
+        hist_words = " ".join(
+            (h.get("oneliner") or "") + " " + (h.get("summary") or "") for h in hist_items
+        )
+        search_blob = _esc((r["name"] + r["code"] + " " + (r.get("quote") or "") + " " + hist_words).lower())
+
+        # ── 2026-09-17 病歷卡（丹尼爾裁決「按公司比較有脈絡，加在熱度這一頁」）──
+        # 兩塊：「本週他怎麼講」一句話（weekline）＋「病歷時間軸」（預設收合）。
+        # rows 沒帶 history（company_notes 那一步失敗或被跳過）就整段不出現，卡片退回原樣。
+        weekline_html = ""
+        if (r.get("weekline") or "").strip():
+            weekline_html = f'<div class="weekline">本週他怎麼講：{_esc(r["weekline"])}</div>'
+        hist_html = _history_block(hist_items, _ep_link) if hist_items else ""
 
         return f'''
         <div class="att-card" data-name="{search_blob}" data-mkt="{r["mkt"]}">
@@ -1662,6 +1759,8 @@ def generate_html_attention(rows: list[dict], title: str = "目前節目關注�
           </div>
           <div style="margin-top:3px;font-size:11px;color:#999;">近30天提及：{recent_eps}</div>
           {quote_html}
+          {weekline_html}
+          {hist_html}
         </div>'''
 
     cards_html = "".join(_card(i + 1, r) for i, r in enumerate(rows))
@@ -1682,6 +1781,7 @@ def generate_html_attention(rows: list[dict], title: str = "目前節目關注�
   .btn-active{{background:#1a252f!important;color:#fff!important;border-color:#1a252f!important;}}
 {_NAV_TABS_CSS}
 {_ONBOARD_CSS}
+{_HIST_CSS}
 </style>
 </head>
 <body>
@@ -1699,6 +1799,7 @@ def generate_html_attention(rows: list[dict], title: str = "目前節目關注�
       "「近期偏多／偏空」是時間衰減加權後的方向；「歷史累計 N 次」是全部歷史的原始次數，兩者時間窗不同",
       "「近期立場分歧」＝加權後多空接近、講者立場不明確，不是無訊號",
       "超過60天沒被提到自動下架，歷史紀錄仍在主報告；卡片上的 EP 可以點開逐字稿",
+      "卡片底下「病歷時間軸」點開看他最近幾集怎麼講這家公司、提到當天到今天股價變多少",
   ])}
 
   <!-- 首屏警語（任務檔8b明確要求，定位差異必須在介面上明確標示）。

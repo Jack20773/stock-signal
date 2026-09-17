@@ -212,6 +212,19 @@ def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
         # 產生時機最合理）；失敗只記警告，不影響主報告已經寫成功這件事。
         try:
             attention_rows = compute_attention(list_signals())
+            # 2026-09-17 病歷卡（丹尼爾裁決「按公司加在熱度那一頁」）：掛 history／weekline。
+            # 這一步失敗（DB 欄位缺、yfinance 掛掉…）只記警告，rows 沒 history 時
+            # report_html 自動退回原本的卡片——不能因為附加資訊壞掉就讓整頁沒了。
+            try:
+                from company_notes import attach_history
+                _cn = attach_history(attention_rows)
+                logging.info(
+                    f"病歷卡：{_cn['codes']} 檔／時間軸 {_cn['timeline_items']} 條／"
+                    f"summary 有值 {_cn['summary_filled']}／股價抓到 {_cn['px_on_ok']}/{_cn['timeline_items']}"
+                    + (f"／股價錯誤：{_cn['price_error']}" if _cn.get('price_error') else "")
+                )
+            except Exception as e:
+                logging.error(f"病歷卡資料組裝失敗，attention.html 退回無時間軸版本：{e}")
             html_attention = generate_html_attention(attention_rows)
             with open("report_attention.html", "w", encoding="utf-8") as f:
                 f.write(html_attention)
