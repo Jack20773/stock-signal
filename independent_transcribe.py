@@ -206,15 +206,65 @@ def cues_to_paragraphs(cues: list[tuple[float, float, str]],
 #: 不是回頭改下游。
 TRANSCRIPT_CHAR_NORMALIZATION = {"臺": "台"}
 
+#: 固定名詞後處理改字表的資料檔路徑。內容與設計理由見該檔案本身的檔頭註解
+#: （asr/fixed_term_corrections.tsv）：只收「節目固定用語」與「有官方正確寫法的
+#: 專有名詞」（節目名／主持人姓名／聯準會這類），不收冷門個股名——那些是 ASR
+#: 根本沒聽到，改字救不了，硬改反而會製造幻覺。表格式：
+#:     訛寫規則(Python regex，可用 lookaround 綁上下文)<TAB>正確寫法<TAB>理由
+#: 刻意落地成資料檔而不是寫死在程式裡，下一棒要加/改一條規則不必碰這支程式。
+#: 效果量測見 eval/proper_noun_accuracy.py 與 eval/fixed_term_corrections_test.py。
+FIXED_TERM_CORRECTIONS_FILE = HERE / "asr" / "fixed_term_corrections.tsv"
+
+_fixed_term_rules_cache: "list[tuple[re.Pattern, str, str]] | None" = None
+
+
+def load_fixed_term_corrections(path: Path = FIXED_TERM_CORRECTIONS_FILE):
+    """讀取固定名詞改字表，回傳 ``[(compiled_pattern, replacement, reason), ...]``。
+
+    查無檔案時回傳空列表（行為等同「沒有這張表」），不讓生產路徑因為表被誤刪而炸掉。
+    每一列必須是 3 欄 TAB 分隔，欄數不對直接丟例外——寧可早死，也不要悄悄吃掉一條
+    格式壞掉的規則。
+    """
+    rules: list[tuple[re.Pattern, str, str]] = []
+    if not path.exists():
+        return rules
+    for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        cols = line.split("\t")
+        if len(cols) != 3:
+            raise ValueError(f"{path}:{lineno} 固定名詞改字表欄位數不對（要 3 欄 TAB 分隔）：{raw!r}")
+        pattern, replacement, _reason = cols
+        rules.append((re.compile(pattern), replacement, _reason))
+    return rules
+
 
 def normalize_transcript_text(text: str) -> str:
-    """把產稿輸出的異體字統一成下游慣用寫法（目前只做「臺」→「台」）。
+    """把產稿輸出的文字正規化成下游慣用寫法。目前做兩件事，依序套用：
 
-    只做字元層級的等長取代：不碰標點、不做簡繁轉換、不增刪任何字，維持本模組既有的
-    忠實度原則（見 cues_to_paragraphs()：不插入原文沒有的字元）。
+    1. 異體字正規化（「臺」→「台」）：字元層級等長取代，不碰標點、不做簡繁轉換。
+    2. 固定名詞改字（asr/fixed_term_corrections.tsv）：修 ASR 對「節目固定用語」
+       （節目名／主持人姓名／聯準會這類）的訛寫，例如「歡迎收聽古愛」→
+       「歡迎收聽股癌」、「我是孟公」→「我是謝孟恭」。這一步**不是**等長取代
+       （「股」→「股癌」、「孟公」→「謝孟恭」都會變長），因為修的是實際聽錯的字，
+       不是單純的異體字轉換；每一條規則都綁了上下文（lookaround），不對全文做
+       無條件替換，理由與每條規則的全庫掃描證據見該 TSV 檔案本身。
+       查無該 TSV（或表是空的）時這一步等同無操作，向後相容舊行為。
+
+    2026-09-27：新增第 2 步之前，本函式的忠實度原則是「不碰標點、不做簡繁轉換、
+    不增刪任何字」（見 cues_to_paragraphs()：不插入原文沒有的字元）。固定名詞改字
+    是刻意的例外——目的正是要修正 ASR 聽錯的字，而不是保留 ASR 的錯誤輸出；範圍
+    嚴格限制在這張表列出的、已用 eval/proper_noun_accuracy.py 與 700 檔全庫掃描
+    驗證過的少數條目，不是放寬成一般性的糾錯管線。
     """
     for src_ch, dst_ch in TRANSCRIPT_CHAR_NORMALIZATION.items():
         text = text.replace(src_ch, dst_ch)
+    global _fixed_term_rules_cache
+    if _fixed_term_rules_cache is None:
+        _fixed_term_rules_cache = load_fixed_term_corrections()
+    for pattern, replacement, _reason in _fixed_term_rules_cache:
+        text = pattern.sub(replacement, text)
     return text
 
 
