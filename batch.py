@@ -9,6 +9,7 @@
 """
 import sys
 import re
+import json
 import time
 import argparse
 import logging
@@ -17,6 +18,7 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8")
 
 from database import init_db, save_result, _conn
+from sync_independent_transcripts import MANIFEST_PATH
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,8 +70,45 @@ def ep_number(path: Path) -> int:
     return int(m.group(1)) if m else 0
 
 
+def load_manifest_filenames(manifest_path: Path) -> set[str]:
+    """讀 manifest.json，回傳「純獨立轉錄來源」的檔名集合（用檔名比對，不管
+    manifest 裡記錄的是相對路徑還是絕對路徑）。manifest 不存在就回傳空集合，
+    等同完全不啟用去重邏輯（環境沒有這個檔案時，行為退回舊版全部保留）。"""
+    if not manifest_path.exists():
+        return set()
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    return {Path(r["path"]).name for r in data.get("records", []) if r.get("path")}
+
+
 def load_transcripts(from_ep: int = 0, last_n: int = 0) -> list[Path]:
-    files = sorted(TRANSCRIPTS_DIR.glob("EP*.md"), key=ep_number)
+    """2026-09-27 接上 Track1 根因修正（索羅門 2026-08-03 demo，commit f285894，
+    DeepSeek 審查通過，5 個測試全 PASS 含跟正式 transcripts/ 交叉比對無回歸）：
+    同一 EP 編號如果目錄裡有兩個檔案，且至少一個不在 manifest.json 記錄裡（＝推定
+    為官方版），優先選官方版，manifest 記錄的獨立轉錄版從這次批次名單濾掉——不刪
+    除、不搬動任何檔案，只改「這次要分析誰」的挑選邏輯，non-destructive。"""
+    all_files = sorted(TRANSCRIPTS_DIR.glob("EP*.md"), key=ep_number)
+    manifest_names = load_manifest_filenames(MANIFEST_PATH)
+
+    by_ep: dict[int, list[Path]] = {}
+    for f in all_files:
+        by_ep.setdefault(ep_number(f), []).append(f)
+
+    files: list[Path] = []
+    for ep, ep_files in by_ep.items():
+        if len(ep_files) == 1:
+            files.append(ep_files[0])
+            continue
+        official = [f for f in ep_files if f.name not in manifest_names]
+        independent = [f for f in ep_files if f.name in manifest_names]
+        if official:
+            # 有官方版，一律優先選官方版，獨立版全部濾掉不送分析
+            files.extend(official)
+        else:
+            # 全部都是獨立版（沒有官方版可選），維持原行為全部保留
+            files.extend(independent if independent else ep_files)
+
+    files.sort(key=ep_number)
+
     if from_ep:
         files = [f for f in files if ep_number(f) >= from_ep]
     if last_n:
