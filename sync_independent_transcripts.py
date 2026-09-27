@@ -52,9 +52,31 @@ EPISODES_LOCAL = HERE / "episodes.json"
 #: 見產生時的實測：兩字詞誤命中率高），再依既有 transcripts/*.md 語料庫的出現次數排序、
 #: 「股癌」「謝孟恭」放最前面（節目名/主持人名不在台股名冊裡，但幾乎每集都會出現）。
 #: 正本與精確參數見 000_Agent/001_memory/feedback_transcription_model_policy.md 的「組態 D」。
-#: ⚠️ transcribe.py 的 hotwords 有 224 token 硬上限（超過截尾），這份檔案有 1,072 個詞，
-#: 實際生效的只有排在最前面的一小段——排序依語料庫出現頻率是盡力而為的啟發式，不是
-#: 語意分析，仍可能有雜訊（見產生時附帶的高頻詞清單）。
+#:
+#: 2026-09-27 重新查證（下面每個數字都有實測，見當次查證附的指令＋輸出）：
+#: - 224 token 上限是真的，但不是這支腳本或 video-transcribe/transcribe.py 自己寫的邏輯，
+#:   是再下一層 faster-whisper 套件本身的行為：
+#:   faster_whisper/transcribe.py 的 WhisperModel.get_prompt()（約 1544-1547 行）——
+#:   `hotwords_tokens = tokenizer.encode(" " + hotwords.strip())`，
+#:   `if len(hotwords_tokens) >= self.max_length // 2:`（self.max_length=448，見 722 行，
+#:   所以門檻是 224）`hotwords_tokens = hotwords_tokens[: self.max_length // 2 - 1]`
+#:   （砍到剩 223 個 token）。這一層不是「事後字串取代」，是餵進解碼器的 prompt 長度限制，
+#:   我們的程式碼完全沒有自己重複實作或加碼這個上限。
+#: - 這份檔案現在是 2026-09-03 換過的「53 詞版」，不是舊註解說的 1,072 詞——1,072 詞版
+#:   已經在同一天被搬進同目錄的 hotwords_gooaye.txt.bak-20260903-freqrebuild（實測 1,075
+#:   個詞，跟「1,072」對不上任何一份現存檔案，差 3，很可能是當時口算/記錯，不是另有第三份
+#:   檔案），正本被換成現在的 53 詞版之後，這段註解沒跟著改，變成講的是已經不存在的舊檔案。
+#: - ⚠️ 用 faster-whisper 實際的 tokenizer（large-v3-turbo 模型，
+#:   models--mobiuslabsgmbh--faster-whisper-large-v3-turbo 的 tokenizer.json）照 get_prompt()
+#:   的作法原樣算過：現在這份 53 詞版 = 225 個 token（含 get_prompt 自己加的那個空格），
+#:   已經 ≥ 224，所以「現行檔案不會被砍」是假的——只是砍掉的只有排在清單最後的 1 個詞
+#:   （"M31"），不是「一大段」。舊的 1,075 詞 .bak 版本算出來是 7,437 個 token，那才是
+#:   注解原本想講的「只有最前面一小段生效」（大約前 223 個 token、遠不到 1,075 詞的一小段）。
+#:   要不要為了保住最後這 1 個詞把檔案縮到 223 token 以內，留給人決定，這裡先不動內容。
+#: - 「聯發科」「力積電」在 53 詞版清單裡排第 17、38 個左右，遠在被砍掉的範圍之外，所以
+#:   這兩檔如果在某幾集自建逐字稿裡出現 0 次，原因不是這個 224 上限——2026-09-27 查證
+#:   同一批（EP694/695/696）的 manifest.json 也證實 hotwords 字串確實原封不動送進了
+#:   model.transcribe()，該路徑本身沒斷。
 DEFAULT_HOTWORDS_FILE = HERE / "asr" / "hotwords_gooaye.txt"
 
 # 轉錄旗標（由 main() 依 CLI 填入／覆寫）。
