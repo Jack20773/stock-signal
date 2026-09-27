@@ -9,10 +9,10 @@
      （EP681-684）已在 2026-09-03 被手動改名成 .bak-20260903-dedupe 後綴，
      不再命中 `EP*.md` glob，所以正式資料現在的重複母體＝0——這正是為什麼
      一定要做下面的注入測試，不能只驗正式資料。
-  2. 注入組（塞一筆刻意重複）：EP900 兩個檔案，一個不在 manifest（推定官方版）、
-     一個在 manifest（推定獨立版）→ 期望只留官方版，去重數字要動（從 2 變 1）。
+  2. 注入組（塞一筆刻意重複）：EP900 兩個檔案，一個不在 manifest（推定粉絲版）、
+     一個在 manifest（推定獨立版）→ 期望只留粉絲版，去重數字要動（從 2 變 1）。
   3. 對照組（塞一筆不重複）：EP901 只有一個檔案 → 期望不受影響，數字不准動。
-     另外多測一組「兩個都是獨立版、都不是官方版」→ 期望維持原行為全部保留
+     另外多測一組「兩個都是獨立版、都不是粉絲版」→ 期望維持原行為全部保留
      （不能因為都在 manifest 就一個都不留）。
 
 跑法：python verify_dedup_injection.py
@@ -73,11 +73,11 @@ def main():
         results["regression_naive"] = real_naive
         results["regression_selected"] = len(real_selected)
 
-        # 2) 注入組：EP900 兩個檔案，一官方一獨立
+        # 2) 注入組：EP900 兩個檔案，一粉絲版一獨立
         n, s, names = run_case(
             tmp / "inject_dup",
             {
-                "EP900_official.md": "官方版內容",
+                "EP900_official.md": "粉絲版內容",
                 "EP900_independent.md": "獨立轉錄版內容",
             },
             manifest_names=["EP900_independent.md"],
@@ -97,7 +97,7 @@ def main():
         results["control_solo_naive"] = n
         results["control_solo_selected"] = s
 
-        # 3b) 邊界對照：EP902 兩個檔案，但兩個都在 manifest（都是獨立版、沒有官方版）
+        # 3b) 邊界對照：EP902 兩個檔案，但兩個都在 manifest（都是獨立版、沒有粉絲版）
         n, s, names = run_case(
             tmp / "control_both_independent",
             {
@@ -114,7 +114,7 @@ def main():
     assert results["inject_dup_naive"] == 2 and results["inject_dup_selected"] == 1, \
         f"注入組應該從2篩到1，實際：{results['inject_dup_naive']}->{results['inject_dup_selected']}"
     assert results["inject_dup_names"] == ["EP900_official.md"], \
-        f"注入組應該只留官方版，實際留下：{results['inject_dup_names']}"
+        f"注入組應該只留粉絲版，實際留下：{results['inject_dup_names']}"
     assert results["control_solo_naive"] == results["control_solo_selected"] == 1, \
         "不重複的對照組數字不准變動"
     assert results["control_both_indep_naive"] == results["control_both_indep_selected"] == 2, \

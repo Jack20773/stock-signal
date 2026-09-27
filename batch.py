@@ -13,7 +13,7 @@ import json
 import time
 import argparse
 import logging
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 sys.stdout.reconfigure(encoding="utf-8")
 
@@ -73,19 +73,58 @@ def ep_number(path: Path) -> int:
 def load_manifest_filenames(manifest_path: Path) -> set[str]:
     """讀 manifest.json，回傳「純獨立轉錄來源」的檔名集合（用檔名比對，不管
     manifest 裡記錄的是相對路徑還是絕對路徑）。manifest 不存在就回傳空集合，
-    等同完全不啟用去重邏輯（環境沒有這個檔案時，行為退回舊版全部保留）。"""
+    等同完全不啟用去重邏輯（環境沒有這個檔案時，行為退回舊版全部保留）。
+
+    🔴 2026-09-27 同日補強（上線當天複查抓到的洞，8 種壞法實測 5 種會 raise）：
+    任何讀取或格式錯誤一律 log warning 後**回空集合＝退回舊行為**，絕不往上拋。
+    理由：`update.py:42` 在 Step 2 直接呼叫 `load_transcripts()` 且沒有 try，
+    這裡 raise 會讓 Step 3 補股價、Step 4 產報告全部不跑，而 `ops/run_daily_analysis.ps1:191`
+    只把 `RUN FAILED` 寫進 `last_run_status.json`、**不通知任何人**——整條每日流水線
+    靜默停擺。而 `_append_manifest_record` 是非 atomic 的 `write_text()`，寫一半斷電
+    就是「半截 JSON」這個情境，不是假想。
+    另修路徑格式洞：manifest 記的是 Windows 反斜線路徑（相對與絕對混用），
+    `PurePosixPath(r"transcripts\\EP681_x.md").name` 在 Linux 上會回整串、取不到檔名
+    → 在 GitHub Actions 上所有自建版都會被誤判成粉絲版。兩種分隔規則各取一次。
+    """
     if not manifest_path.exists():
         return set()
-    data = json.loads(manifest_path.read_text(encoding="utf-8"))
-    return {Path(r["path"]).name for r in data.get("records", []) if r.get("path")}
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        records = data.get("records", []) if isinstance(data, dict) else []
+        names: set[str] = set()
+        for r in records:
+            if not isinstance(r, dict):
+                continue
+            p = r.get("path")
+            if not isinstance(p, str) or not p:
+                continue
+            names.add(PurePosixPath(p).name)
+            names.add(PureWindowsPath(p).name)
+        return names
+    except Exception as exc:
+        logging.warning(
+            "manifest 讀不到或格式壞掉（%s: %s）——本輪退回舊行為（同 EP 全部保留、不去重）",
+            type(exc).__name__, exc,
+        )
+        return set()
 
 
 def load_transcripts(from_ep: int = 0, last_n: int = 0) -> list[Path]:
     """2026-09-27 接上 Track1 根因修正（索羅門 2026-08-03 demo，commit f285894，
     DeepSeek 審查通過，5 個測試全 PASS 含跟正式 transcripts/ 交叉比對無回歸）：
     同一 EP 編號如果目錄裡有兩個檔案，且至少一個不在 manifest.json 記錄裡（＝推定
-    為官方版），優先選官方版，manifest 記錄的獨立轉錄版從這次批次名單濾掉——不刪
-    除、不搬動任何檔案，只改「這次要分析誰」的挑選邏輯，non-destructive。"""
+    為粉絲版），優先選粉絲版，manifest 記錄的獨立轉錄版從這次批次名單濾掉——不刪
+    除、不搬動任何檔案，只改「這次要分析誰」的挑選邏輯，non-destructive。
+
+    🔴 用詞更正（2026-09-27 11:0x，丹尼爾打 4 分：「我說過好幾遍了」）：
+    **股癌沒有官方逐字稿。** 這裡所謂「粉絲版」＝ `whatmkreallysaid` 這位**另一個粉絲**
+    做的逐字稿，就是目前實際在用的那份。**我們預設相信它是對的，但從來沒有驗證過。**
+    會優先選它的理由**不是它權威**，而是**我們自己的 ASR 做不到那個品質**（自建版把
+    開場「我是謝孟恭」聽成「孟公／專案公」）。
+    ⚠️ 所以不要拿它當 ground truth：任何「以逐字稿為準」的結論，上游都掛著一個
+    未驗證的假設。之前的註解與交接一路寫「官方版」，會讓讀的人以為有權威來源可靠，
+    那是錯的——這是本次要改掉的主要東西，挑選邏輯本身沒有改。
+    """
     all_files = sorted(TRANSCRIPTS_DIR.glob("EP*.md"), key=ep_number)
     manifest_names = load_manifest_filenames(MANIFEST_PATH)
 
@@ -101,10 +140,10 @@ def load_transcripts(from_ep: int = 0, last_n: int = 0) -> list[Path]:
         official = [f for f in ep_files if f.name not in manifest_names]
         independent = [f for f in ep_files if f.name in manifest_names]
         if official:
-            # 有官方版，一律優先選官方版，獨立版全部濾掉不送分析
+            # 有粉絲版，一律優先選粉絲版，獨立版全部濾掉不送分析
             files.extend(official)
         else:
-            # 全部都是獨立版（沒有官方版可選），維持原行為全部保留
+            # 全部都是獨立版（沒有粉絲版可選），維持原行為全部保留
             files.extend(independent if independent else ep_files)
 
     files.sort(key=ep_number)
