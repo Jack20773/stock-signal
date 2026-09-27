@@ -7,6 +7,25 @@ asr/hotwords_gooaye.txt）轉完並產出 md（2026-09-27，人工單集操作�
 用法：
   python ops/run_configD_batch.py
 
+🔴 但「怎麼起」比「起什麼」重要（2026-09-27 第卅九→四十棒實際踩到兩次）：
+  上面那行**直接在 agent session 裡跑（含 Bash run_in_background）會在換棒時一起被殺掉**。
+  第卅九棒 21:29:35 起，21:35 換棒，21:37 查 `Get-Process -Id 1748` → 已死，只跑了 6 分鐘，
+  EP682 的 log 只有 2 行（停在剛啟動 transcribe.py），_progress.log 沒有任何完成行。
+  交接寫「已脫離 agent」是**錯的**——它脫離了 agent，但沒脫離 session 的程序樹。
+
+  ✅ 正確起法（讓 parent 變成 WmiPrvSE，完全在 session 的程序樹外）：
+    powershell -NoProfile -Command "$py='C:\\Users\\USER\\AppData\\Local\\Programs\\Python\\Python312\\python.exe'; \
+      $cmd='\"'+$py+'\" -X utf8 \"D:\\All claude\\300_Projects\\stock-signal\\ops\\run_configD_batch.py\"'; \
+      Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=$cmd; \
+        CurrentDirectory='D:\\All claude\\300_Projects\\stock-signal'}"
+  驗它真的脫離了（不要只看「有沒有活著」，要看 parent 是誰）：
+    Get-CimInstance Win32_Process -Filter 'ProcessId=<pid>' | Select ParentProcessId
+    → 再把那個 ppid 餵給 Get-Process，ProcessName 應該是 WmiPrvSE，不是 bash/node/claude。
+
+  🔴 查死活一律用 `Get-Process -Id <pid>`，**不要用「有沒有產物」判斷**：
+  這種工作做到一半本來就沒有產物，所以「沒東西」這個畫面跟「程序已死」長得一模一樣。
+  冪等保護的是「重跑不會白做」，不是「它還在跑」——兩件事不要混。
+
 行為：
   - 序列處理 EP682/683/684/687（GPU 只有一張，不平行）。
   - 冪等：每集開始前先檢查 transcripts_data/independent_configD_2026-09-27/ 底下
