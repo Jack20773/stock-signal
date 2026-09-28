@@ -50,6 +50,11 @@
     python -X utf8 eval/proper_noun_accuracy.py --selftest
     python -X utf8 eval/proper_noun_accuracy.py
     python -X utf8 eval/proper_noun_accuracy.py --audit    # 逐實體列出命中/漏/幻覺與上下文
+    # 校稿後量法（EP687 改讀人工校稿版；路徑不寫進 repo，用旗標或環境變數給）
+    python -X utf8 eval/proper_noun_accuracy.py --profile proofread --proofread EP687=<校稿後檔案>
+    PNA_PROOFREAD_EP687=<校稿後檔案> python -X utf8 eval/proper_noun_accuracy.py --profile proofread
+
+不帶旗標 = baseline（未校稿回歸對照組，合計自建版 32/50），見下方 BASELINE_* 常數。
 
 本腳本**只讀**逐字稿，不寫入 transcripts/，不動生產路徑上的程式。
 """
@@ -57,6 +62,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -108,6 +114,27 @@ PAIRS = [
 ]
 
 MANIFEST = "transcripts_data/independent_transcribe/manifest.json"
+
+# --------------------------------------------------------------------------
+# 具名的「量法」（profile）。不帶任何旗標 = baseline。
+#
+# baseline：上面 PAIRS 原封不動，自建版 = faster-whisper 原始聽寫（未校稿）。
+#   合計「自建版 32/50=64.0%」是**回歸對照組的定錨數字**，不是「壞掉」——
+#   它刻意固定在未校稿的舊產物上，好讓改字表／新聽寫設定／校稿的效果都有同一把
+#   基準可比。eval/fixed_term_corrections_test.py 第 1 節會斷言改字前 == 這組數字。
+#   **不要為了讓分數好看去改 PAIRS 的預設路徑**，那會銷毀這個對照組；
+#   要量新產物請用 --profile proofread 或 --self-override。
+#
+# proofread：EP687 的「自建版」改讀人工校稿後的檔案，其餘四集維持 baseline。
+#   校稿後檔案**不在本 repo**（逐字稿不入版控，見 .gitignore），路徑只能從
+#   --proofread EP687=PATH 或環境變數 PNA_PROOFREAD_EP687 傳入，程式碼不寫死。
+# --------------------------------------------------------------------------
+PROFILES = ("baseline", "proofread")
+BASELINE_PROFILE = "baseline"
+BASELINE_SELF_HIT = 32   # 合計自建版命中（未校稿）
+BASELINE_UNION = 50      # 合計母體 U（五集聯集加總）
+PROOFREAD_EPS = ("EP687",)          # 目前有校稿後版本的集數
+PROOFREAD_ENV_PREFIX = "PNA_PROOFREAD_"  # 環境變數名 = 前綴 + 集數，例 PNA_PROOFREAD_EP687
 
 # --------------------------------------------------------------------------
 # 名冊歧義排除（對兩版對稱套用，不偏袒任何一版）。每一條都要寫理由。
@@ -606,6 +633,47 @@ def selftest():
     check("空語料的正確率回傳 None 而不是 1.0",
           rate(r7["versions"]["粉絲版"]["hit"], r7["union_size"]) is None)
 
+    # 7) --profile proofread 路徑解析的失敗路徑（用暫存檔，不碰真實逐字稿）
+    import tempfile
+    ep0 = PROOFREAD_EPS[0]
+    _, e = resolve_proofread_paths([], {})
+    check("proofread：沒給路徑 → 報錯（不准退回 baseline）", bool(e), str(e))
+    _, e = resolve_proofread_paths([f"{ep0}=__definitely_missing__.md"], {})
+    check("proofread：路徑不存在 → 報錯（不准跳過該集）", bool(e) and "不存在" in e, str(e))
+    with tempfile.TemporaryDirectory() as td:
+        base_pair = next(p for p in PAIRS if p["ep"] == ep0)
+        base_p = REPO / base_pair["self"]
+        if base_p.is_file():
+            same = Path(td) / "same.md"
+            same.write_bytes(base_p.read_bytes())
+            _, e = resolve_proofread_paths([f"{ep0}={same}"], {})
+            check("proofread：內容與 baseline 自建版相同 → 報錯（那是未校稿原稿）",
+                  bool(e) and "完全相同" in e, str(e))
+            raw_b = base_p.read_bytes()
+            for tag, variant in (("尾端多一個換行", raw_b + b"\n"),
+                                 ("CRLF 換行＋行尾空白", raw_b.replace(b"\n", b" \r\n"))):
+                v = Path(td) / "variant.md"
+                v.write_bytes(variant)
+                _, e = resolve_proofread_paths([f"{ep0}={v}"], {})
+                check(f"proofread：基線原稿{tag} → 仍判定為基線、報錯（不准繞過）",
+                      bool(e) and "完全相同" in e, str(e))
+        diff = Path(td) / "diff.md"
+        diff.write_text("proofread fixture only", encoding="utf-8")
+        got, e = resolve_proofread_paths([], {PROOFREAD_ENV_PREFIX + ep0: str(diff)})
+        check("proofread：環境變數給合法路徑 → 解析成功", e is None and got.get(ep0) == diff,
+              f"err={e} got={got}")
+        _, e = resolve_proofread_paths([f"EP681={diff}"], {PROOFREAD_ENV_PREFIX + ep0: str(diff)})
+        check("proofread：指到沒有校稿版定義的集數 → 報錯", bool(e), str(e))
+        _, e = resolve_proofread_paths([f"{ep0}="], {PROOFREAD_ENV_PREFIX + ep0: str(diff)})
+        check("proofread：--proofread EP= 空值 → 報錯（不准默默改用環境變數）",
+              bool(e) and "空的" in e, str(e))
+        _, e = resolve_proofread_paths([f"{ep0}={diff}", f"{ep0}={diff}"], {})
+        check("proofread：同一集給兩次 → 報錯（不准默默取最後一個）",
+              bool(e) and "兩次" in e, str(e))
+        fp1 = file_sha256(diff)
+        diff.write_text("proofread fixture only v2", encoding="utf-8")
+        check("proofread：校稿檔內容一改，sha256 指紋就變", file_sha256(diff) != fp1)
+
     print("=== --selftest（鑑別度對照組）===")
     print("\n".join(lines))
     print(f"=== 結果：{len(lines) - len(failures)}/{len(lines)} 通過 ===")
@@ -619,8 +687,16 @@ def selftest():
 # --------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------
-def check_provenance():
-    """用 manifest.json 驗證「自建版」身分，印出憑證。"""
+def check_provenance(pairs=None):
+    """用 manifest.json 驗證「自建版」身分，印出憑證。
+
+    ``pairs`` 預設用全域 ``PAIRS``（不帶 --self-override/--self-dir 時的行為，
+    跟改動前一模一樣）；由 main() 傳入覆寫後的清單時，覆寫的集數走
+    ``cli_override``/``cli_self_dir`` 分支，只回報「檔案存不存在」，不假裝有
+    manifest/pairing_sample 那種正式憑證。
+    """
+    if pairs is None:
+        pairs = PAIRS
     p = REPO / MANIFEST
     recorded = {}
     if p.exists():
@@ -628,16 +704,134 @@ def check_provenance():
         for rec in data.get("records", []):
             recorded[rec["ep_id"]] = os.path.basename(str(rec.get("path", "")).replace("\\", "/"))
     out = []
-    for pair in PAIRS:
+    for pair in pairs:
         ep = pair["ep"]
+        provenance = pair["self_provenance"]
         self_name = os.path.basename(pair["self"])
-        if pair["self_provenance"] == "manifest":
+        if provenance == "manifest":
             ok = recorded.get(ep) == self_name
             out.append((ep, "manifest", ok, recorded.get(ep, "(無紀錄)")))
-        else:
+        elif provenance == "pairing_sample":
             srt = REPO / "docs" / "pairing_samples" / f"{ep}_raw.srt"
             out.append((ep, "pairing_sample", srt.exists(), str(srt.relative_to(REPO))))
+        else:
+            self_p = Path(pair["self"])
+            if not self_p.is_absolute():
+                self_p = REPO / self_p
+            if provenance == "proofread":
+                # 校稿檔在 repo 外：畫面只留指紋，不印路徑
+                note = f"sha256={file_sha256(self_p)}" if self_p.exists() else "(檔案不存在)"
+            else:
+                note = str(self_p)
+            out.append((ep, provenance, self_p.exists(), note))
     return out
+
+
+def _apply_self_overrides(pairs, overrides: dict, self_dir: str | None):
+    """回傳一份新的 PAIRS 清單，把「自建版」路徑覆寫成新產物。
+
+    **只換路徑，不動任何計分邏輯**——score_pair()/find_hits()/find_hallucinations()
+    一行都沒改，這支函式只是決定「自建版」這個位置要讀哪個檔案。
+
+    - self_dir：目錄底下有 ``{ep}_*.md`` 或 ``{ep}.md`` 就用它（同一集若有多個檔案，
+      取第一個並在 note 裡註記，避免默默選錯）。
+    - overrides：``{ep: path}``，優先權比 self_dir 高（更精確、逐集指定）。
+    - 兩者都沒指到的集數維持原樣（讀舊的 transcripts/independent_superseded/ 或
+      docs/pairing_samples/），這是「不帶新旗標時分數必須仍是 BASELINE_SELF_HIT/BASELINE_UNION
+      （32/50）」的回歸對照組
+      能過的原因：不覆寫任何東西時，這支函式回傳的就是原始 PAIRS，一字不改。
+    """
+    if not overrides and not self_dir:
+        return pairs, {}
+    out = []
+    notes = {}
+    self_dir_path = Path(self_dir).expanduser() if self_dir else None
+    for pair in pairs:
+        p = dict(pair)
+        ep = p["ep"]
+        if ep in overrides:
+            p["self"] = overrides[ep]
+            p["self_provenance"] = "cli_override"
+            notes[ep] = f"--self-override 指定：{overrides[ep]}"
+        elif self_dir_path is not None:
+            cands = sorted(self_dir_path.glob(f"{ep}_*.md")) + sorted(self_dir_path.glob(f"{ep}.md"))
+            if cands:
+                p["self"] = str(cands[0])
+                p["self_provenance"] = "cli_self_dir"
+                notes[ep] = f"--self-dir 命中：{cands[0]}" + (
+                    f"（同集另有 {len(cands)-1} 個候選，取第一個，其餘：{[str(c) for c in cands[1:]]}）"
+                    if len(cands) > 1 else "")
+        out.append(p)
+    return out, notes
+
+
+def _normalized_text(b: bytes) -> str:
+    """比對「是不是同一份稿」用的正規化：統一換行、去掉行尾空白、丟掉所有空行。
+
+    只用來判斷「指到的是不是基線原稿」，不影響計分（計分讀的是原檔）。
+    """
+    t = b.decode("utf-8", errors="replace").lstrip("\ufeff")
+    t = t.replace("\r\n", "\n").replace("\r", "\n")
+    # 空行一律丟掉：CRLF 被當成兩次換行、段落間多空一行，都不該讓「同一份稿」變成不同
+    return "\n".join(ln.rstrip() for ln in t.split("\n") if ln.strip())
+
+
+def file_sha256(path) -> str:
+    """校稿檔指紋：原檔 bytes 的 sha256（只印 hash，不印路徑，公開 repo 也安全）。"""
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def resolve_proofread_paths(cli_items, environ, pairs=None):
+    """把 --profile proofread 要用的校稿後檔案路徑解析出來。
+
+    回傳 ``(paths: {ep: Path}, error: str | None)``；有 error 時呼叫端必須以非 0 結束，
+    **不准退回 baseline 或跳過該集**（跳過會讓母體從 50 默默變 41，看起來像有分數）。
+
+    來源優先權：``--proofread EP=PATH`` > 環境變數 ``PNA_PROOFREAD_<EP>``。
+    判定為錯誤的情況：
+      * PROOFREAD_EPS 裡的集數沒有任何來源給路徑；
+      * 路徑不存在；
+      * 檔案內容跟 baseline 的自建版**正規化後**相同（那是未校稿原稿，不是校稿後；
+        正規化見 _normalized_text，擋「尾端多一個換行／CRLF」這類繞法）；
+      * ``--proofread EP=``（值空白）或同一集給兩次（不准默默取最後一個或退回環境變數）；
+      * --proofread 指到 PROOFREAD_EPS 以外的集數（目前沒有校稿版，避免靜默忽略）。
+    """
+    if pairs is None:
+        pairs = PAIRS
+    given = {}
+    for item in cli_items:
+        if "=" not in item:
+            return {}, f"--proofread 格式錯誤（要 EP=PATH）：{item!r}"
+        ep, _, path = item.partition("=")
+        ep, path = ep.strip(), path.strip()
+        if not path:
+            return {}, f"--proofread {ep}= 路徑是空的（不會默默改用環境變數）"
+        if ep in given:
+            return {}, f"--proofread {ep} 給了兩次（{given[ep]!r} 與 {path!r}），請只給一個"
+        given[ep] = path
+    extra = sorted(set(given) - set(PROOFREAD_EPS))
+    if extra:
+        return {}, f"--proofread 指到沒有校稿版定義的集數：{extra}（目前只有 {list(PROOFREAD_EPS)}）"
+    by_ep = {p["ep"]: p for p in pairs}
+    out = {}
+    for ep in PROOFREAD_EPS:
+        raw = given.get(ep) or environ.get(PROOFREAD_ENV_PREFIX + ep, "")
+        if not raw:
+            return {}, (f"--profile proofread 需要 {ep} 的校稿後檔案："
+                        f"用 --proofread {ep}=PATH 或環境變數 {PROOFREAD_ENV_PREFIX}{ep}")
+        path = Path(raw).expanduser()
+        if not path.is_absolute():
+            path = REPO / path
+        if not path.is_file():
+            return {}, f"{ep} 校稿後檔案不存在：{path}"
+        base_self = by_ep[ep]["self"]
+        base_p = Path(base_self) if Path(base_self).is_absolute() else REPO / base_self
+        if base_p.is_file() and (_normalized_text(path.read_bytes())
+                                 == _normalized_text(base_p.read_bytes())):
+            return {}, (f"{ep} 指到的檔案內容與 baseline 自建版（{base_self}）完全相同"
+                        "（已忽略換行格式與行尾／頭尾空白），那是未校稿原稿，不是校稿後版本")
+        out[ep] = path
+    return out, None
 
 
 def main(argv=None):
@@ -647,24 +841,91 @@ def main(argv=None):
     ap.add_argument("--include-headings", action="store_true",
                     help="把 markdown 標題行也算進正文（預設不算，因為只有粉絲版有編輯下的標題）")
     ap.add_argument("--json", metavar="PATH", help="把完整結果寫成 JSON")
+    ap.add_argument("--self-override", metavar="EP=PATH", nargs="+", default=[],
+                    help="把某集『自建版』的讀取路徑換成新產物，例如 "
+                         "--self-override EP681=transcripts_data/independent_configD_2026-09-27/EP681_x.md ."
+                         "只換路徑，計分邏輯不變；不加這個旗標時行為與改動前完全一樣（baseline 回歸對照組，BASELINE_SELF_HIT/BASELINE_UNION = 32/50）。")
+    ap.add_argument("--self-dir", metavar="DIR", default=None,
+                    help="目錄底下找 {ep}_*.md 當『自建版』，同一批新產物懶人版，優先權低於 --self-override。")
+    ap.add_argument("--profile", choices=PROFILES, default=BASELINE_PROFILE,
+                    help="具名量法。baseline（預設）= 未校稿的回歸對照組，合計應為 "
+                         f"{BASELINE_SELF_HIT}/{BASELINE_UNION}；proofread = "
+                         f"{'/'.join(PROOFREAD_EPS)} 改讀人工校稿後檔案（路徑用 --proofread 或 "
+                         f"環境變數 {PROOFREAD_ENV_PREFIX}<EP> 傳入）。")
+    ap.add_argument("--proofread", metavar="EP=PATH", nargs="+", default=[],
+                    help="--profile proofread 用的校稿後檔案路徑，例如 --proofread EP687=/path/to/校稿後.md；"
+                         f"優先於環境變數 {PROOFREAD_ENV_PREFIX}<EP>。")
     args = ap.parse_args(argv)
 
     if args.selftest:
         return selftest()
+
+    if args.proofread and args.profile != "proofread":
+        print("!! --proofread 只能搭配 --profile proofread 使用（避免以為量了校稿版其實跑的是 baseline）")
+        return 2
+
+    overrides = {}
+    for item in args.self_override:
+        if "=" not in item:
+            print(f"!! --self-override 格式錯誤（要 EP=PATH）：{item!r}")
+            return 2
+        ep, _, path = item.partition("=")
+        overrides[ep.strip()] = path.strip()
+
+    proofread_paths = {}
+    if args.profile == "proofread":
+        proofread_paths, err = resolve_proofread_paths(args.proofread, os.environ)
+        if err:
+            print(f"!! {err}")
+            return 2
+        clash = sorted(set(proofread_paths) & set(overrides))
+        if clash:
+            print(f"!! {clash} 同時被 --profile proofread 與 --self-override 指定，請只用一種")
+            return 2
+
+    pairs, override_notes = _apply_self_overrides(PAIRS, overrides, args.self_dir)
+    proofread_fp = {ep: file_sha256(pth) for ep, pth in proofread_paths.items()}
+    if proofread_paths:
+        new_pairs = []
+        for pair in pairs:
+            p = dict(pair)
+            if p["ep"] in proofread_paths:
+                p["self"] = str(proofread_paths[p["ep"]])
+                p["self_provenance"] = "proofread"
+                override_notes[p["ep"]] = (f"--profile proofread 校稿後 sha256="
+                                           f"{proofread_fp[p['ep']]}")
+            new_pairs.append(p)
+        pairs = new_pairs
+    is_baseline_run = (args.profile == BASELINE_PROFILE and not overrides and not args.self_dir)
+    print(f"=== 量法 profile = {args.profile}"
+          + (" + 手動覆寫（--self-override/--self-dir）" if (overrides or args.self_dir) else "")
+          + ("（回歸對照組，未校稿）" if is_baseline_run else "（非基線，數字不可與基線直接混用）")
+          + " ===")
 
     roster = load_roster(verbose=True)
     stoplist = load_hallu_stoplist()
     cm = canon_map(roster)
 
     print("=== 版本憑證 ===")
-    for ep, kind, ok, note in check_provenance():
+    for ep, kind, ok, note in check_provenance(pairs):
         print(f"  {ep} 自建版 憑證={kind} {'OK' if ok else 'MISSING'} :: {note}")
+    if override_notes:
+        print("  -- 覆寫 --")
+        for ep, note in override_notes.items():
+            print(f"  {ep} {note}")
     print()
 
     results = []
-    for pair in PAIRS:
-        fan_p, self_p = REPO / pair["fan"], REPO / pair["self"]
+    for pair in pairs:
+        fan_p = REPO / pair["fan"]
+        self_p = Path(pair["self"])
+        if not self_p.is_absolute():
+            self_p = REPO / self_p
         if not fan_p.exists() or not self_p.exists():
+            if pair["self_provenance"] not in ("manifest", "pairing_sample"):
+                # 使用者明確指定的路徑缺檔 → 直接失敗，不准跳過（跳過會讓母體默默變小）
+                print(f"!! {pair['ep']} 指定的自建版檔案不存在（{pair['self_provenance']}）：{self_p}")
+                return 2
             print(f"!! {pair['ep']} 檔案缺失，跳過：{fan_p.exists()=} {self_p.exists()=}")
             continue
         results.append(score_pair(pair["ep"],
@@ -707,6 +968,13 @@ def main(argv=None):
     if totU == 0:
         print("FAIL：母體 0，不算通過。")
         return 1
+    if is_baseline_run:
+        ok = (tot["自建版"][0], totU) == (BASELINE_SELF_HIT, BASELINE_UNION)
+        print(f"基線核對：自建版 {tot['自建版'][0]}/{totU}，定錨值 {BASELINE_SELF_HIT}/{BASELINE_UNION} → "
+              + ("符合（這是未校稿的回歸對照組，不是壞掉）" if ok else
+                 "!! 不符：基線漂移了——先查 PAIRS／名冊／改字表是誰動的，不要直接改定錨值"))
+    else:
+        print(f"（對照：baseline 定錨值 = 自建版 {BASELINE_SELF_HIT}/{BASELINE_UNION}）")
 
     if args.audit:
         print("\n=== --audit 明細 ===")
@@ -732,7 +1000,10 @@ def main(argv=None):
                 rr["versions"][ver].pop("_hits_detail", None)
             out.append(rr)
         Path(args.json).write_text(
-            json.dumps({"pairs": out,
+            json.dumps({"profile": args.profile,
+                        "is_baseline_run": is_baseline_run,
+                        "proofread_sha256": proofread_fp,
+                        "pairs": out,
                         "total": {"union": totU,
                                   "粉絲版": tot["粉絲版"],
                                   "自建版": tot["自建版"]}},

@@ -6,7 +6,8 @@
 ----
 eval/proper_noun_accuracy.py 量到自建版（faster-whisper）逐字稿在「股癌」「謝孟恭」
 「聯準會」這類節目固定用語上系統性聽錯（EP681/682/683/684/687 五集，母體 50，
-自建版 32/50=64%），本改字表接進 independent_transcribe.normalize_transcript_text()
+自建版 32/50=64%，即 pna.BASELINE_SELF_HIT/pna.BASELINE_UNION：未校稿的 baseline 回歸對照組，
+不是壞掉；第 1 節會斷言「改字前」仍等於這組定錨值），本改字表接進 independent_transcribe.normalize_transcript_text()
 修這批錯。本腳本回答判斷力二之 7：「如果我要修的東西根本不存在，這個測試會不會照樣
 綠燈？」——所以每個正向斷言都有一個成對的反向斷言在盯著同一段程式碼。
 
@@ -101,6 +102,9 @@ def section_1_forward(roster, stoplist):
         check(f"{ep}: 沒有本來對的實體被改壞", not newly_broken, str(newly_broken))
 
     check("正向總計：母體 > 0", before_pop > 0, f"pop={before_pop}")
+    check("baseline 定錨：改字前 == pna.BASELINE_SELF_HIT/BASELINE_UNION（回歸對照組沒被動到）",
+          (before_hit, before_pop) == (pna.BASELINE_SELF_HIT, pna.BASELINE_UNION),
+          f"{before_hit}/{before_pop} vs 定錨 {pna.BASELINE_SELF_HIT}/{pna.BASELINE_UNION}")
     check("正向總計：自建版命中數上升", after_hit > before_hit,
           f"{before_hit}/{before_pop} -> {after_hit}/{after_pop}")
     before_rate = before_hit / before_pop if before_pop else None
@@ -135,7 +139,7 @@ def section_2_reverse_fan(roster, stoplist):
 
 
 # --------------------------------------------------------------------------
-# 3) 反向對照組 B/C：全庫 700+ 檔逐字稿套改字表，只准動該動的 5 個檔案，
+# 3) 反向對照組 B/C：全庫 700+ 檔逐字稿套改字表，只准動 expected_touched 逐檔列名的自建版檔案，
 #    「孟公」暱稱與其他正常字串一個字都不准被改。
 #
 #    「孟公」暱稱的保護判定不能用天真的 ``(?<!我是)孟公``：規則 2 有一個變體
@@ -169,7 +173,17 @@ def section_3_corpus_wide():
         (REPO / "transcripts" / "independent_superseded" / "EP683_一個月前的自己對未來寄予厚望.md").resolve(),
         (REPO / "transcripts" / "independent_superseded" / "EP684_終於可以喘一下.md").resolve(),
         (REPO / "docs" / "pairing_samples" / "EP687_independent.md").resolve(),
+        # EP696（2026-09-28 加入）：改字表新規則 `(?<=歡迎收聽)(骨癌|國外|骨牌)(?=[ ,，])→股癌`
+        # 在全庫掃描時唯一多改到的檔案。理由與證據：
+        #   * 它是自建版不是粉絲版——independent_transcribe/manifest.json 有 EP696 紀錄
+        #     （mode=gap_fill，note「純獨立轉錄來源，沒有第二方交叉驗證」），所以
+        #     「粉絲版一個字都不准動」的保證不受影響；
+        #   * 全檔只有 1 處被任何規則命中：開場「歡迎收聽骨癌,我是謝孟公」的「骨癌」，
+        #     這正是該規則要修的節目名訛寫（改成「股癌」是改對的）。
+        # 要是之後某條規則又多改到新檔，這條斷言照樣會 FAIL——清單是逐檔列名，不是放寬數量。
+        (REPO / "transcripts" / "EP696_考驗接著考驗.md").resolve(),
     }
+    n_expected = len(expected_touched)
 
     rules = it.load_fixed_term_corrections()
     rule2_pattern = next(p for p, repl, _ in rules if repl == "謝孟恭")
@@ -215,11 +229,12 @@ def section_3_corpus_wide():
     touched_set = set(touched_files)
     unexpected = touched_set - expected_touched
     missing = expected_touched - touched_set
-    check("只有預期的 5 個自建版檔案被改到，其餘 696+ 個檔案（含全部粉絲版）一個字都沒變",
+    check(f"只有預期的 {n_expected} 個自建版檔案被改到，其餘檔案（含全部粉絲版）一個字都沒變",
           not unexpected, f"意外被改到：{sorted(str(p) for p in unexpected)}")
-    check("5 個目標自建版檔案全部確實被改到（不是誤判成 0 命中就綠燈）",
+    check(f"{n_expected} 個目標自建版檔案全部確實被改到（不是誤判成 0 命中就綠燈）",
           not missing, f"沒被改到：{sorted(str(p) for p in missing)}")
-    check("touched_files 數 == 5", len(touched_files) == 5, f"n={len(touched_files)}")
+    check(f"touched_files 數 == {n_expected}", len(touched_files) == n_expected,
+          f"n={len(touched_files)}")
 
     check("留言引用裡的『孟公』暱稱（規則2替換範圍以外的『孟公』）在全庫裡一個都沒被動到",
           nickname_after_total == nickname_before_total,
@@ -229,14 +244,14 @@ def section_3_corpus_wide():
 
     for term in correct_terms_untouched_before:
         b, a = correct_terms_untouched_before[term], correct_terms_untouched_after[term]
-        check(f"未被動到的 696+ 檔裡，本來就寫對的『{term}』出現次數不變（正確寫法不准被動到）",
+        check(f"未被動到的其餘檔案裡，本來就寫對的『{term}』出現次數不變（正確寫法不准被動到）",
               a == b, f"改前 {b} -> 改後 {a}")
         check(f"『{term}』（未觸動檔案）母體 > 0", b > 0, f"n={b}")
     for term in correct_terms_touched_before:
         b, a = correct_terms_touched_before[term], correct_terms_touched_after[term]
-        lines.append(f"  [info] 5 個目標檔案裡『{term}』出現次數：改前 {b} -> 改後 {a}"
+        lines.append(f"  [info] {n_expected} 個目標檔案裡『{term}』出現次數：改前 {b} -> 改後 {a}"
                       f"（預期上升，是改字表把訛寫修對後新增的正確寫法）")
-        check(f"5 個目標檔案裡『{term}』出現次數不減少（新增沒問題，變少代表改壞了）",
+        check(f"{n_expected} 個目標檔案裡『{term}』出現次數不減少（新增沒問題，變少代表改壞了）",
               a >= b, f"改前 {b} -> 改後 {a}")
 
     # 檔案本身不准被動：重讀一次 mtime/size，證明我們全程沒有 write()。
