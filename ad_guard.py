@@ -53,7 +53,11 @@ from config import (
     AD_GUARD_ENABLED,
     AD_GUARD_WINDOW_CHARS,
     AD_KEYWORDS,
+    AD_KEYWORDS_STRONG,
+    AD_KEYWORDS_WEAK,
 )
+
+_STRONG_SET = set(AD_KEYWORDS_STRONG)
 
 TRANSCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "transcripts")
 
@@ -226,12 +230,26 @@ def check_signal(signal: dict, transcript: str = None) -> dict:
     else:
         scope = "signal_fields_only(no transcript file)"
 
+    # 2026-09-29 分層判斷（config.py 裡有完整背景，這裡只講判斷式本身）：
+    # 強關鍵字單獨命中就擋；弱關鍵字要跟「另一個」關鍵字（強或弱皆可）同時
+    # 出現在這次算出來的 keywords 集合裡才擋。keywords 已經是「逐字稿視窗」
+    # 跟「訊號自身文字欄位」兩邊命中結果的聯集且去重，所以「同時出現」看的
+    # 就是這個聯集，不分開算兩個視窗各自要湊滿兩個字。
+    strong_hits = [kw for kw in keywords if kw in _STRONG_SET]
+    blocked = bool(strong_hits) or len(keywords) >= 2
+    block_reason = (
+        "strong_keyword" if strong_hits else
+        "weak_combo" if blocked else
+        None
+    )
+
     return {
-        "blocked": bool(keywords),
+        "blocked": blocked,
         "keywords": keywords,
         "where": where,
         "scope": scope,
         "segment_kind": how,
+        "block_reason": block_reason,
     }
 
 
@@ -311,6 +329,7 @@ def screen_signals(signals: list, log_path: str = None, record: bool = True) -> 
             "matched_keywords": v["keywords"],
             "matched_where": v["where"],
             "checked_scope": v["scope"],
+            "block_reason": v["block_reason"],
             "note": "held back from email by ad_guard; the row in the signals table is untouched",
         }
         for s, v in blocked
@@ -339,6 +358,7 @@ def screen_signals(signals: list, log_path: str = None, record: bool = True) -> 
                 f"（{s.get('stock_code')}, action={s.get('action')}, id={s.get('id')}）"
                 f"｜命中關鍵字：{'、'.join(v['keywords'])}"
                 f"｜命中位置：{v['where']}｜檢查範圍：{v['scope']}"
+                f"｜判斷依據：{v['block_reason']}"
             )
             q = (s.get("exact_quote") or "").replace("\n", " ")
             lines.append(f"      原句：{q[:80]}{'…' if len(q) > 80 else ''}")
