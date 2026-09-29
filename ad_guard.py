@@ -143,12 +143,19 @@ def heading_of(transcript: str, idx: int) -> str:
     return hs[-1].group(0) if hs else ""
 
 
+# 段落斷點：逐字稿是把逐句稿落成 Markdown 時，每個口語段落之間留一個空行
+# （`\n\n` 或更多換行夾雜空白）。用這個當「同一段」的邊界。
+_PARA_BREAK_RE = re.compile(r"\n\s*\n")
+
+
 def extract_segment(transcript: str, quote: str, window: int = None) -> tuple:
     """把 quote 所在的「那一段」切出來，回傳 (segment_text, how)。
 
-    段落 = **quote 前後各 window 字**，再把所在段落的 Markdown 標題行接在前面。
+    段落 = **quote 前後各最多 window 字，但一遇到空行（段落斷點）就停**，
+    再把所在段落的 Markdown 標題行接在前面。window 字數是「安全上限」，不是
+    目標——大多數情況會在遇到空行時就提早停下，比 window 字還短。
     how 有三種值，會原樣寫進稽核檔，好讓之後看得出這筆是怎麼判的：
-      "window"  — 正常情況：字元窗 + 標題行。
+      "window"  — 正常情況：段落（受 window 字上限保護）+ 標題行。
       "notfound"— quote 在逐字稿裡找不到（模型改寫過、或標點不同）。回傳 None，
                   呼叫端只比對訊號自己的文字欄位，並在結果標記涵蓋範圍縮小。
 
@@ -169,6 +176,15 @@ def extract_segment(transcript: str, quote: str, window: int = None) -> tuple:
        誤擋的大宗是「合作」——正常的產業合作討論，跟業配同字不同義。
        這道關卡沒有辦法分辨那兩者（它刻意不做語意判斷），所以誤擋是設計的一部分：
        誤擋的代價是「這筆今天沒寄、留給人看」，漏擋的代價是「錯誤訊號寄給 8 個人」。
+
+    🔴 2026-09-29 加「段落斷點」這一刀，原因是純字元窗會「視窗誤黏」
+       （window bleed）：id=244（EP658）的訊號句在講大盤/台積電表現，跟它
+       只隔一個空行的**上一段**是 NordVPN 業配段落（「…專屬連結…輸入優惠碼
+       …」），純 300 字窗把那段也掃進來，命中兩個關鍵字誤判成擋。加上這一刀
+       之後：quote 所在的那一段（空行到空行之間）以內才算數，跨過空行的內容
+       不算——214 案例因此不再誤擋，EP689 那句本身所在的那一段仍然完整包含
+       「業配」「誠心推薦」兩個詞（見 test_08 系列），加上 heading_of() 抓到
+       的 `## 贊助` 標題（不受這刀影響，仍然獨立算），真業配沒有被這刀放過。
     """
     window = AD_GUARD_WINDOW_CHARS if window is None else window
     if not transcript or not quote:
@@ -178,8 +194,19 @@ def extract_segment(transcript: str, quote: str, window: int = None) -> tuple:
     if idx < 0:
         return None, "notfound"
 
-    lo = max(0, idx - window)
-    hi = min(len(transcript), idx + len(quote) + window)
+    lo_limit = max(0, idx - window)
+    hi_limit = min(len(transcript), idx + len(quote) + window)
+
+    # 往左找：window 上限內，最靠近 quote 的那個段落斷點之後開始算。
+    left_chunk = transcript[lo_limit:idx]
+    left_breaks = list(_PARA_BREAK_RE.finditer(left_chunk))
+    lo = lo_limit + left_breaks[-1].end() if left_breaks else lo_limit
+
+    # 往右找：window 上限內，最靠近 quote 的那個段落斷點之前結束。
+    right_chunk = transcript[idx + len(quote):hi_limit]
+    right_break = _PARA_BREAK_RE.search(right_chunk)
+    hi = idx + len(quote) + right_break.start() if right_break else hi_limit
+
     head = heading_of(transcript, idx)
     seg = transcript[lo:hi]
     return ((head + "\n" + seg) if head else seg), "window"

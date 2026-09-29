@@ -414,6 +414,53 @@ def test_07c_real_ad_id_527_still_blocked():
 
 
 # ---------------------------------------------------------------------------
+# ⑧ 2026-09-29 第二輪：段落斷點修「視窗誤黏連強詞都會誤擋」（id=244）
+#
+# 背景：分兩層改完之後對帳，發現全量母體（1006 筆）裡除了真業配 527，還有
+# 一筆 id=244（EP658 台積電）也被擋，命中「專屬連結」「優惠碼」——但這兩個
+# 詞其實出現在**上一段** NordVPN 業配段落，跟 244 這筆訊號在講大盤/台積電
+# 表現完全無關，是純字元窗把隔壁段落也掃進來（window bleed），「專屬連結」
+# 是強詞、單獨命中就擋，分層改動救不了這種案例。修法：extract_segment() 改
+# 成「quote 所在段落，以空行為界，window 字數只當安全上限」——跨過空行的
+# 內容不算進檢查範圍。
+# ---------------------------------------------------------------------------
+def test_08_id244_window_bleed_from_adjacent_paragraph_is_fixed():
+    t = ad_guard.load_transcript("EP658")
+    if t is None:
+        pytest.skip("找不到 EP658 逐字稿（.gitignore 排除，CI 上沒有）；跳過不代表通過。")
+    s = _sig(
+        id=244, episode_id="EP658", stock_name="台積電", stock_code="2330.TW",
+        action="0",
+        exact_quote="就算你沒有在做交易的人，只是把部位放在可能 0050、台積電什麼的，"
+                    "那大家的成績都是非常的好。",
+        reasoning="講者以近期大盤與被動投資部位表現作為市場情緒觀察指標，非個股基本面"
+                  "分析。",
+        raw_reason="大盤與 0050 近期漲勢作為市場情緒佐證。",
+    )
+    v = check_signal(s, transcript=t)
+    assert v["blocked"] is False, (
+        f"仍被視窗誤黏擋下：keywords={v['keywords']} where={v['where']}"
+    )
+    # 順便釘住這句本身確實跟業配無關（沒有命中任何關鍵字），不是矇對的
+    assert v["keywords"] == []
+
+
+def test_08b_ep689_paragraph_cut_still_contains_the_sponsor_words():
+    """段落斷點修法不能連累真事故：EP689 那句所在的段落本身（不靠隔壁段落）
+    就已經包含「業配」跟「誠心推薦」，加上 heading_of() 抓到的『## 贊助』
+    （這一刀不影響 heading，heading 是獨立算的），三個詞都還在。"""
+    t = _ep689_transcript()
+    seg, how = extract_segment(t, EP689_QUOTE)
+    assert how == "window"
+    assert "業配" in seg  # 段內「上次業配完」
+    assert "誠心推薦" in seg
+    assert seg.lstrip().startswith("## 贊助")
+    # 這一刀確實把範圍縮小了：EP689 那個舊 300 字窗曾經包含的「輸入代碼」促購
+    # 句型現在不在段內了（那是下下一段），證明段落邊界真的有切到，不是沒作用。
+    assert "輸入代碼" not in seg
+
+
+# ---------------------------------------------------------------------------
 # 誤擋率量測（不是測試，是拿真實資料看這道關卡有多兇）
 # ---------------------------------------------------------------------------
 def survey():
