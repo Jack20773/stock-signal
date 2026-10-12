@@ -6,7 +6,7 @@
 
 --live 用的題庫 eval/semantic_gate_regression.json（2026-10-12 從 signals 表唯讀撈出）：
   must_block  id=985 EP689 保險套業配「誠心推薦特斯拉」→ 必須擋
-  must_pass   5 則真的在講股票的看多／看空 → 必須放行
+  must_pass   5 則真的在講股票的看多／看空 → 必須寄出（yes，或 uncertain 帶標註）
   observe     只記錄、不判對錯
 --live 不讀也不寫快取（每題都真的問），判決寫到暫存檔，不污染正式稽核檔。
 """
@@ -47,7 +47,7 @@ def test_parse_verdict_strict():
         raise AssertionError(f"應該拒收：{bad!r}")
 
 
-def test_only_yes_passes_and_errors_fail_closed():
+def test_yes_passes_uncertain_flagged_no_and_errors_fail_closed():
     answers = {"1": "yes", "2": "no", "3": "uncertain"}
 
     def asker(prompt):
@@ -59,9 +59,10 @@ def test_only_yes_passes_and_errors_fail_closed():
     sigs = [_sig(1, "EP1"), _sig(2, "EP1"), _sig(3, "EP1"), _sig(4, "EP1")]
     log = _tmp_log()
     res = sg.screen(sigs, asker=asker, log_path=log, use_cache=False)
-    assert [s["id"] for s in res["passed"]] == [1]
+    assert [s["id"] for s in res["passed"]] == [1, 3]
+    assert [s["id"] for s, _ in res["flagged"]] == [3]
     got = {s["id"]: v["verdict"] for s, v in res["blocked"]}
-    assert got == {2: "no", 3: "uncertain", 4: "error"}, got
+    assert got == {2: "no", 4: "error"}, got
     rows = [json.loads(l) for l in open(log, encoding="utf-8")]
     assert len(rows) == 4                       # 每一則都留紀錄，包含失敗的
     assert any("TimeoutError" in r["reason"] for r in rows)
@@ -97,12 +98,13 @@ def test_notifier_gate_backfills_older_episode_and_injects_note():
         seen.append(prompt)
         return {"verdict": "no" if "加碼1" in prompt else "yes", "reason": "stub 理由"}
 
-    pool, blocked, lines = notifier.apply_semantic_gate(results, asker=asker, log_path=_tmp_log())
+    pool, blocked, flagged, lines = notifier.apply_semantic_gate(results, asker=asker, log_path=_tmp_log())
+    assert flagged == []
     assert [s["id"] for s, _ in blocked] == [1]
     assert {r["id"] for r in notifier.email_card_signals(pool)} == {2, 3}
     assert len(seen) == 3                       # EP8 的卡片是遞補上來後才被問的
     html = notifier._inject_gate_note("<html><body>x</body></html>", blocked)
-    assert "擋下 1 則" in html and "加碼1" in html and html.endswith("</body></html>")
+    assert "擋下 1／標註 0" in html and "加碼1" in html and html.endswith("</body></html>")
 
 
 def test_notifier_send_path_is_stubbed_end_to_end(monkeypatch=None):
@@ -189,13 +191,39 @@ def test_gate_outage_does_not_send_and_partial_block_still_sends():
                 notifier.run_report(results=[dict(x) for x in sigs], stats=stats)
                 assert bool(sent) == expect_sent, (verdict, sent)
                 if sent:
-                    assert "品管覆核：本期擋下 1 則" in sent[0]
+                    assert "品管覆核：擋下 1／標註 0" in sent[0]
         finally:
             os.chdir(cwd)
     finally:
         for k, v in orig.items():
             setattr(notifier, k, v)
         sg.screen = orig_screen
+
+
+def test_uncertain_is_sent_with_card_note_and_counted():
+    """不確定→照寄，卡片上有小字標註，信末分開算「擋下 N／標註 M」；否→不寄。"""
+    import notifier
+    from report_html import generate_html_email
+    results = [_sig(1, "EP10"), _sig(2, "EP10"), _sig(3, "EP10")]
+    verdicts = {"加碼1": "yes", "加碼2": "uncertain", "加碼3": "no"}
+
+    def asker(prompt):
+        for k, v in verdicts.items():
+            if k in prompt:
+                return {"verdict": v, "reason": "stub"}
+        raise AssertionError(prompt)
+
+    pool, blocked, flagged, _ = notifier.apply_semantic_gate(results, asker=asker, log_path=_tmp_log())
+    cards = {r["id"]: r for r in notifier.email_card_signals(pool)}
+    assert set(cards) == {1, 2}
+    assert cards[2]["qc_note"] == notifier.QC_UNCERTAIN_NOTE and "qc_note" not in cards[1]
+    assert "qc_note" not in results[1]          # 不改到原物件
+    stats = {"win_rate": 50, "wins": 1, "losses": 1, "decided": 2, "total": 2}
+    html = notifier._inject_gate_note(generate_html_email(pool, "t", stats), blocked, flagged)
+    body, note = html.split("品管覆核：")
+    assert body.count(notifier.QC_UNCERTAIN_NOTE) == 1
+    assert "加碼2" in body and "加碼3" not in body
+    assert note.startswith("擋下 1／標註 1")
 
 
 # ---------------------------------------------------------------- 實跑
@@ -209,7 +237,7 @@ def live():
         for s in fx[g]:
             r = sg.judge_one(s, load_transcript(s["episode_id"]))
             times.append(r["duration_s"])
-            passed = r["verdict"] == "yes"
+            passed = r["verdict"] in ("yes", "uncertain")   # 會寄出（uncertain 帶標註）
             good = (g == "observe") or (passed == (g == "must_pass"))
             ok_all &= good
             print(f"[{'OK ' if good else 'BAD'}] {g:10s} id={s['id']:<5} {s['episode_id']} "

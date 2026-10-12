@@ -22,7 +22,8 @@
 
 ## 不可協商的行為
 
-1. **否／不確定＝不寄。** 只有明確答「是」才放行。
+1. **否＝不寄；不確定＝照寄但卡片加一行標註**（2026-10-12 協調者裁決：嚴格版
+   模擬 4 封信擋掉 14/27 張卡片，信會空掉；id=985 是明確「否」，放寬不確定不會放過它）。
 2. **關卡自己失敗（逾時、非零 exit、回覆不是合法 JSON、verdict 不在合法值）＝不寄**，
    並記錄原因。關卡壞掉不等於檢查通過。
 3. **不默默消失。** 每一則被擋的都 append 進 `SEMANTIC_GATE_LOG`（JSONL），並由
@@ -288,15 +289,15 @@ def screen(signals: list, asker=None, log_path: str = None, use_cache: bool = Tr
            record: bool = True, workers: int = None) -> dict:
     """回傳 dict：population / passed / blocked [(signal, verdict_row)] / lines / enabled。
 
-    passed 只含 verdict == "yes" 的訊號。"""
+    passed 含 yes 與 uncertain；uncertain 另列在 flagged [(signal, verdict_row)]，呼叫端要標註。"""
     signals = list(signals or [])
     population = len(signals)
     if not SEMANTIC_GATE_ENABLED:
-        return {"population": population, "passed": signals, "blocked": [], "enabled": False,
+        return {"population": population, "passed": signals, "blocked": [], "flagged": [], "enabled": False,
                 "lines": [f"⚠ 語意覆核關卡已被停用（SEMANTIC_GATE_ENABLED=0）：{population} 筆"
                           "訊號未經覆核直接放行。這是設定造成的，不是檢查通過。"]}
     if population == 0:
-        return {"population": 0, "passed": [], "blocked": [], "enabled": True,
+        return {"population": 0, "passed": [], "blocked": [], "flagged": [], "enabled": True,
                 "lines": ["⚠ 語意覆核關卡：母體 0 筆——沒東西可檢查，不等於檢查通過。"]}
 
     cache = load_cache(log_path) if use_cache else {}
@@ -340,17 +341,25 @@ def screen(signals: list, asker=None, log_path: str = None, use_cache: bool = Tr
     if record:
         _append(new_rows, log_path)
 
-    passed, blocked = [], []
+    # 2026-10-12 協調者裁決：uncertain 照寄但卡片加標註（flagged）；no／error 照舊不寄。
+    passed, blocked, flagged = [], [], []
     for s in signals:
         r = results[signal_key(s)]
         if r["verdict"] == "yes":
             passed.append(s)
+        elif r["verdict"] == "uncertain":
+            passed.append(s)
+            flagged.append((s, r))
         else:
             blocked.append((s, r))
 
     n_new = len(todo)
     lines = [f"語意覆核關卡｜母體 {population} 筆（新問 {n_new}、沿用先前判決 {population - n_new}）"
-             f"｜放行 {len(passed)}｜擋下 {len(blocked)}｜新問耗時 {wall}s（{n_workers} 並行）"]
+             f"｜放行 {len(passed) - len(flagged)}｜標註照寄 {len(flagged)}｜擋下 {len(blocked)}"
+             f"｜新問耗時 {wall}s（{n_workers} 並行）"]
+    for s, r in flagged:
+        lines.append(f"  ⚠ 標註照寄 {s.get('episode_id')} {s.get('stock_name')}（{s.get('stock_code')}, "
+                     f"{_direction(s.get('action'))}, id={s.get('id')}）｜判決 uncertain｜{r['reason']}")
     for s, r in blocked:
         q = (s.get("exact_quote") or "").replace("\n", " ")
         lines.append(f"  ⛔ 擋下 {s.get('episode_id')} {s.get('stock_name')}（{s.get('stock_code')}, "
@@ -359,5 +368,5 @@ def screen(signals: list, asker=None, log_path: str = None, use_cache: bool = Tr
     if blocked:
         lines.append(f"  → 這 {len(blocked)} 筆不會寄出；判決紀錄：{log_path or SEMANTIC_GATE_LOG}"
                      "（資料庫未改動）")
-    return {"population": population, "passed": passed, "blocked": blocked,
+    return {"population": population, "passed": passed, "blocked": blocked, "flagged": flagged,
             "enabled": True, "lines": lines, "wall_s": wall, "asked": n_new}

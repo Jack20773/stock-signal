@@ -1460,6 +1460,7 @@ def generate_html_email(results: list[dict], title: str, stats: dict,
             {'<div style="color:#333;font-size:16px;margin-top:12px;line-height:1.7;">' + reason + '</div>' if reason else ''}
             {'<div style="margin-top:10px;padding:12px 16px;background:rgba(0,0,0,.04);border-radius:6px;color:#777;font-style:italic;font-size:15px;line-height:1.7;">「' + quote + '」</div>' if quote else ''}
             {'<div style="color:#ccc;font-size:13px;margin-top:8px;">進場日 ' + entry_d + '</div>' if entry_d else ''}
+            {'<div style="color:#b8860b;font-size:12px;margin-top:6px;">' + _esc(r.get("qc_note")) + '</div>' if r.get("qc_note") else ''}
           </div>"""
 
     latest_section = ""

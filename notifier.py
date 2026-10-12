@@ -277,8 +277,8 @@ def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
             # ── 語意覆核關卡（2026-10-12 新增，第三道）──────────────────────
             # ad_guard 是關鍵字黑名單，擋不到沒有關鍵字的玩笑／雙關／舉例／轉述。
             # 這裡對「信裡真的會出現的訊號卡片」逐則另開一次 claude -p 問一題；
-            # 只有明確答「是」才寄。否／不確定／關卡失敗＝不寄，並列在信末與日誌。
-            email_results, sg_blocked, sg_lines = apply_semantic_gate(email_results)
+            # 「是」照寄；「不確定」照寄但卡片加標註；否／關卡失敗＝不寄。都列在信末與日誌。
+            email_results, sg_blocked, sg_flagged, sg_lines = apply_semantic_gate(email_results)
             for _line in sg_lines:
                 logging.info(_line)
             if (sg_blocked and not email_card_signals(email_results)
@@ -294,7 +294,7 @@ def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
 
             # 寄送簡要版 email
             html_email = generate_html_email(email_results, title, stats, detail_url)
-            html_email = _inject_gate_note(html_email, sg_blocked)
+            html_email = _inject_gate_note(html_email, sg_blocked, sg_flagged)
             send_email(subject, html_email, override_to=override_to)
             if not override_to:
                 # 手動指定收件人時視為一次性測試/單獨寄送，不連帶寄給全體訂閱者
@@ -316,13 +316,16 @@ def email_card_signals(results: list[dict]) -> list[dict]:
 
 def apply_semantic_gate(results: list[dict], asker=None, log_path: str = None,
                         max_rounds: int = 5):
-    """對信裡會出現的卡片跑語意覆核，回傳 (留下的 results, 被擋 [(signal, verdict)], 日誌行)。
+    """對信裡會出現的卡片跑語意覆核，回傳
+    (留下的 results, 被擋 [(signal, verdict)], 標註照寄 [(signal, verdict)], 日誌行)。
+    標註照寄的訊號在回傳的 results 裡換成帶 qc_note 欄位的複本（report_html 會畫成小字）。
 
     為什麼要繞圈：被擋的訊號拿掉後，如果某一集整集都被拿光，「最新 2 集」就會
     往前遞補一集，遞補上來的卡片也必須被覆核過才能寄。繞到卡片集合不再變動為止；
     超過 max_rounds 仍有沒覆核過的卡片，一律當 error 擋下（寧可不寄）。"""
     pool = list(results)
     blocked: list = []
+    flagged: list = []
     lines: list = []
     judged: set = set()
     for _ in range(max_rounds):
@@ -335,6 +338,7 @@ def apply_semantic_gate(results: list[dict], asker=None, log_path: str = None,
         judged.update(semantic_gate.signal_key(c) for c in new)
         bad = {id(s) for s, _v in res["blocked"]}
         blocked += res["blocked"]
+        flagged += res.get("flagged", [])
         pool = [r for r in pool if id(r) not in bad]
     else:
         left = [c for c in email_card_signals(pool) if semantic_gate.signal_key(c) not in judged]
@@ -345,12 +349,18 @@ def apply_semantic_gate(results: list[dict], asker=None, log_path: str = None,
             lines.append(f"⚠ 語意覆核關卡繞了 {max_rounds} 輪仍有 {len(left)} 則卡片沒覆核到，一律不寄。")
     if not email_card_signals(results):
         lines.append("⚠ 語意覆核關卡：信裡沒有任何訊號卡片（母體 0）——沒東西可檢查，不等於檢查通過。")
-    return pool, blocked, lines
+    fl = {id(s) for s, _v in flagged}
+    pool = [dict(r, qc_note=QC_UNCERTAIN_NOTE) if id(r) in fl else r for r in pool]
+    return pool, blocked, flagged, lines
 
 
-def _inject_gate_note(html_email: str, blocked: list) -> str:
-    """信末列出被品管擋下的訊號，讓「擋下」看得見、不默默消失。"""
-    if not blocked:
+QC_UNCERTAIN_NOTE = "品管：AI 覆核不確定，請自行判斷"
+
+
+def _inject_gate_note(html_email: str, blocked: list, flagged: list = ()) -> str:
+    """信末列出品管結果：擋下 N（未列入）／標註 M（照寄、卡片有小字），不默默消失。"""
+    flagged = list(flagged or [])
+    if not blocked and not flagged:
         return html_email
     label = {"no": "覆核判定不是在對這檔股票表態", "uncertain": "覆核無法確定",
              "error": "覆核失敗，保守不列入"}
@@ -364,8 +374,13 @@ def _inject_gate_note(html_email: str, blocked: list) -> str:
                   f'｜{_html.escape(str(v.get("reason", ""))[:60])}</span></li>')
     note = (f'<div style="max-width:600px;margin:16px auto;padding:12px 16px;font-size:13px;'
             f'color:#888;border-top:1px solid #eee;">'
-            f'<b>品管覆核：本期擋下 {len(blocked)} 則訊號，未列入上方</b>'
-            f'<ul style="padding-left:18px;margin:8px 0 0;">{items}</ul></div>')
+            f'<b>品管覆核：擋下 {len(blocked)}／標註 {len(flagged)}</b>'
+            + (f'<div style="margin-top:6px;">擋下（未列入上方）：</div>'
+               f'<ul style="padding-left:18px;margin:4px 0 0;">{items}</ul>' if blocked else '')
+            + (f'<div style="margin-top:6px;">標註（照寄，覆核不確定）：'
+               + "、".join(_html.escape(f"{s.get('episode_id')} {s.get('stock_name')}") for s, _v in flagged)
+               + '</div>' if flagged else '')
+            + '</div>')
     if "</body>" in html_email:
         return html_email.replace("</body>", note + "</body>", 1)
     return html_email + note
