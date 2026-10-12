@@ -40,6 +40,9 @@ from database import list_active_subscribers, save_latest_report, list_signals
 from attention import compute_attention
 # 業配關卡（第二道，確定性關鍵字比對）——見 ad_guard.py 的檔頭與 2026-08-28 事故。
 from ad_guard import screen_signals
+# 語意覆核關卡（第三道，另一次獨立 claude -p 只問「是不是真的在對這檔股票表態」）——見 semantic_gate.py。
+import html as _html
+import semantic_gate
 
 # ── 寄信 ────────────────────────────────────────────────────────────────────
 
@@ -271,8 +274,27 @@ def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
                 )
                 return
 
+            # ── 語意覆核關卡（2026-10-12 新增，第三道）──────────────────────
+            # ad_guard 是關鍵字黑名單，擋不到沒有關鍵字的玩笑／雙關／舉例／轉述。
+            # 這裡對「信裡真的會出現的訊號卡片」逐則另開一次 claude -p 問一題；
+            # 只有明確答「是」才寄。否／不確定／關卡失敗＝不寄，並列在信末與日誌。
+            email_results, sg_blocked, sg_lines = apply_semantic_gate(email_results)
+            for _line in sg_lines:
+                logging.info(_line)
+            if (sg_blocked and not email_card_signals(email_results)
+                    and all(v.get("verdict") == "error" for _s, v in sg_blocked)):
+                # 關卡本身壞了（claude 沒登入、逾時…）且一則都沒覆核成功：這是維運
+                # 故障，不寄一封「卡片全空＋一串覆核失敗」的信給 8 個人，留給人修。
+                # 其他情況（有判決、只是被判否／不確定）照寄，被擋的列在信末。
+                logging.error(
+                    f"語意覆核關卡全部 {len(sg_blocked)} 則都覆核失敗（關卡故障），本次不寄信。"
+                    f"請看 {semantic_gate.SEMANTIC_GATE_LOG} 的 reason 欄。"
+                )
+                return
+
             # 寄送簡要版 email
             html_email = generate_html_email(email_results, title, stats, detail_url)
+            html_email = _inject_gate_note(html_email, sg_blocked)
             send_email(subject, html_email, override_to=override_to)
             if not override_to:
                 # 手動指定收件人時視為一次性測試/單獨寄送，不連帶寄給全體訂閱者
@@ -281,6 +303,72 @@ def run_report(ep_filter: str = None, last_n: int = 0, fill: bool = True,
                 save_latest_report(subject, html_email)
             except Exception as e:
                 logging.error(f"存最新報告失敗（不影響本次寄信）：{e}")
+
+
+def email_card_signals(results: list[dict]) -> list[dict]:
+    """信裡「本週最新訊號」卡片會用到的訊號——挑法必須跟
+    report_html.generate_html_email 一模一樣（最新 2 集、action 為 +1/-1）。"""
+    eps = sorted({r["episode_id"] for r in results if r.get("episode_id")}, key=_ep_num)
+    latest = set(eps[-2:])
+    return [r for r in results
+            if r.get("episode_id") in latest and r.get("action") in ("+1", "-1")]
+
+
+def apply_semantic_gate(results: list[dict], asker=None, log_path: str = None,
+                        max_rounds: int = 5):
+    """對信裡會出現的卡片跑語意覆核，回傳 (留下的 results, 被擋 [(signal, verdict)], 日誌行)。
+
+    為什麼要繞圈：被擋的訊號拿掉後，如果某一集整集都被拿光，「最新 2 集」就會
+    往前遞補一集，遞補上來的卡片也必須被覆核過才能寄。繞到卡片集合不再變動為止；
+    超過 max_rounds 仍有沒覆核過的卡片，一律當 error 擋下（寧可不寄）。"""
+    pool = list(results)
+    blocked: list = []
+    lines: list = []
+    judged: set = set()
+    for _ in range(max_rounds):
+        new = [c for c in email_card_signals(pool)
+               if semantic_gate.signal_key(c) not in judged]
+        if not new:
+            break
+        res = semantic_gate.screen(new, asker=asker, log_path=log_path)
+        lines += res["lines"]
+        judged.update(semantic_gate.signal_key(c) for c in new)
+        bad = {id(s) for s, _v in res["blocked"]}
+        blocked += res["blocked"]
+        pool = [r for r in pool if id(r) not in bad]
+    else:
+        left = [c for c in email_card_signals(pool) if semantic_gate.signal_key(c) not in judged]
+        if left:
+            gone = {id(c) for c in left}
+            blocked += [(c, {"verdict": "error", "reason": "覆核輪數用盡仍未覆核到"}) for c in left]
+            pool = [r for r in pool if id(r) not in gone]
+            lines.append(f"⚠ 語意覆核關卡繞了 {max_rounds} 輪仍有 {len(left)} 則卡片沒覆核到，一律不寄。")
+    if not email_card_signals(results):
+        lines.append("⚠ 語意覆核關卡：信裡沒有任何訊號卡片（母體 0）——沒東西可檢查，不等於檢查通過。")
+    return pool, blocked, lines
+
+
+def _inject_gate_note(html_email: str, blocked: list) -> str:
+    """信末列出被品管擋下的訊號，讓「擋下」看得見、不默默消失。"""
+    if not blocked:
+        return html_email
+    label = {"no": "覆核判定不是在對這檔股票表態", "uncertain": "覆核無法確定",
+             "error": "覆核失敗，保守不列入"}
+    items = ""
+    for s, v in blocked:
+        q = (s.get("exact_quote") or "").replace(chr(10), " ")
+        q = q[:60] + ("…" if len(q) > 60 else "")
+        items += (f'<li style="margin-bottom:6px;">{_html.escape(str(s.get("episode_id")))} '
+                  f'{_html.escape(str(s.get("stock_name")))}：「{_html.escape(q)}」'
+                  f'<br><span style="color:#aaa;">{label.get(v.get("verdict"), v.get("verdict"))}'
+                  f'｜{_html.escape(str(v.get("reason", ""))[:60])}</span></li>')
+    note = (f'<div style="max-width:600px;margin:16px auto;padding:12px 16px;font-size:13px;'
+            f'color:#888;border-top:1px solid #eee;">'
+            f'<b>品管覆核：本期擋下 {len(blocked)} 則訊號，未列入上方</b>'
+            f'<ul style="padding-left:18px;margin:8px 0 0;">{items}</ul></div>')
+    if "</body>" in html_email:
+        return html_email.replace("</body>", note + "</body>", 1)
+    return html_email + note
 
 
 def main():

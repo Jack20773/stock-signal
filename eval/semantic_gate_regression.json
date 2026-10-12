@@ -1,0 +1,65 @@
+{
+ "_note": "語意覆核關卡迴歸題庫。2026-10-12 從 signals 表唯讀撈出（id=985 已於 2026-08-29 刪除，取自 backups/deleted_signal_985_2026-08-29.json）。must_block 必須擋、must_pass 必須放行、observe 只記錄不判對錯。",
+ "must_block": [
+  {
+   "id": 985,
+   "episode_id": "EP689",
+   "stock_name": "特斯拉",
+   "stock_code": "TSLA",
+   "action": "+1",
+   "exact_quote": "七夕情人節快樂，送情人最佳禮物，誠心推薦特斯拉，濕，大大的濕。"
+  }
+ ],
+ "must_pass": [
+  {
+   "id": 980,
+   "episode_id": "EP686",
+   "stock_name": "健策",
+   "stock_code": "3653.TW",
+   "action": "+1",
+   "exact_quote": "這支我也非常喜歡，這我們林口之光，健策是一個非常屌炮的公司。那當然前面因為 MC 被人家放一些利空……這些優質的公司很多時候被放利空的時候，就是一個蠻不錯的機會。"
+  },
+  {
+   "id": 954,
+   "episode_id": "EP680",
+   "stock_name": "台積電",
+   "stock_code": "2330.TW",
+   "action": "+1",
+   "exact_quote": "台積電，我覺得他根本就不應該是在 2300 塊這個價格，我覺得他根本就是在更上面的價格"
+  },
+  {
+   "id": 944,
+   "episode_id": "EP677",
+   "stock_name": "NVIDIA",
+   "stock_code": "NVDA",
+   "action": "+1",
+   "exact_quote": "美股絕對是NVIDIA，可是這兩個東西卻交易在最便宜估值... NVIDIA以我的角度來講，現在它是有一個便宜的factor在裡面，外加它就是AI的一個強者，沒什麼好說的，也漲了好幾年了。"
+  },
+  {
+   "id": 768,
+   "episode_id": "EP567",
+   "stock_name": "Confluent",
+   "stock_code": "CFLT",
+   "action": "-1",
+   "exact_quote": "這個 CFLT 也是我持股，確實是他媽是幹一個爛扣。所以理論上就是要把他汰弱留強丟掉，那比較不會去做低點加倉"
+  },
+  {
+   "id": 748,
+   "episode_id": "EP557",
+   "stock_name": "0050",
+   "stock_code": "0050.TW",
+   "action": "-1",
+   "exact_quote": "所以我現在是把指數的東西都減掉了，然後一些中小型的標的都還是持續地抱著，那比較大型的權值股部分的抱著，但是指數的期貨先把它減掉，然後再來就是 0050 也會想把它賣掉。"
+  }
+ ],
+ "observe": [
+  {
+   "id": 989,
+   "episode_id": "EP690",
+   "stock_name": "美光",
+   "stock_code": "MU",
+   "action": "-1",
+   "exact_quote": "後來是有蠻多美光的朋友後來證實，就是這真的蠻小氣加摳門。我的印象是停留在好像是上一次、去年還是什麼時候，那次還不錯；今年那個數字我聽到我也是傻眼，因為跟同業比起來是真的非常小氣。我是想說這時候怎麼敢小氣，你懂嗎？因為現在是大家都在搶人的時候"
+  }
+ ]
+}
