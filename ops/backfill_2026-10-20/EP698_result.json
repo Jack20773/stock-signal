@@ -1,0 +1,108 @@
+{
+  "episode_id": "EP698",
+  "analysis_date": "2026-10-20",
+  "extracted_signals": [
+    {
+      "stock_name": "台積電",
+      "stock_code": "2330.TW",
+      "action": "+1",
+      "claim_type": "forward",
+      "confidence_level": "Medium",
+      "reasoning": "台積電屬上游晶圓代工，依 Rule 5『產品漲價』判定偏 +1。講者談到市場傳言明年最大的 foundry 有機會漲價，並說『非常合理』，還引用黃仁勳說台積電價格太便宜。他沒有說自己買賣，所以信心只給 Medium。claim_type：這句話猜的是明年尚未發生的漲價，填 forward。",
+      "exact_quote": "其實市場已經有在傳說，就是在明年，可能我們最大的 foundry，他就是有機會會去做漲價，非常合理。",
+      "raw_reason": "市場傳台積電明年有機會漲價，講者認為在缺貨與成本上升下調價合理。",
+      "primary_tag": "#總經趨勢",
+      "secondary_tags": [
+        "#營收動能"
+      ],
+      "summary": "他說市場在傳，明年最大的 foundry 有機會漲價，他認為非常合理。他提到黃仁勳自己說台積電價格太便宜。他也說 AMD 被漲價的主因其實是記憶體，台積電只是擋刀。",
+      "oneliner": "傳台積電明年有機會漲價，他說很合理",
+      "context": "意識流貼文：AMD 漲價",
+      "substantive": true
+    },
+    {
+      "stock_name": "超微",
+      "stock_code": "AMD",
+      "action": "0",
+      "claim_type": "unclear",
+      "confidence_level": "Medium",
+      "reasoning": "AMD 這段是在解釋自己臉書貼文的寫法，並說明漲價主因是記憶體而非代工廠。講者沒有表態買賣或多空，屬中立提及，依 Rule 2 填 0。claim_type：這句只是描述文章內容，沒有預測，填 unclear。",
+      "exact_quote": "接著就稍微提一下說，其實 AMD 的漲價，就像它感覺是寫出來，你看就是因為晶圓代工廠漲價，所以怎麼漲價。",
+      "raw_reason": "講者討論 AMD 漲價傳聞的成因，認為記憶體才是漲最多的因素，未表達個人多空。",
+      "primary_tag": "#總經趨勢",
+      "secondary_tags": [
+        "#營收動能"
+      ],
+      "summary": "他說他轉貼了一篇 AMD 轉嫁台積電漲價 10% 的文章。他說漲最多的其實是記憶體，台積電只是擋刀的角色。",
+      "oneliner": "AMD 漲價主因是記憶體，不全是代工廠",
+      "context": "意識流貼文：AMD 漲價",
+      "substantive": true
+    },
+    {
+      "stock_name": "輝達",
+      "stock_code": "NVDA",
+      "action": "0",
+      "claim_type": "unclear",
+      "confidence_level": "Medium",
+      "reasoning": "講者說 NVIDIA 顯示卡漲價是最重要的環節，並解釋 NVIDIA 以 GPU 加 GDDR 成套賣給 AIC。這是產業觀察，沒有個人買賣或多空表態，填 0。claim_type：這句只是他對重要性的看法，不是對股價的預測，填 unclear。",
+      "exact_quote": "因為我覺得 NVIDIA 的顯示卡漲價，才是最重要的一個環節。",
+      "raw_reason": "講者認為 NVIDIA 顯示卡因零組件漲價而價格上升，是貼文中最重要的環節，未表態多空。",
+      "primary_tag": "#總經趨勢",
+      "secondary_tags": [
+        "#營收動能"
+      ],
+      "summary": "他說 NVIDIA 是把 GPU 和 GDDR 當成一組賣給下游 AIC。下游收到的東西漲價，就會反映到終端價格。所以即使 NVIDIA 沒對外宣布，大家看到的價格還是往上跑。",
+      "oneliner": "NVIDIA 沒宣布漲價，但顯卡終端價格往上跑",
+      "context": "意識流貼文：AMD 漲價",
+      "substantive": true
+    },
+    {
+      "stock_name": "Take-Two Interactive",
+      "stock_code": "TTWO",
+      "action": "0",
+      "claim_type": "notfwd",
+      "confidence_level": "Medium",
+      "reasoning": "講者回答聽眾問題時說這檔他是賺錢的，講的是已經發生的損益，沒有說現在買、賣或看好看壞，依 Rule 2 填 0。claim_type：這句是回顧自己賺過錢，填 notfwd。",
+      "exact_quote": "但是在 Take-Two Interactive 這個股票我是賺錢的",
+      "raw_reason": "講者回顧自己操作 Take-Two 這檔股票有獲利，並說與 GTA6 啟蒙炒股無關。",
+      "primary_tag": "#籌碼面",
+      "secondary_tags": [],
+      "summary": "聽眾問他炒股是不是受 GTA6 啟蒙。他說這跟交易沒有什麼關係。他說自己操作 Take-Two 這檔是賺錢的。",
+      "oneliner": "他說 Take-Two 這檔自己有賺錢",
+      "context": "Q&A 回答 GTA6 問題",
+      "substantive": false
+    },
+    {
+      "stock_name": "CD Projekt",
+      "stock_code": "Unknown",
+      "action": "0",
+      "claim_type": "notfwd",
+      "confidence_level": "Low",
+      "reasoning": "『波蘭蠢驢』是講者對波蘭遊戲公司的稱呼，推測為 CD Projekt，但原話沒有明說，所以信心給 Low。華沙市場不在支援清單內，代號填 Unknown。他說自己做這檔是賠錢的，是回顧，沒有現在的操作傾向，填 0。claim_type 填 notfwd。",
+      "exact_quote": "然後我去做波蘭蠢驢我是賠錢的",
+      "raw_reason": "講者回顧自己操作波蘭遊戲股（暱稱波蘭蠢驢）虧損，未表達現在的多空。",
+      "primary_tag": "#籌碼面",
+      "secondary_tags": [],
+      "summary": "他說自己去做過波蘭蠢驢，結果是賠錢的。他把這件事和 Take-Two 一起舉例，說明事件交易與遊戲沒有關係。",
+      "oneliner": "他說做波蘭蠢驢這檔是賠錢的",
+      "context": "Q&A 回答 GTA6 問題",
+      "substantive": false
+    },
+    {
+      "stock_name": "遊戲橘子",
+      "stock_code": "6180.TWO",
+      "action": "0",
+      "claim_type": "notfwd",
+      "confidence_level": "Medium",
+      "reasoning": "講者回顧之前遊戲橘子事件（天堂新作）時說應該沒有獲得什麼收益，是過去的結果，沒有現在的多空表態，填 0。claim_type 填 notfwd。遊戲橘子為上櫃公司，代號 6180.TWO。",
+      "exact_quote": "然後之前的遊戲橘子事件，我忘記了，那時候應該是沒有獲得什麼收益，就是當時要出那個天堂",
+      "raw_reason": "講者回顧過去遊戲橘子（天堂新作）事件交易，記憶中沒有獲利。",
+      "primary_tag": "#籌碼面",
+      "secondary_tags": [],
+      "summary": "他說之前遊戲橘子那次事件，他忘記了。他說應該沒有獲得什麼收益。他說當時是要出那個天堂。",
+      "oneliner": "之前遊戲橘子事件，他說應該沒賺到錢",
+      "context": "Q&A 回答 GTA6 問題",
+      "substantive": false
+    }
+  ]
+}

@@ -55,8 +55,16 @@ def _load_episodes() -> dict[str, str]:
     return _episodes_cache
 
 
-def _episode_date(episode_id: str, fallback: str) -> str:
-    return _load_episodes().get(episode_id, fallback)
+def _episode_date(episode_id: str, fallback: str | None = None) -> str | None:
+    """集數上架日（episodes.json）。2026-10-20 起：episodes.json 還沒有這一集就回 None
+    （fallback 參數保留只為相容舊呼叫，不再使用）——以前退回 analysis_date，
+    EP694–696 因此被寫成補分析那天 09-15，之後又沒人回頭改。留空等下一輪補才對。"""
+    return _load_episodes().get(episode_id)
+
+
+# 已寫入的 entry_date 跟 episodes.json 不一致時，一輪最多自動重寫幾筆；超過就只報警不動，
+# 防 episodes.json 本身又壞掉時把整張表改歪（2026-10-17 那次是 93 筆，那種量要人看過再修）。
+_RESYNC_MAX = 20
 
 
 def _swap_tw_suffix(code: str) -> str | None:
@@ -68,31 +76,59 @@ def _swap_tw_suffix(code: str) -> str | None:
     return None
 
 
+def _plan_entry_fills(rows: list[dict], air: dict[str, str], resync_max: int = _RESYNC_MAX):
+    """決定哪些訊號要（重）抓進場價。回傳 (meta, skipped_no_air, mismatched, alarm)。
+    - 進場價空的：用 episodes.json 上架日補；episodes.json 沒這集 → 跳過（留空等下一輪）。
+    - 進場價有、但 entry_date 跟上架日不一致：重寫（日期＋價格）；
+      不一致超過 resync_max 筆 → 一筆都不重寫，alarm=True 交給人看。"""
+    meta, skipped, mismatched = [], [], []
+    for r in rows:
+        code = r["stock_code"]
+        if not code or code == "Unknown":
+            continue
+        d = air.get(r["episode_id"] or "")
+        has_price = bool(r.get("entry_price"))
+        if not d:
+            if not has_price:
+                skipped.append(r["id"])
+            continue
+        if not has_price:
+            meta.append({"id": r["id"], "code": code, "date": d, "resync": False})
+        elif str(r.get("entry_date") or "")[:10] != d:
+            mismatched.append({"id": r["id"], "code": code, "date": d, "resync": True,
+                               "old_date": r.get("entry_date")})
+    alarm = len(mismatched) > resync_max
+    if not alarm:
+        meta.extend(mismatched)
+    return meta, skipped, mismatched, alarm
+
+
 def _fill_entry_prices():
-    """對 entry_price 為 NULL 的訊號補抓進場價（用集數播出日，非分析日）。"""
+    """補抓進場價（用集數播出日，非分析日）；並把 entry_date 跟 episodes.json 不一致的重寫。"""
     import psycopg2.extras
     init_db()
-    _load_episodes()
+    air = _load_episodes()
 
     with _conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT id, episode_id, stock_code, analysis_date FROM signals
-                   WHERE action != '0' AND (entry_price IS NULL OR entry_price = 0)"""
+                """SELECT id, episode_id, stock_code, analysis_date, entry_date, entry_price FROM signals
+                   WHERE action != '0' AND invalid_reason IS NULL"""
             )
             rows = [dict(r) for r in cur.fetchall()]
 
-    meta = []
-    requests = []
-    for r in rows:
-        code    = r["stock_code"]
-        ep_id   = r["episode_id"] or ""
-        entry_d = _episode_date(ep_id, r["analysis_date"])
-        if not code or code == "Unknown" or not entry_d:
-            continue
-        requests.append((code, entry_d))
-        meta.append({"id": r["id"], "code": code, "date": entry_d})
+    meta, skipped, mismatched, alarm = _plan_entry_fills(rows, air)
+    if skipped:
+        print(f"[info] {len(skipped)} 筆訊號的集數 episodes.json 還沒有上架日，先不補進場價（下一輪再補）：id={skipped[:20]}")
+    if mismatched:
+        ids = [m["id"] for m in mismatched]
+        if alarm:
+            print(f"[警報] {len(mismatched)} 筆 entry_date 跟 episodes.json 上架日不一致，超過自動重寫上限 "
+                  f"{_RESYNC_MAX}，這次不動，請人工確認 episodes.json 是否正確：id={ids[:30]}")
+        else:
+            print(f"[修正] {len(mismatched)} 筆 entry_date 跟 episodes.json 上架日不一致，重寫日期與進場價：id={ids}")
 
+    requests = [(m["code"], m["date"]) for m in meta]
     # meta 保留一筆對一筆（後面要用各自的 id 寫回），但送進批次查價的 requests
     # 去重——同一檔股票同一個進場日期，可能被好幾筆訊號同時引用（例如多次提到
     # 同一檔且剛好同一集），去重前會對同一個 key 重複查快取/重複打 yfinance。
@@ -122,6 +158,8 @@ def _fill_entry_prices():
     updates = []
     for m in meta:
         price = prices.get((m["code"], m["date"]))
+        if not price and m.get("resync"):
+            print(f"[警報] id={m['id']} {m['code']} 上架日 {m['date']} 抓不到價，entry_date 維持錯的 {m.get('old_date')}，請人工處理")
         if price:
             updates.append((price, benchmark_for(m["code"]), m["date"], m["code"], m["id"]))
             print(f"  {m['code']} @ {m['date']} = {price}")
@@ -137,6 +175,8 @@ def _fill_entry_prices():
     return len(updates)
 
 
+
+
 def calc_performance() -> list[dict]:
     """
     回傳所有 action != 0 的訊號，附上即時績效欄位：
@@ -146,7 +186,7 @@ def calc_performance() -> list[dict]:
     with _conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT * FROM signals WHERE action != '0' ORDER BY entry_date ASC"
+                "SELECT * FROM signals WHERE action != '0' AND invalid_reason IS NULL ORDER BY entry_date ASC"
             )
             rows = [dict(r) for r in cur.fetchall()]
 

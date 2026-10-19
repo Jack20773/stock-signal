@@ -1,0 +1,42 @@
+{
+  "episode_id": "EP697",
+  "analysis_date": "2026-10-20",
+  "extracted_signals": [
+    {
+      "stock_name": "CrowdStrike",
+      "stock_code": "CRWD",
+      "action": "0",
+      "claim_type": "notfwd",
+      "confidence_level": "Medium",
+      "reasoning": "講者在說明『驗證與監控會用掉更多算力』的段落中順帶提到 CrowdStrike 新方案，以及資安股股價大漲。他只描述已發生的股價表現與可能的合作方向，沒有說自己買進或賣出，屬順口提及，依 Rule 2 判 0。claim_type：『你看人家股價跑去噴』是回顧已發生的漲幅，『說不定會合作』是假設語氣，整句沒有對股價的明確預測，填 notfwd。",
+      "exact_quote": "就是最新 CrowdStrike 所推出的一些方案，它說其實我們不用用最尖端的東西，可以把資安做好——說不定會跟這些資安公司去做一些合作，所以你看人家股價跑去噴",
+      "raw_reason": "CrowdStrike 推出新方案、資安股在 Dario 文章後逆勢上漲，講者以此佐證市場對資安需求的反應，並無個人操作表態。",
+      "primary_tag": "#技術創新",
+      "secondary_tags": [
+        "#總經趨勢"
+      ],
+      "summary": "他提到 CrowdStrike 最新推出的方案，說不一定要用最尖端的東西也能把資安做好。他說可能會跟這些資安公司合作，並指出資安股股價大漲。",
+      "oneliner": "順帶提到 CrowdStrike 新方案與資安股大漲",
+      "context": "大結論段落順帶提到",
+      "substantive": false
+    },
+    {
+      "stock_name": "江海股份",
+      "stock_code": "Unknown",
+      "action": "0",
+      "claim_type": "notfwd",
+      "confidence_level": "Low",
+      "reasoning": "江海為中國 A 股公司，行情源不支援，stock_code 填 Unknown。講者是回答聽眾『江海被點了就噴幾根』的提問，回顧當時抓到被動元件漲價，並說明自己近年已不看 A 股、也不要把節目當報牌台。被動元件漲價趨勢雖對上游有利，但他講的是產業與過去經驗，沒有對江海本身表態買賣，故判 0。claim_type：講的是已發生的漲價與過往經驗，不是對未來的預測，填 notfwd。",
+      "exact_quote": "就是抓到了這個被動元件的漲價，那一波真的很大，上半年漲最多的就是被動元件。當然現在其實蠻多都軟掉、都在休息，但那個漲價趨勢都還是在持續。",
+      "raw_reason": "講者回顧被動元件漲價帶動相關個股上漲，但表示近年已少看 A 股，並提醒聽眾不要把節目當報牌台。",
+      "primary_tag": "#總經趨勢",
+      "secondary_tags": [
+        "#營收動能"
+      ],
+      "summary": "他說當時是抓到被動元件漲價，那一波很大，上半年漲最多的就是被動元件。他說現在很多股票軟掉在休息，但漲價趨勢還在持續。他也說自己近年比較沒在看 A 股。",
+      "oneliner": "回顧被動元件漲價行情，不是針對江海表態",
+      "context": "Q&A 回答聽眾問題",
+      "substantive": false
+    }
+  ]
+}
