@@ -195,6 +195,29 @@ def fix_episode_dates(path: Path = EPISODES_LOCAL, *,
     return res
 
 
+def merge_local_only(upstream: list, local_path: Path = EPISODES_LOCAL):
+    """把「本地有、上游沒有」的集數（以 number 判斷）併進上游清單。
+
+    上游有的集數一律以上游為準；結果依 number 由小到大排序（與上游一致）。
+    回傳 (合併後清單, 被保留的集號清單)；沒有要保留的就原樣回傳上游清單。
+    本地檔不存在／讀不了／結構不對 → 視為沒有可保留的，不擋流程。
+    """
+    try:
+        local = json.loads(Path(local_path).read_text(encoding="utf-8"))
+        if not isinstance(local, list):
+            return upstream, []
+    except Exception:
+        return upstream, []
+    have = {ep.get("number") for ep in upstream if isinstance(ep, dict)}
+    extra = [ep for ep in local
+             if isinstance(ep, dict) and isinstance(ep.get("number"), int)
+             and ep["number"] not in have]
+    if not extra:
+        return upstream, []
+    merged = sorted(upstream + extra, key=lambda e: e.get("number", 0))
+    return merged, sorted(ep["number"] for ep in extra)
+
+
 def safe_filename(name: str) -> str:
     for ch in r'\/:*?"<>|':
         name = name.replace(ch, "_")
@@ -221,7 +244,14 @@ def main(last_n: int = 0, rss_max_age_hours: float = 6.0):
     episodes = json.loads(raw.decode("utf-8"))
 
     # C: 存成本地檔案，讓 performance.py 直接讀，不用再抓一次
-    EPISODES_LOCAL.write_bytes(raw)
+    # 上游較舊時（例如停在 EP711），本地手動補的集數不可被蓋掉：先合併再寫
+    merged, kept = merge_local_only(episodes, EPISODES_LOCAL)
+    if kept:
+        print(f"保留本地獨有集數（上游沒有）：{kept}")
+        episodes = merged
+        EPISODES_LOCAL.write_bytes(_dump_bytes(merged, raw))
+    else:
+        EPISODES_LOCAL.write_bytes(raw)
 
     # 寫檔後當場用官方 RSS 校正日期（上游月份解析有 bug，見檔頭說明）
     fix = fix_episode_dates(EPISODES_LOCAL, max_age_hours=rss_max_age_hours)
