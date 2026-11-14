@@ -26,11 +26,37 @@ def step(n: int, title: str):
     logging.info(f"\n{STEP_SEP}\n[Step {n}] {title}\n{STEP_SEP}")
 
 
+def _warn_analysis_failed(failed: int):
+    """重試後仍失敗：寫警告檔＋戰情室卡（best-effort，本身出錯不再往上拋）。"""
+    import datetime, subprocess
+    from pathlib import Path
+    msg = (f"{datetime.datetime.now():%Y-%m-%d %H:%M} 有 {failed} 集逐字稿分析重試後仍失敗，"
+           f"看 batch.log 與 ops/logs/daily_*.log；下次排程會再自動重跑未分析集數。")
+    logging.error("🔴 " + msg)
+    try:
+        here = Path(__file__).resolve().parent
+        (here / "ops" / "ANALYSIS_FAILED_WARNING.txt").write_text(msg + "\n", encoding="utf-8")
+        task = Path(r"D:/All claude/000_Agent/007_dashboard/task.py")
+        if task.exists():
+            subprocess.run([sys.executable, "-X", "utf8", str(task), "new",
+                            "--id", f"stocksignal-analysis-failed-{datetime.date.today():%Y%m%d}",
+                            "--title", "股癌逐字稿分析重試後仍失敗", "--owner", "ai", "--dept", "invest",
+                            "--plain", msg, "--color", "red", "--status", "open", "--no-dispatch"],
+                           timeout=60, capture_output=True)
+    except Exception as e:
+        logging.error(f"寫警告失敗：{e}")
+
+
 def run(args):
     # ── Step 1：下載新逐字稿 ─────────────────────────────────────────
     step(1, "下載新逐字稿")
     from download_transcripts import main as dl_main
     dl_main(last_n=args.last)
+    # 2026-11-14：第三方逐字稿站常晚好幾天才上新集，本機 asr-lab 其實早轉好了——先橋接進來
+    # （RSS 有、episodes.json 沒有、asr-lab/out_best 有 SRT 才補；失敗不擋後面）
+    if not getattr(args, "dry_run", False):
+        from bridge_asrlab import bridge
+        bridge()
 
     # ── Step 2：批次分析（跳過已分析集數）────────────────────────────
     from_ep = getattr(args, "from_ep", 0) or 0
@@ -43,14 +69,18 @@ def run(args):
     if files:
         logging.info(f"待處理 {len(files)} 集")
         _done, _skipped, failed = run_batch(files, dry_run=args.dry_run)
-        if failed:
-            # 原本回傳值完全沒被讀，失敗集數會被靜默吞掉：後續報告仍照跑、
-            # 「更新完成」照樣印出，使用者不會知道有集數分析失敗——2026-08-01
-            # 索羅門診斷 + Codex 審查一起發現。這裡先只加明顯警告，不改變
-            # 後續是否寄信/報告是否照跑（那是更大的行為變更，這次不做，
-            # 只確保「有失敗」這件事不會被靜默吞掉）。
-            logging.warning(f"⚠ 有 {failed} 集分析失敗，後續報告仍會照跑——"
-                             f"上面日誌裡有各集的失敗原因，建議手動確認")
+        if failed and not args.dry_run:
+            # 2026-11-14：單集內的 5s/10s 重試只隔 15 秒，API 短暫異常（11/12 EP713 claude -p exit=1）
+            # 擋不住。這裡等 2 分鐘後整批再跑一次（已分析的集數會自動跳過，只重跑失敗的）；
+            # 仍失敗就寫警告檔＋戰情室卡，不再靜默。
+            import time
+            logging.warning(f"⚠ 有 {failed} 集分析失敗，120 秒後自動重試一次")
+            time.sleep(120)
+            _d2, _s2, failed = run_batch(files, dry_run=False)
+            if failed:
+                _warn_analysis_failed(failed)
+        elif failed:
+            logging.warning(f"⚠ 有 {failed} 集分析失敗（dry-run）")
     else:
         logging.info("無新集數需要分析")
 
